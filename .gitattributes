@@ -1,0 +1,17 @@
+# 所有文本文件在仓库和工作区都使用 LF 换行（Linux 格式）。
+# 这样 Windows 和 WSL 上的 Git 都不会把换行改成 CRLF。
+* text=auto eol=lf
+
+# 只在 Windows 上运行的脚本保持 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制文件：不做任何换行转换，也不按文本比较差异
+*.png binary
+*.jpg binary
+*.pdf binary
+*.elf binary
+*.bin binary
+*.axf binary
+

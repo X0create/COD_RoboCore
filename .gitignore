@@ -1,0 +1,26 @@
+# ---- 构建产物 ----
+build/
+build-*/
+cmake-build-*/
+/compile_commands.json
+
+# ---- 编辑器与语言服务器 ----
+.idea/
+.cache/
+*.swp
+*~
+
+# ---- 调试器临时文件 ----
+*.jdebug.user
+JLinkLog.txt
+JLinkSettings.ini
+
+# ---- Python ----
+__pycache__/
+*.pyc
+
+# ---- 操作系统 ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
