@@ -10,7 +10,7 @@
 | `error/` | `RM_ASSERT`、`RM_CHECK`、错误码、HardFault 记录 |
 | `log/` | SEGGER RTT 日志 |
 | `param/` | Flash 双区参数存储 |
-| `util/` | CRC、环形缓冲、帧编解码等小工具 |
+| `util/` | CRC、环形缓冲、帧编解码等小工具（纯计算，库 `rm_core_util`，电脑测试也链接） |
 
 - **可以** include：platform 接口、FreeRTOS。
 - **禁止** include：任何具体设备。

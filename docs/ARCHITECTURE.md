@@ -1532,7 +1532,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | # | 旧工程 | 新位置 | 状态 |
 | --- | --- | --- | --- |
 | 1 | `BSP/bsp_can.c` | `platform/include/platform/can.h`、`platform/stm32h7/can.c`（DLC 换算、接收环形缓冲放 `platform/common/`） | 代码完成（2026-09-28），待上板 V30 |
-| 2 | `Algorithm/CRC.c` | `core/util/crc.{h,c}` | |
+| 2 | `Algorithm/CRC.c` | `core/util/crc.{h,c}` | 代码完成（2026-09-28），主机测试 6 项；纯计算，无需上板 |
 | 3 | `Controller/PID.c`、`Algorithm/Ramp.c`、`LPF.c`、`Kalman_Filter.c` | `algorithm/control/pid`、`algorithm/control/ramp`、`algorithm/filter/lpf`、`algorithm/filter/kalman` | |
 | 4 | `Device/Remote_Control.c`、`Task/Detect_Task.c` | `devices/remote/dr16`、`core/watchdog`、`msgs/rc_state` | |
 | 5 | `Device/Motor.c`（DJI 部分）、`Task/CAN_Task.c` | `devices/motor/motor.h`、`motor.c`、`dji_motor`、`motor_group` | |

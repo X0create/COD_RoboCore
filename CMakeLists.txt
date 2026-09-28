@@ -20,10 +20,10 @@ if(RM_BOARD)
 endif()
 
 add_subdirectory(platform)
+add_subdirectory(core)             # 电脑侧只有 core/util，其余只用于固件（见 core/CMakeLists.txt）
 
 if(RM_BOARD)
-    # core、robots 目前只用于固件（依赖 FreeRTOS）；电脑侧的假实现以后再加
-    add_subdirectory(core)
+    # robots 目前只用于固件（依赖 FreeRTOS）
     add_subdirectory(robots)
 
     # 固件目标。CubeMX 生成的 CMakeLists 把 main.c 等源文件加到名为 ${CMAKE_PROJECT_NAME} 的目标上，
