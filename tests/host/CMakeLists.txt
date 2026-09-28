@@ -14,3 +14,4 @@ function(rm_add_host_test name source)
 endfunction()
 
 rm_add_host_test(test_cycle_extend platform/test_cycle_extend.c rm_platform_common)
+rm_add_host_test(test_ws2812 platform/test_ws2812.c rm_platform_common)
