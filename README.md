@@ -37,13 +37,19 @@ docs/         随代码演进的文档：编码规范、决策记录、实时预
 | --- | --- |
 | 系统 | Windows + WSL 2 + Ubuntu 24.04 |
 | 交叉编译器 | Arm GNU Toolchain 15.2.Rel1（`arm-none-eabi-gcc` 15.2.1） |
-| 构建 | CMake ≥ 3.22、make |
+| 构建 | CMake ≥ 3.25、Ninja |
 | 代码检查 | clang-format 18、clang-tidy 18、cppcheck 2.13 |
 | 测试 | gcc（主机）、Ruby 3.2（CMock） |
 | 调试 | SEGGER J-Link + Ozone（Windows 端） |
 | 板级配置 | STM32CubeMX |
 
-构建与烧录命令会在阶段 0 完成后补充。
+电脑侧单元测试（WSL，仓库根目录）：
+
+```bash
+cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset host-tests
+```
+
+固件构建与烧录命令会在板级工程完成后补充。
 
 ## 仓库约定
 

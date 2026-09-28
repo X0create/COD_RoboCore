@@ -11,3 +11,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(warnings)
+
+add_subdirectory(platform)
+
+option(RM_HOST_TESTS "编译电脑侧单元测试（只在 host-tests 预设中打开）" OFF)
+if(RM_HOST_TESTS)
+    enable_testing()
+    add_subdirectory(tests/host)
+endif()
