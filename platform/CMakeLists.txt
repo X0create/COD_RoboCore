@@ -2,6 +2,7 @@
 add_library(rm_platform_common STATIC
     common/cycle_extend.c
     common/ws2812.c
+    common/dma_ring.c
 )
 target_include_directories(rm_platform_common PUBLIC common)
 rm_target_warnings(rm_platform_common)
@@ -11,6 +12,7 @@ if(RM_CHIP)
     add_library(rm_platform STATIC
         ${RM_CHIP}/time.c
         ${RM_CHIP}/status_led.c
+        ${RM_CHIP}/uart.c
     )
     target_include_directories(rm_platform PUBLIC include)
     target_link_libraries(rm_platform

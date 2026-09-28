@@ -1489,7 +1489,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 - [x] `core/os`：用原生 FreeRTOS API 静态创建任务，并实现 `rm_task_delay_until()`（2026-09-28，上板心跳周期 500 ms 无漂移）
 - [x] `robots/_template/`：`app_main()` 创建一个心跳任务，由它驱动状态灯并通过 RTT 打印（2026-09-28 上板通过）
 - [ ] `platform/stm32h7/can.c` 最小版本：可以发送；可以按精确 ID 和精确范围订阅
-- [ ] `platform/stm32h7/uart.c` 最小版本：DMA 循环接收 + 空闲中断，缓冲区放在 `.dma_buf` 段
+- [x] `platform/stm32h7/uart.c` 最小版本：DMA 循环接收 + 空闲中断，缓冲区放在 `.dma_buf` 段（2026-09-28 编译 + 主机测试：取数逻辑 `platform/common/dma_ring` 5 项；出错自动重启接收；心跳每秒打印 UART5 收到的字节数。**上板待 DR16**）
 
 **测试与 CI**
 - [x] `tests/host`：接入 Unity，第一个测试用 DWT 64 位扩展的回绕逻辑（`9369599`，2026-09-27；纯函数放在 `platform/common/cycle_extend`，time.c 上板时调用它）
