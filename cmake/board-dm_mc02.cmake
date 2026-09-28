@@ -20,3 +20,14 @@ add_link_options(${RM_CPU_FLAGS}
 
 # CubeMX 生成的 cmake/stm32cubemx/CMakeLists.txt 会链接这个变量里的库
 set(TOOLCHAIN_LINK_LIBRARIES m)
+
+# 平台实现目录：platform/stm32h7
+set(RM_CHIP stm32h7)
+
+# 本仓库代码使用 HAL、CMSIS、FreeRTOS 头文件的入口。include 目录和宏取自 CubeMX 生成的 stm32cubemx 目标，
+# 但作为 SYSTEM 目录，第三方头文件里的警告不算在我们头上（-Werror）
+add_library(rm_vendor INTERFACE)
+target_include_directories(rm_vendor SYSTEM INTERFACE
+    $<TARGET_PROPERTY:stm32cubemx,INTERFACE_INCLUDE_DIRECTORIES>)
+target_compile_definitions(rm_vendor INTERFACE
+    $<TARGET_PROPERTY:stm32cubemx,INTERFACE_COMPILE_DEFINITIONS>)

@@ -64,6 +64,7 @@ const osThreadAttr_t startup_attributes = {
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
+void app_main(void); /* 框架入口，定义在 robots/common/app_main.c */
 
 /* USER CODE END FunctionPrototypes */
 
@@ -115,6 +116,7 @@ void MX_FREERTOS_Init(void) {
   startupHandle = osThreadNew(startup_task, NULL, &startup_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
+  app_main(); /* 框架：初始化并静态创建其余全部任务（REGEN_CHECKLIST 第 4 条） */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
 

@@ -22,10 +22,15 @@ endif()
 add_subdirectory(platform)
 
 if(RM_BOARD)
+    # core、robots 目前只用于固件（依赖 FreeRTOS）；电脑侧的假实现以后再加
+    add_subdirectory(core)
+    add_subdirectory(robots)
+
     # 固件目标。CubeMX 生成的 CMakeLists 把 main.c 等源文件加到名为 ${CMAKE_PROJECT_NAME} 的目标上，
     # 所以目标名必须等于项目名；生成代码不套用本仓库的严格警告
     add_executable(${CMAKE_PROJECT_NAME})
     add_subdirectory(${RM_BOARD_DIR}/cmake/stm32cubemx ${CMAKE_BINARY_DIR}/stm32cubemx)
+    target_link_libraries(${CMAKE_PROJECT_NAME} rm_robot)
 endif()
 
 option(RM_HOST_TESTS "编译电脑侧单元测试（只在 host-tests 预设中打开）" OFF)
