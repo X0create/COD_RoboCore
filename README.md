@@ -72,7 +72,7 @@ cmake --preset h723-template-debug && cmake --build --preset h723-template-debug
 
 ## 参考与致谢
 
-本模板从零编写。设计时参考了以下项目：
+设计时参考了以下项目：
 
 - [COD-H7-Template](https://github.com/GrassFanWang/COD-H7-Template)（COD，MIT）
 - [COD_UniCFramework](https://github.com/fakeSkyy/COD_UniCFramework)（COD，MIT）
