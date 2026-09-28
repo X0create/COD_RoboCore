@@ -12,7 +12,8 @@
  *          解锁：右拨杆拨到下再拨到中或上；急停：右拨杆拨到下（config.h，ADR 0032）。
  *          ins 任务 1 kHz：subsystems/ins（BMI088、上电零偏标定、EKF、加热），标定完成后才发布 imu_state；
  *          IMU 未就绪时安全门全车停。
- *          心跳任务驱动状态灯，每秒通过 RTT 打印模式、遥控、电机反馈和 IMU；上线 / 离线的变化由 daemon 任务打印。
+ *          心跳任务驱动状态灯和蜂鸣器（启动音、解锁 / 上锁音、低电量每 2 s 两声），检查电池电压，
+ *          每秒通过 RTT 打印模式、遥控、电机反馈、IMU 和电池；上线 / 离线的变化由 daemon 任务打印。
  */
 #include "robot.h"
 
@@ -24,6 +25,8 @@
 #include "core/os/delay.h"
 #include "core/os/os.h"
 #include "daemon.h"
+#include "devices/battery/battery.h"
+#include "devices/buzzer/buzzer.h"
 #include "devices/motor/motor.h"
 #include "devices/motor/motor_group.h"
 #include "devices/remote/dr16.h"
@@ -33,6 +36,7 @@
 #include "msgs/kbm_state.h"
 #include "msgs/rc_state.h"
 #include "msgs/vt_rc_state.h"
+#include "platform/adc.h"
 #include "platform/can.h"
 #include "platform/status_led.h"
 #include "platform/time.h"
@@ -113,6 +117,11 @@ static const InsConfig ins_config = { .install_rotation = TEMPLATE_IMU_INSTALL_R
 static Ins ins;
 static RmTask ins_task;
 static StackType_t ins_stack[INS_STACK_WORDS];
+
+static const BatteryConfig battery_config = TEMPLATE_BATTERY_CONFIG;
+static Battery battery; /* 以下两个只在心跳任务里用 */
+static Buzzer buzzer;
+#define LOW_BATTERY_BEEP_STEPS 80u /* 80 × 25 ms = 2 s 响一次 */
 
 static RmTask heartbeat_task;
 static StackType_t heartbeat_stack[HEARTBEAT_STACK_WORDS];
@@ -290,16 +299,72 @@ static const char *mode_name(RobotMode mode)
     return "?";
 }
 
+/* 电池：低电量期间每 2 s 响一次；状态变化时打印一次 */
+static void check_battery(uint32_t tick)
+{
+    const bool was_low = battery.low;
+    const bool low = battery_update(&battery, adc_read_volts(ADC_BATTERY), rm_time_now_us());
+    if (low != was_low)
+    {
+        if (low)
+        {
+            RM_LOG_W("battery low: %d mV", (int)(battery.voltage_v * 1000.0f));
+        }
+        else
+        {
+            RM_LOG_I("battery ok: %d mV", (int)(battery.voltage_v * 1000.0f));
+        }
+    }
+    if (low && tick % LOW_BATTERY_BEEP_STEPS == 0u)
+    {
+        buzzer_play(&buzzer, BUZZER_LOW_BATTERY);
+    }
+}
+
+/* 模式变化时的提示音：进入 Manual 为解锁音，离开为上锁音 */
+static void beep_on_mode_change(RobotMode *last)
+{
+    const RobotMode mode = gate.mode;
+    if (mode != *last)
+    {
+        if (mode == ROBOT_MODE_MANUAL)
+        {
+            buzzer_play(&buzzer, BUZZER_ARM);
+        }
+        else if (*last == ROBOT_MODE_MANUAL)
+        {
+            buzzer_play(&buzzer, BUZZER_DISARM);
+        }
+        *last = mode;
+    }
+}
+
 static void heartbeat_entry(void *arg)
 {
     (void)arg;
     uint32_t beat = 0u;
     uint32_t step = 0u;
+    uint32_t tick = 0u;
+    RobotMode last_mode = gate.mode;
+
+    if (buzzer_init(&buzzer))
+    {
+        buzzer_play(&buzzer,
+                    BUZZER_STARTUP); /* 心跳任务在 startup 任务结束后才运行，此时启动已完成 */
+    }
+    else
+    {
+        RM_LOG_E("buzzer pwm start failed");
+    }
 
     RmTaskPeriod last_wake = rm_task_period_start();
     for (;;)
     {
         rm_status_led_set(0u, led_on_at(step) ? LED_GREEN_LEVEL : 0u, 0u);
+        check_battery(tick);
+        beep_on_mode_change(&last_mode);
+        buzzer_step(&buzzer, HEARTBEAT_STEP_MS);
+        tick++;
 
         if (step == 0u)
         {
@@ -311,6 +376,8 @@ static void heartbeat_entry(void *arg)
             log_vt_link();
             log_usb();
             log_imu();
+            RM_LOG_I("battery %d mV%s", (int)(battery.voltage_v * 1000.0f),
+                     battery.low ? " (low)" : "");
             beat++;
         }
 
@@ -357,6 +424,7 @@ bool robot_init(void)
         RM_LOG_E("ins init failed");
         return false;
     }
+    battery_init(&battery, &battery_config);
     safety_gate_init(&gate, TEMPLATE_ARM_SWITCH);
     const PidParam speed_param = TEMPLATE_SPEED_PID_PARAM;
     pid_init(&speed_pid, PID_POSITION, &speed_param);
@@ -365,6 +433,10 @@ bool robot_init(void)
 
 void robot_start(void)
 {
+    if (!adc_start())
+    {
+        RM_LOG_E("adc start failed"); /* 只影响低电量提示，不阻止解锁 */
+    }
     safety_gate_set_system_ready(&gate);
 }
 

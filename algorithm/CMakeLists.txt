@@ -7,6 +7,7 @@ add_library(rm_algorithm STATIC
     filter/kalman.c
     filter/lpf.c
     math/matrix.c
+    power/rls.c
 )
 # 以 "algorithm/control/pid.h" 的形式 include
 target_include_directories(rm_algorithm PUBLIC ${PROJECT_SOURCE_DIR})

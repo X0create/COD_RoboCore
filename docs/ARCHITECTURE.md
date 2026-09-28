@@ -1340,6 +1340,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0035 | 用户 2026-09-28 确认：达妙电机 ① 使能 / 失能 / 清错命令发往**电机 CAN ID**（与 MIT 帧同 ID，按 basic_framework、StandardRobot++），不沿用旧工程发往反馈 ID 的做法；② **解锁后由子系统请求使能**，上电不使能，离线后请求被清除（重新上线不自动使能）；③ **只做 MIT 模式**；④ 样板接一台 DM8009（FDCAN2 FD、ID 0x01 / 0x11、±π / 45 / 54）。实现要点：使能按“期望状态”与反馈状态对齐，不用命令队列，两条命令至少间隔 20 ms（等确认或超时）；报错时一次请求只清错一次；没人请求使能而电机报告已使能时发失能；每台每周期必发一帧；FD 总线自动发 FD 帧（平台新增 `can_bus_is_fd()`）；MIT 编码截到范围内 | ① 两份参考一致，旧工程无证据表明生效 ② 运行时契约第 5 节“使能只在解锁后” ③④ 只做有人用的功能，行为对照旧工程 |
 | 0036 | 用户 2026-09-28 确认：① 裁判系统命令解析**等用户提供官方《裁判系统串口协议附录 V2.0.0》**后再写（三份参考资料的 0x0201、0x0003 布局互相矛盾，见附录 A.5）；② 届时只解析有使用者的命令：0x0001、0x0201、0x0202、0x0207、0x0208；③ 裁判系统接 USART1（需在 CubeMX 把 USART1_RX 的 DMA 改为 Circular）、图传链路接 USART10（921600）；④ VT13 图传遥控器和 0x0304 键鼠**只解析、发布**，暂不参与解锁 / 急停，操作输入标准化时再定。与赛季无关的 0xA5 帧检查已做成 `devices/referee/ref_frame`，图传现用、裁判系统复用 | ① 不猜协议布局 ② 只做有人用的功能 ③ 旧工程两者共用 USART1、编译开关二选一 ④ 输入仲裁属于 command 任务 |
 | 0037 | 用户 2026-09-28 确认：视觉通信本步**只做通道和帧层**：`platform/usb_cdc`（接收经字节环形缓冲交给 comm_rx，发送拷贝进缓冲、忙时返回 false）+ 0x5A 帧（`devices/vision/vision_frame`：SOF、长度、ID、帧头 CRC8，整帧 CRC16，附录 A.6）+ `vision_link` 找帧计数；消息 ID、字段、下行姿态与时间戳对齐等视觉组确定协议后再做。样板把 USB 收到的字节原样回发，用于验证通道，协议确定后去掉。顺带修正：`MX_USB_DEVICE_Init()` 原本只在 CubeMX 的弱定义 `startup_task` 里，被框架覆盖后 USB 从未初始化，现由 `usb_cdc_start()` 调用 | 旧工程 MiniPC 是空壳，无协议可移植；视觉组上位机未定，不凭空定字段 |
+| 0038 | 用户 2026-09-28 确认：① 电池按 6S，**连续 1 s 低于 21.0 V 提示低电量**（回到 21.5 V 以上解除，持续时间与回差为 AI 补的默认值，写在兵种 config.h）；第一版只提示（日志 + 蜂鸣器），不限制动作（ADR 0027）；② 蜂鸣器响**启动音、解锁 / 上锁音和低电量音**（低电量每 2 s 两声）；③ RLS **按标准公式重写**（带遗忘因子、单输出、静态存储），暂不接入，等底盘功率控制。实现要点：`platform/adc` 按用途命名（`ADC_BATTERY`），DMA 缓冲区放 `.dma_buf`；`platform/pwm` 增加 `PWM_BUZZER` 和 `pwm_set_frequency()`（自动选分频） | 旧工程 bsp_adc 只换算电压、无使用者；没有蜂鸣器代码；RLS.c 无调用者且跑不起来（增益向量越界、λ 未赋值、维数不匹配） |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
@@ -1552,7 +1553,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 9 | `Device/Motor.c`（达妙部分） | `devices/motor/dm_motor`（含 FDCAN2 的 FD 总线） | 代码完成（2026-09-28）：MIT、使能按期望状态对齐、FD 帧、跨品牌 ID 查重（ADR 0035）；样板接一台 DM8009；主机测试 18 项；上板待 V39–V42 |
 | 10 | `Device/Referee_System.c`、`Image_Transmission.c` | `devices/referee/referee`（协议 v2.0.0）、`devices/remote/vt_link` | 图传完成（2026-09-28）：`ref_frame`（0xA5 帧检查）、`vt_link`（VT13、0x0304），主机测试 11 项，上板待 V13、V14；**裁判系统等官方 V2.0.0 文档**（ADR 0036） |
 | 11 | `Device/MiniPC.c`、USB CDC | `platform/…/usb_cdc`、`devices/vision/vision_link` | 通道和帧层完成（2026-09-28，ADR 0037）：usb_cdc、byte_ring、vision_frame、vision_link；主机测试 8 项；上板待 V15；**消息字段等视觉组协议** |
-| 12 | `BSP/bsp_adc.c`、`Algorithm/RLS.c`、蜂鸣器 | `platform/…/adc`、`devices/battery`、`algorithm/power/rls`、`devices/buzzer` | |
+| 12 | `BSP/bsp_adc.c`、`Algorithm/RLS.c`、蜂鸣器 | `platform/…/adc`、`devices/battery`、`algorithm/power/rls`、`devices/buzzer` | 代码完成（2026-09-28，ADR 0038）：adc、battery（6S / 21.0 V）、buzzer（启动 / 解锁 / 上锁 / 低电量）、rls（标准公式重写，暂未接入）；主机测试 12 项；上板待 V16–V18 |
 
 ### 风险
 

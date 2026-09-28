@@ -7,6 +7,7 @@
 static bool started[PWM_COUNT];
 static float duty[PWM_COUNT];
 static unsigned set_count[PWM_COUNT];
+static float freq[PWM_COUNT];
 
 void fake_pwm_reset(void)
 {
@@ -15,6 +16,7 @@ void fake_pwm_reset(void)
         started[i] = false;
         duty[i] = 0.0f;
         set_count[i] = 0u;
+        freq[i] = 0.0f;
     }
 }
 
@@ -29,6 +31,16 @@ void pwm_set_duty(PwmChannel ch, float d)
 {
     duty[ch] = (d < 0.0f) ? 0.0f : ((d > 1.0f) ? 1.0f : d);
     set_count[ch]++;
+}
+
+void pwm_set_frequency(PwmChannel ch, float hz)
+{
+    freq[ch] = hz;
+}
+
+float fake_pwm_frequency(PwmChannel ch)
+{
+    return freq[ch];
 }
 
 bool fake_pwm_started(PwmChannel ch)

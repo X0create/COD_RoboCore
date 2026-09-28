@@ -14,6 +14,7 @@ rm_target_warnings(rm_platform_common)
 # 当前主控的平台实现：同名函数，CMake 只编译这一份（ADR 0017）
 if(RM_CHIP)
     add_library(rm_platform STATIC
+        ${RM_CHIP}/adc.c
         ${RM_CHIP}/can.c
         ${RM_CHIP}/pwm.c
         ${RM_CHIP}/spi.c

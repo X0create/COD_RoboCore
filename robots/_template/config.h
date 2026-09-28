@@ -33,6 +33,15 @@
                  .integral_limit = 5000.0f / TEMPLATE_RPM_PER_RAD_S,                               \
                  .output_limit = 12000.0f / TEMPLATE_RAW_PER_NM })
 
+/**
+ * 电池（6S）：连续 1 s 低于 21.0 V 提示低电量，回到 21.5 V 以上解除（ADR 0038）；
+ * 分压比 11 取自 COD-H7-Template bsp_adc.c，待万用表核对（V16）
+ */
+#define TEMPLATE_BATTERY_CONFIG                                                                    \
+    {                                                                                              \
+        .divider = 11.0f, .low_v = 21.0f, .recover_v = 21.5f, .hold_ms = 1000u                     \
+    }
+
 /** 解锁 / 急停拨杆：右拨杆 sw[1]（ADR 0032；左右以 V11 上板核对为准） */
 #define TEMPLATE_ARM_SWITCH 1u
 

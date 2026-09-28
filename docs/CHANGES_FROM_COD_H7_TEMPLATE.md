@@ -65,6 +65,9 @@
 | 2026-09-28 | 图传链路 | `Image_Transmission.c`：与裁判系统共用 USART1（编译开关二选一，115200）；只看缓冲区开头一帧；VT13 不查摇杆范围；0x0309 发送没加帧头和 CRC | `devices/remote/vt_link`：接 USART10（921600）；comm_rx 任务里按字节流找帧（帧头 + CRC，拆段能拼、错位能恢复）；VT13 摇杆超出 364–1684 丢弃（范围待核对）；发布 `VtRcState`、`KbmState`，暂不参与控制；0x0302 / 0x0309 暂不移植；0xA5 帧检查做成公共的 `devices/referee/ref_frame` | ADR 0036 | 主机测试 ref_frame 4 项、vt_link 7 项；上板待 V13、V14 |
 | 2026-09-28 | USB 虚拟串口 | `MiniPC.c`：`CDC_Transmit_HS(Buff, sizeof(*Buff))` 只发 1 字节；接收回调为空；`MX_USB_DEVICE_Init()` 在 CubeMX 生成的默认任务里 | `platform/usb_cdc`：接收钩子在 `usbd_cdc_if.c` 的 USER CODE 区，经字节环形缓冲交给 comm_rx；发送按实际长度、拷贝进缓冲，上一包没发完返回 false；**`MX_USB_DEVICE_Init()` 改由 `usb_cdc_start()` 调用**（框架覆盖了 CubeMX 的弱定义 startup_task，原来的调用从未执行） | ADR 0027、0037 | 主机测试 byte_ring 3 项；上板待 V15 |
 | 2026-09-28 | 视觉通信帧 | 无 | `devices/vision/vision_frame`（0x5A 帧检查与组帧）+ `vision_link`（找帧、计数）；消息字段待视觉组；样板暂时原样回发收到的字节 | ADR 0037 | 主机测试 vision 5 项 |
+| 2026-09-28 | 电池电压 | `bsp_adc.c`：ADC1 两个序位都是通道 4，只用第一个，×3.3/65535×11 换算；没有使用者 | `platform/adc`（按用途命名 `ADC_BATTERY`，两个序位取平均，DMA 缓冲区在 `.dma_buf`）+ `devices/battery`：6S 连续 1 s 低于 21.0 V 提示低电量、21.5 V 以上解除，只提示不限制动作；分压比 11 沿用，待核对 | ADR 0027、0038 | 主机测试 battery 4 项；上板待 V16、V18 |
+| 2026-09-28 | 蜂鸣器 | 只在 CubeMX 里配了 TIM12 通道 2，没有代码 | `devices/buzzer`：音符序列、不阻塞；启动音、解锁 / 上锁音、低电量每 2 s 两声；`platform/pwm` 新增 `pwm_set_frequency()` | ADR 0038 | 主机测试 buzzer 4 项；上板待 V17 |
+| 2026-09-28 | RLS 参数辨识 | `RLS.c`：CMSIS-DSP 矩阵 + `malloc`；**没有调用者**；增益向量只分配 1 个 float 却按 2 个使用（越界写堆）、遗忘因子从未赋值（为 0，1/λ 为无穷）、1×1 乘 2×2 维数不匹配 | `algorithm/power/rls`：按标准公式重写，静态存储，最多 4 个参数；暂不接入（等底盘功率控制） | 旧代码跑不起来，无法照搬（ADR 0038） | 主机测试 4 项（含功率模型用法：辨识 k1、k2） |
 | 2026-09-28 | 键盘状态机 | `KeyBoard_Info_Typedef`（短按 / 长按）声明了但没有使用 | **不移植** | 没有调用者；写操作手输入（command）时再做 | —— |
 | 2026-09-28 | 在线检测与话题 | 无统一机制 | `core/watchdog`（喂狗时间戳，在线与否读取时计算）、`core/msg/topic`（最新值 + 时间戳 + 唯一发布者）、daemon 任务 100 Hz 打印上线 / 离线与设备清单 | 《架构设计》核心机制第 2、3 节 | 主机测试 topic 6 项、watchdog 4 项；上板待 V4 |
 
@@ -101,5 +104,3 @@
 | `MiniPC.c` | 接收回调为空 | 消息 ID 与字段等视觉组确定协议后再做（ADR 0037） |
 | `Config.h` | 弹道系数、装甲板尺寸等是全局宏 | 视觉常数归 VisionLink 或上位机（IMU 轴映射已改为安装旋转，见上） |
 | 安全逻辑 | 无统一的遥控丢失 / 电机离线处理 | 全车停（急停、遥控丢失、未解锁、IMU 未就绪）+ 机构停（本机构设备离线）（ADR 0026） |
-| `bsp_adc.c` | ADC1 采电池电压（×11），没有使用者 | `devices/battery`，第一版只提示低电量（ADR 0027） |
-| 板载外设 | 未配置 SPI6（WS2812 状态灯）、TIM12（蜂鸣器） | 按 UniC 实测补上 |

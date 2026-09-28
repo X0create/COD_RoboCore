@@ -1,5 +1,7 @@
 # 设备协议解析；只用 platform 接口、core、msgs，电脑测试和固件都链接它
 add_library(rm_devices STATIC
+    battery/battery.c
+    buzzer/buzzer.c
     imu/bmi088.c
     motor/dji_motor.c
     motor/dm_motor.c
