@@ -36,3 +36,5 @@ rm_add_host_test(test_watchdog core/test_watchdog.c rm_core_common rm_host_fakes
 rm_add_host_test(test_dr16 devices/test_dr16.c rm_devices rm_host_fakes)
 rm_add_host_test(test_dji_motor devices/test_dji_motor.c rm_devices)
 rm_add_host_test(test_motor_group devices/test_motor_group.c rm_devices rm_host_fakes)
+rm_add_host_test(test_safety_gate robots/test_safety_gate.c rm_robot_logic)
+rm_add_host_test(test_template_config robots/test_template_config.c rm_algorithm rm_devices)

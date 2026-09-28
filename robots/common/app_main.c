@@ -60,7 +60,8 @@ void startup_task(void *argument)
     }
     comm_rx_start_uarts(); /* robot_init() 里登记的串口（DR16 等），收到数据同样唤醒 comm_rx */
 
-    /* 10–12（设备自检、硬件看门狗、允许解锁）在阶段 1 加入 */
+    /* 10–11（设备自检、硬件看门狗）在阶段 1 加入 */
+    robot_start(); /* 12. 允许解锁 */
     RM_LOG_I("startup done");
     rm_task_delete_self();
 }

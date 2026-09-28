@@ -1,15 +1,18 @@
 /**
  * @file    robot.c
- * @brief   新兵种的样板：DR16 遥控 + 一台 M3508（只收反馈）+ 心跳任务
- * @note    心跳任务驱动状态灯，每秒通过 RTT 打印一次（上板验证手段，见 docs/VERIFICATION_TODO.md）：
- *          - 遥控：在线时打印 5 个通道、两个拨杆和丢弃的坏帧数；离线时打印 “rc lost”；
- *          - M3508（CAN1，ID 1，接线沿用 COD-H7-Template）：在线时打印角度、速度、力矩估计、温度；
- *          上线 / 离线的变化由 daemon 任务另外打印。
- *          **本样板不发送任何电机指令**：motor_group_flush() 要等第 6 步的 control 任务才调用。
+ * @brief   新兵种的样板：遥控控制一台 M3508 的转速（照搬 COD-H7-Template `Control_Task.c`）+ 安全门
+ * @note    control 任务 1 kHz：读遥控 → 安全门 → 速度环 → 全车停改写 → 电机组发送。
+ *          **这个固件会给电机发指令**：未解锁时持续发 0 电流；解锁后按遥控通道 3 转动。上板按台架条件
+ *          （docs/VERIFICATION_TODO.md“接电机”）。
+ *          解锁：右拨杆拨到下再拨到中或上；急停：右拨杆拨到下（config.h，ADR 0032）。
+ *          心跳任务驱动状态灯，每秒通过 RTT 打印模式、遥控和电机反馈；上线 / 离线的变化由 daemon 任务打印。
  */
 #include "robot.h"
 
+#include "algorithm/control/pid.h"
 #include "comm_rx.h"
+#include "config.h"
+#include "control_task.h"
 #include "core/log/log.h"
 #include "core/os/os.h"
 #include "daemon.h"
@@ -19,14 +22,17 @@
 #include "msgs/rc_state.h"
 #include "platform/can.h"
 #include "platform/status_led.h"
+#include "platform/time.h"
 #include "platform/uart.h"
+#include "safety_gate.h"
 
 /* FreeRTOS 优先级，数字越大越高；本兵种全部任务的优先级只写在这里 */
 enum
 {
     PRIORITY_HEARTBEAT = 1,
     PRIORITY_DAEMON = 2,
-    PRIORITY_COMM_RX = 3, /* 高于控制以外的任务，保证反馈帧及时取走（《架构设计》任务划分） */
+    PRIORITY_CONTROL = 3,
+    PRIORITY_COMM_RX = 4, /* 高于 control，保证控制周期读到最新反馈（《架构设计》任务划分） */
 };
 
 #define HEARTBEAT_STEP_MS     25u
@@ -38,7 +44,7 @@ enum
 #define DBUS_UART UART_5
 
 /* 话题实例 */
-static RcStateTopic rc_state; /* 发布：dr16    读取：心跳任务（以后是 command、安全门） */
+static RcStateTopic rc_state; /* 发布：dr16    读取：control（安全门、速度目标）、心跳任务 */
 
 static Dr16 dr16;
 
@@ -54,6 +60,10 @@ static const MotorConfig chassis_motor_config = {
 };
 static Motor chassis_motor;
 static MotorGroup motors;
+
+/* 以下只在 control 任务里读写（gate.mode 另由心跳任务读来打印） */
+static SafetyGate gate;
+static Pid speed_pid;
 static RmTask heartbeat_task;
 static StackType_t heartbeat_stack[HEARTBEAT_STACK_WORDS];
 
@@ -97,6 +107,20 @@ static void log_motor(void)
              (int)(fb.torque_nm * 1000.0f), (int)fb.temperature_c);
 }
 
+static const char *mode_name(RobotMode mode)
+{
+    switch (mode)
+    {
+        case ROBOT_MODE_INIT:
+            return "init";
+        case ROBOT_MODE_SAFE:
+            return "safe";
+        case ROBOT_MODE_MANUAL:
+            return "manual";
+    }
+    return "?";
+}
+
 static void heartbeat_entry(void *arg)
 {
     (void)arg;
@@ -111,7 +135,7 @@ static void heartbeat_entry(void *arg)
         if (step == 0u)
         {
             /* 每次打印都会读一次时间，同时保证 DWT 扩展计数至少每 7.8 s 更新一次（time.h 的 @pre） */
-            RM_LOG_I("alive %u", (unsigned)beat);
+            RM_LOG_I("alive %u, mode %s", (unsigned)beat, mode_name(gate.mode));
             log_rc();
             log_motor();
             beat++;
@@ -137,12 +161,57 @@ bool robot_init(void)
                  conflict != NULL ? conflict->cfg->name : "");
         return false;
     }
+    safety_gate_init(&gate, TEMPLATE_ARM_SWITCH);
+    const PidParam speed_param = TEMPLATE_SPEED_PID_PARAM;
+    pid_init(&speed_pid, PID_POSITION, &speed_param);
     return true;
+}
+
+void robot_start(void)
+{
+    safety_gate_set_system_ready(&gate);
+}
+
+void robot_control_step(void)
+{
+    const uint64_t now_us = rm_time_now_us();
+
+    /* 1. 一次性读输入快照 */
+    RcState rc;
+    const bool rc_online = rc_state_read(&rc_state, &rc, RC_LOST_TIMEOUT_MS);
+    MotorFeedback fb;
+    const bool motor_online = motor_read_feedback(&chassis_motor, &fb);
+
+    /* 2. 安全门：遥控丢失、急停、未解锁 → 全车停 */
+    const SafetyDecision gate_out = safety_gate_update(&gate, rc_online ? &rc : NULL, now_us);
+
+    /* 3. 速度环（旧工程 Control_Task）。全车停或电机离线（机构停）时清积分，不写指令：
+     *    槽位没写就填零力矩，恢复时从零开始，不会因积分猛冲 */
+    if (gate_out.stop_all || !motor_online)
+    {
+        pid_reset(&speed_pid);
+    }
+    else /* 不全车停时本周期遥控一定在线（安全门保证），rc 有效 */
+    {
+        const float target_rad_s = (float)rc.ch[3] * TEMPLATE_SPEED_PER_CH;
+        const float limit = speed_pid.param.output_limit * safety_gate_output_scale(&gate, now_us);
+        float torque_nm = pid_calc(&speed_pid, target_rad_s, fb.speed_rad_s);
+        torque_nm = (torque_nm > limit) ? limit : ((torque_nm < -limit) ? -limit : torque_nm);
+        motor_set_torque(&chassis_motor, torque_nm);
+    }
+
+    /* 4. 全车停在发送出口统一执行：即使上面漏判，也不会发出运动指令 */
+    if (gate_out.stop_all)
+    {
+        motor_group_apply_stop_all(&motors);
+    }
+    motor_group_flush(&motors);
 }
 
 void robot_create_tasks(void)
 {
     comm_rx_create_task(PRIORITY_COMM_RX);
+    control_task_create(PRIORITY_CONTROL);
     daemon_create_task(PRIORITY_DAEMON);
     if (!rm_task_create(&heartbeat_task, "heartbeat", heartbeat_entry, NULL, PRIORITY_HEARTBEAT,
                         heartbeat_stack, HEARTBEAT_STACK_WORDS))

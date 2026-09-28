@@ -24,11 +24,9 @@ add_subdirectory(core)             # 电脑侧只有 rm_core_common，其余只�
 add_subdirectory(algorithm)
 add_subdirectory(msgs)
 add_subdirectory(devices)
+add_subdirectory(robots)           # 电脑侧只有 rm_robot_logic（安全门），其余只用于固件
 
 if(RM_BOARD)
-    # robots 目前只用于固件（依赖 FreeRTOS）
-    add_subdirectory(robots)
-
     # 固件目标。CubeMX 生成的 CMakeLists 把 main.c 等源文件加到名为 ${CMAKE_PROJECT_NAME} 的目标上，
     # 所以目标名必须等于项目名；生成代码不套用本仓库的严格警告
     add_executable(${CMAKE_PROJECT_NAME})

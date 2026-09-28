@@ -4,9 +4,9 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| `common/` | `app_main()` 与启动任务、`comm_rx` 任务（CAN 帧分发、串口字节交给设备解析）、`daemon` 任务（设备上线 / 离线报告）、模式状态机、安全门（全车停） |
+| `common/` | `app_main()` 与启动任务、`comm_rx` 任务（CAN 帧分发、串口字节交给设备解析）、`control` 任务（1 kHz 调用 `robot_control_step()`）、`daemon` 任务（设备上线 / 离线报告）、安全门与模式（`safety_gate`，全车停） |
 | `_template/` | 新兵种的样板，由 `tools/new_robot.py` 复制 |
-| `<兵种>/` | `config.h`（含每个电机全车停时的 `stop_action`）、`robot.c`（组装与话题实例）、`debug.c` |
+| `<兵种>/` | `config.h`（PID 参数、解锁拨杆等固定参数）、`robot.c`（组装、话题实例、`robot_control_step()`）、`debug.c` |
 
 - 负责：选模块、填参数、模式状态机、创建任务。
 - **可以** include：所有下层。
