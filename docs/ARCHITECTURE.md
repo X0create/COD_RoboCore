@@ -1333,6 +1333,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0025 | FreeRTOS 由 CubeMX 生成（内核版本随 CubeMX 固件包：COD-H7-Template 所用的旧包为 V10.3.1，本模板用的 CubeMX 6.18.1 + FW_H7 V1.13.0 为 V10.6.2）；CubeMX 里不定义任何任务；框架在 `app_main()` 中用 `xTaskCreateStatic` 等原生 API 静态创建全部任务；HAL 时基用 TIM | 理由见下文 |
 | 0029 | 用户 2026-09-28 确认：① 卡尔曼等算法的矩阵运算用本层自写的 `algorithm/math/matrix`（加、减、乘、转置、列主元高斯-约当求逆），不引入 CMSIS-DSP；② PID 先保持 COD-H7-Template 的行为（不带 dt、微分作用在误差上），显式 dt 与“微分作用在测量值上”留到第 6 步控制任务能在台架上对比时，作为单独的“改行为”提交 | ① 矩阵最大 6×6，自写约 150 行即可在电脑上直接测试，不必为主机测试配置 CMSIS-DSP；求逆的舍入与旧工程有极小差异 ② 旧参数可直接使用，符合“搬代码与改行为分开” |
 | 0030 | 用户 2026-09-28 确认：**遥控丢失超时 200 ms**（沿用 COD-H7-Template，不用计划中的 100 ms）；遥控是否丢失**只以 `rc_state` 话题的新旧判定**（`rc_state_read(…, RC_LOST_TIMEOUT_MS)` 失败即丢失），DR16 的 `Watchdog` 只用于上线 / 离线日志和设备清单；daemon 任务现在只做报告，IWDG 在阶段 1 加入 | 同一故障只在一处判定；只有合法帧才发布，话题时间戳就是最后一次合法帧。代价：从关遥控到判定丢失就要 200 ms，阶段 1 完成标准中“关遥控后 100 ms 内停下”一项按此放宽（见该清单） |
+| 0031 | 用户 2026-09-28 确认：① 电机接口用**输出轴国际单位**（`motor_set_torque` 为 N·m，反馈为 rad、rad/s、N·m），第 6 步把旧 PID 参数按固定公式换算；② 电机反馈离线超时 **20 ms**（`MOTOR_OFFLINE_TIMEOUT_MS`）；③ GM6020 本步只有反馈，`torque_command = false`，电压 / 电流指令写云台时再加；④ DJI 电机的 `stop_action` 只支持零力矩（发 0）和失能（发 0 后停止发送），配成阻尼时 `motor_init()` 拒绝。实现与“电机：统一接口”草图的差异：电机组是 `MotorGroup` 实例（由 `robot.c` 持有，`motor_init` 时传入，便于测试和多组），没有 `begin_cycle`（`motor_group_flush()` 发送后清空槽位）；`motor_init` 多一个 `conflict` 输出参数，日志里写出冲突的两个电机 | ① 换型号 / 减速比不用改子系统，与达妙电机单位一致 ② 1 kHz 反馈下等于连续丢 20 帧，机构停及时 ③④ 只做有人用的功能 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
@@ -1508,8 +1509,8 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 - [ ] `core/msg`：话题通用实现（临界区拷贝 + 时间戳 + 认领）；`msgs/robot_cmd`、`msgs/rc_state`（2026-09-28：`core/msg/topic` 与 `msgs/rc_state` 完成，`robot_cmd` 未做）
 - [x] `core/watchdog`：在线状态在读取时计算；清单打印（2026-09-28，daemon 任务打印；上板待 V4）
 - [x] `devices/remote/dr16`：检查帧长和取值范围，输出 `RcState`；用录制帧和错误帧做单元测试（模糊测试推迟到阶段 5 以后）（2026-09-28，主机测试 9 项，帧由独立的组帧函数生成、并用 Python 算的字节核对；上板待 V10–V12）
-- [ ] `devices/motor`：`motor.h` 统一接口 + `dji_motor.c`（先只做 M3508）、ID 冲突检查、反馈快照
-- [ ] `motor_group`：按周期打包；没有写入的槽位填零力矩
+- [x] `devices/motor`：`motor.h` 统一接口 + `dji_motor.c`（先只做 M3508）、ID 冲突检查、反馈快照（2026-09-28：M3508 / M2006 / GM6020 反馈，M3508 / M2006 力矩指令，主机测试；上板待 V30–V32）
+- [x] `motor_group`：按周期打包；没有写入的槽位填零力矩（2026-09-28，主机测试；固件里第 6 步 control 任务才调用）
 - [ ] `robots/common/safety_gate`：遥控丢失、急停、未解锁 → `stop_all`；全车停时发送出口把每个电机改写为 `stop_action`（ADR 0026）
 - [ ] 模式状态机 Init → Safe → Manual（表驱动）；进入 Manual 时输出斜坡 300 ms；离线后不自动恢复，需要重新解锁
 - [ ] `control` 任务（1 kHz）：周期开头读快照，末尾统一提交；记录启动延迟、执行时间、提交时刻的最大值（只做调试统计，不联动安全门）
@@ -1538,7 +1539,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 2 | `Algorithm/CRC.c` | `core/util/crc.{h,c}` | 代码完成（2026-09-28），主机测试 6 项；纯计算，无需上板 |
 | 3 | `Controller/PID.c`、`Algorithm/Ramp.c`、`LPF.c`、`Kalman_Filter.c` | `algorithm/control/pid`、`algorithm/control/ramp`、`algorithm/filter/lpf`、`algorithm/filter/kalman` || 代码完成（2026-09-28）：PID、斜坡、低通、卡尔曼 + `algorithm/math/matrix`，主机测试 29 项；纯计算，无需上板 |
 | 4 | `Device/Remote_Control.c`、`Task/Detect_Task.c` | `devices/remote/dr16`、`core/watchdog`、`msgs/rc_state` | 代码完成（2026-09-28），另补 `core/msg/topic`、daemon 任务；主机测试 19 项；上板待 V4、V10–V12 |
-| 5 | `Device/Motor.c`（DJI 部分）、`Task/CAN_Task.c` | `devices/motor/motor.h`、`motor.c`、`dji_motor`、`motor_group` | |
+| 5 | `Device/Motor.c`（DJI 部分）、`Task/CAN_Task.c` | `devices/motor/motor.h`、`motor.c`、`dji_motor`、`motor_group` | 代码完成（2026-09-28），主机测试 21 项；样板只收反馈、不发指令；上板待 V30–V32 |
 | 6 | `Task/Control_Task.c` | `robots/common/safety_gate`、`robots/common/control_task`、`robots/_template`（遥控 → 底盘电机转速） | |
 | 7 | `BSP/bsp_spi.c`、`bsp_gpio.c`、`bsp_pwm.c`、`Device/Bmi088.c` | `platform/…/spi`、`gpio`、`pwm`，`devices/imu/bmi088`（含加热恒温） | |
 | 8 | `Algorithm/Quaternion.c`、`Task/INS_Task.c` | `algorithm/attitude/quat_ekf`、`subsystems/ins`、`msgs/imu_state` | |
@@ -1592,7 +1593,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | `0x204 + id`（`0x205`–`0x20B`） | GM6020 | 同上 |
 
 - **冲突**：GM6020 的 1–4 号与 C6x0 的 5–8 号反馈 ID 相同（basic\_framework 在注册时检查）；控制帧 `0x1FF` 两者共用。
-- 原始值量程：C620 电流 ±16384 对应 ±20 A；M3508 减速比 3591/187；输出轴力矩常数约 0.3 N·m/A（basic\_framework 用 `(20/16384)×0.3`）。其余型号的量程和常数以大疆手册为准，写进 `dji_motor.c` 的型号常量表并注明出处。层级：**引用**。
+- 原始值量程：C620 电流 ±16384 对应 ±20 A；M3508 减速比 3591/187；输出轴力矩常数约 0.3 N·m/A（basic\_framework 用 `(20/16384)×0.3`）。其余型号的量程和常数以大疆手册为准，写进 `dji_motor.c` 的型号常量表并注明出处。层级：**引用**。2026-09-28 `dji_motor.c` 中 M2006（C610 ±10000 ↔ ±10 A、0.18 N·m/A）和 GM6020（反馈 ±16384 ↔ ±3 A、0.741 N·m/A）的常数是**待核对值**，要对照大疆手册确认。
 - 接收过滤不要包含 `0x200`（本机发出的控制帧），见核心机制第 1 节。
 
 ### A.3 达妙电机 CAN 协议（引用 basic\_framework、StandardRobot++）

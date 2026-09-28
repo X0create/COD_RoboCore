@@ -5,9 +5,9 @@
 add_library(unity STATIC unity/unity.c)
 target_include_directories(unity SYSTEM PUBLIC unity)
 
-# 假实现：临界区（单线程下为空）和可设定的时钟，代替 FreeRTOS 与芯片计时
+# 假实现：临界区（单线程下为空）、可设定的时钟、记录收发的 CAN，代替 FreeRTOS 与芯片外设
 # OBJECT 库：目标文件直接编进测试程序，不受静态库链接顺序影响（被测库在它之后才用到这些符号）
-add_library(rm_host_fakes OBJECT fakes/fake_os.c fakes/fake_time.c)
+add_library(rm_host_fakes OBJECT fakes/fake_can.c fakes/fake_os.c fakes/fake_time.c)
 target_include_directories(rm_host_fakes PUBLIC fakes)
 target_link_libraries(rm_host_fakes PUBLIC rm_core_common)
 rm_target_warnings(rm_host_fakes)
@@ -34,3 +34,5 @@ rm_add_host_test(test_kalman algorithm/test_kalman.c rm_algorithm)
 rm_add_host_test(test_topic core/test_topic.c rm_core_common rm_host_fakes)
 rm_add_host_test(test_watchdog core/test_watchdog.c rm_core_common rm_host_fakes)
 rm_add_host_test(test_dr16 devices/test_dr16.c rm_devices rm_host_fakes)
+rm_add_host_test(test_dji_motor devices/test_dji_motor.c rm_devices)
+rm_add_host_test(test_motor_group devices/test_motor_group.c rm_devices rm_host_fakes)
