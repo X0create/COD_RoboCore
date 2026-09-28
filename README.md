@@ -21,6 +21,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 | `docs/CODING_STANDARD.md` | 编码规范：命名、格式、注释、错误处理、安全相关代码，“必须 / 应该 / 可以”三级 |
 | `docs/DEV_ENVIRONMENT.md` | 开发环境搭建：WSL、工具链、Ozone 烧录调试、CLion，每步带验证状态 |
 | `docs/CHANGES_FROM_COD_H7_TEMPLATE.md` | 与 COD-H7-Template 的差异：新旧对照、原因和验证层级 |
+| `docs/VERIFICATION_TODO.md` | 待验证清单：代码已写好、需要上板或台架确认的项目，每项写明接线、操作和期望 |
 
 ## 规划中的目录
 

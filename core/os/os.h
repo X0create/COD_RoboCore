@@ -52,6 +52,19 @@ void rm_task_delay_until(RmTaskPeriod *last_wake, uint32_t period_ms);
 /** 删除当前任务（静态任务的栈和控制块不回收，只是不再运行） */
 void rm_task_delete_self(void);
 
+/**
+ * @brief   等待其他地方（通常是中断）发来的通知，最多等 timeout_ms
+ * @return  true：收到了通知；false：超时
+ * @note    多次通知在被取走前只算一次（计数清零），适合“有新数据了，去取吧”这种用法
+ */
+bool rm_task_wait_notify(uint32_t timeout_ms);
+
+/**
+ * @brief   在中断里通知一个任务（配合 rm_task_wait_notify）
+ * @pre     任务已创建；只能在“RTOS 管理的中断”里调用（优先级数值 ≥ configMAX_SYSCALL_INTERRUPT_PRIORITY）
+ */
+void rm_task_notify_from_isr(RmTask *task);
+
 #ifdef __cplusplus
 }
 #endif

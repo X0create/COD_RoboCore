@@ -4,7 +4,7 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| `common/` | `app_main()`、模式状态机、安全门（全车停） |
+| `common/` | `app_main()` 与启动任务、`comm_rx` 任务（CAN 帧分发）、模式状态机、安全门（全车停） |
 | `_template/` | 新兵种的样板，由 `tools/new_robot.py` 复制 |
 | `<兵种>/` | `config.h`（含每个电机全车停时的 `stop_action`）、`robot.c`（组装与话题实例）、`debug.c` |
 

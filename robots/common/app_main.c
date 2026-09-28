@@ -6,8 +6,10 @@
  */
 #include "app_main.h"
 
+#include "comm_rx.h"
 #include "robot.h"
 
+#include "platform/can.h"
 #include "platform/time.h"
 
 #include "core/log/log.h"
@@ -48,7 +50,16 @@ void startup_task(void *argument)
 {
     (void)argument;
 
-    /* 9–12（打开接收中断、设备自检、硬件看门狗、允许解锁）在阶段 1 加入 */
+    /* 9. 打开接收：CAN 按 robot_init() 里登记的订阅配置滤波器；收到帧由中断唤醒 comm_rx 任务 */
+    for (int bus = 0; bus < (int)CAN_BUS_COUNT; bus++)
+    {
+        if (!can_start((CanBusId)bus, comm_rx_notify_from_isr, NULL))
+        {
+            RM_LOG_E("can%d start failed", bus + 1);
+        }
+    }
+
+    /* 10–12（设备自检、硬件看门狗、允许解锁）在阶段 1 加入 */
     RM_LOG_I("startup done");
     rm_task_delete_self();
 }

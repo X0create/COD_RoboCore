@@ -10,7 +10,7 @@
 | 3 | CubeMX 只创建了一个任务 `startup`，入口 `startup_task` 是 `__weak` | `grep -n "osThreadNew\|__weak" Core/Src/freertos.c` | 只有一处 `osThreadNew`；`startup_task` 为 `__weak` | ADR 0025 修订：不允许出现 `defaultTask` 或其他 CubeMX 任务 |
 | 4 | `MX_FREERTOS_Init()` 的 USER CODE 区里仍然调用 `app_main()` | `Core/Src/freertos.c` 的 `USER CODE BEGIN RTOS_THREADS` | 存在（接入框架后） | 生成器清空 USER CODE 区时框架入口会消失，固件能编译但什么都不做 |
 | 5 | 系统时钟 550 MHz、VOS0、Flash 等待 3 | `Core/Src/main.c` 的 `SystemClock_Config()` | `PLLM = 3`、`PLLN = 68`、`PLLFRACN = 6144`、`FLASH_LATENCY_3` | ADR 0028；迁移时 CubeMX 曾把等待周期改成 0 |
-| 6 | FDCAN1/2/3 标称速率 1 Mbit/s，FDCAN2 为 FD + BRS | `grep CalculateBaudRate dm_mc02.ioc` | `CalculateBaudRateNominal=1000000` ×3 | UniC 出过 960 kbit/s |
+| 6 | FDCAN1/2/3 标称速率 1 Mbit/s，FDCAN2 为 FD + BRS；每路 16 个标准滤波器 | `grep -E "CalculateBaudRate|StdFiltersNbr" dm_mc02.ioc`，以及 `Core/Src/fdcan.c` | `CalculateBaudRateNominal=1000000` ×3；`StdFiltersNbr = 16` ×3 | UniC 出过 960 kbit/s；滤波器不够时 `can_subscribe*()` 返回 false |
 | 7 | MPU 区域 0：`0x24000000` 起 512 KB 不可缓存 | `Core/Src/main.c` 的 `MPU_Config()` | 存在 | ADR 0021 |
 | 8 | SPI2、SPI6 数据位 8 bit；SPI6 内核时钟 HSE、分频 4 | `grep -E "SPI[26].DataSize|SPI6.BaudRate|SPI6CLockSelection" dm_mc02.ioc` | `SPI_DATASIZE_8BIT` ×2、`SPI_BAUDRATEPRESCALER_4`、`RCC_SPI6CLKSOURCE_HSE`（SPI6 任一项错，WS2812 乱色且无报错） | `.ioc` 缺键时会默认成 4 bit（UniC） |
 | 9 | FreeRTOS 配置 | `Core/Inc/FreeRTOSConfig.h` | `configCHECK_FOR_STACK_OVERFLOW 2`、`configRECORD_STACK_HIGH_ADDRESS 1`、`configTOTAL_HEAP_SIZE 1024` | 本工程设定 |

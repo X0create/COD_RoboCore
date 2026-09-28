@@ -225,7 +225,7 @@ rm-template/
 ├── tools/                       # new_robot.py check_forbidden.py check_deps.py check_linked.py vofa 配置 Ozone 工程模板（check_keil_sync.py 在 ADR 0019 之后加）
 ├── docs/
 │   ├── ARCHITECTURE.md（本文）  CODING_STANDARD.md  DEV_ENVIRONMENT.md
-│   ├── CHANGES_FROM_COD_H7_TEMPLATE.md  conventions.md  budget.md
+│   ├── CHANGES_FROM_COD_H7_TEMPLATE.md  VERIFICATION_TODO.md  conventions.md  budget.md
 │   └── adr/                     # 决策记录，每个决策一个文件
 ├── .github/workflows/ci.yml
 ├── .clang-format  .clang-tidy  .editorconfig
@@ -1488,7 +1488,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 - [x] 状态灯（WS2812 接 SPI6，发送方式按附录 A.1）（2026-09-28 上板：绿灯每拍闪两下）。`gpio.c` 等到有 GPIO 设备时再加
 - [x] `core/os`：用原生 FreeRTOS API 静态创建任务，并实现 `rm_task_delay_until()`（2026-09-28，上板心跳周期 500 ms 无漂移）
 - [x] `robots/_template/`：`app_main()` 创建一个心跳任务，由它驱动状态灯并通过 RTT 打印（2026-09-28 上板通过）
-- [ ] `platform/stm32h7/can.c` 最小版本：可以发送；可以按精确 ID 和精确范围订阅
+- [x] `platform/stm32h7/can.c` 最小版本：可以发送；可以按精确 ID 和精确范围订阅（2026-09-28 编译 + 主机测试：DLC 换算、接收环形缓冲；comm_rx 任务分发；心跳每秒打印 CAN1 反馈帧数。**上板待 V30**）
 - [x] `platform/stm32h7/uart.c` 最小版本：DMA 循环接收 + 空闲中断，缓冲区放在 `.dma_buf` 段（2026-09-28 编译 + 主机测试：取数逻辑 `platform/common/dma_ring` 5 项；出错自动重启接收；心跳每秒打印 UART5 收到的字节数。**上板待 DR16**）
 
 **测试与 CI**
@@ -1519,6 +1519,30 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
   - 恢复解锁后是否不猛冲。
 
 **完成标准**：遥控能控制电机转速；四种故障下电机都在 100 ms 内停下（台架实测）；恢复解锁后不猛冲。
+
+### COD-H7-Template 全量移植（2026-09-28 起）
+
+用户 2026-09-28 决定：把 COD-H7-Template 的全部功能按本文的分层移植过来，**先写代码并做主机测试，硬件验证统一记入
+`docs/VERIFICATION_TODO.md`，攒起来上板**。最终行为与旧工程一致（遥控器控制一台 M3508 转速、IMU 姿态解算与加热恒温、
+达妙电机、裁判系统、图传、上位机通信），并加上安全门。算法按“先原样搬、再改行为”（见“从现有代码迁移”），
+复制的代码保留原 MIT 版权声明；与旧工程的每处差异记入 `docs/CHANGES_FROM_COD_H7_TEMPLATE.md`。
+
+按依赖顺序，一个模块一次提交：
+
+| # | 旧工程 | 新位置 | 状态 |
+| --- | --- | --- | --- |
+| 1 | `BSP/bsp_can.c` | `platform/include/platform/can.h`、`platform/stm32h7/can.c`（DLC 换算、接收环形缓冲放 `platform/common/`） | 代码完成（2026-09-28），待上板 V30 |
+| 2 | `Algorithm/CRC.c` | `core/util/crc.{h,c}` | |
+| 3 | `Controller/PID.c`、`Algorithm/Ramp.c`、`LPF.c`、`Kalman_Filter.c` | `algorithm/control/pid`、`algorithm/control/ramp`、`algorithm/filter/lpf`、`algorithm/filter/kalman` | |
+| 4 | `Device/Remote_Control.c`、`Task/Detect_Task.c` | `devices/remote/dr16`、`core/watchdog`、`msgs/rc_state` | |
+| 5 | `Device/Motor.c`（DJI 部分）、`Task/CAN_Task.c` | `devices/motor/motor.h`、`motor.c`、`dji_motor`、`motor_group` | |
+| 6 | `Task/Control_Task.c` | `robots/common/safety_gate`、`robots/common/control_task`、`robots/_template`（遥控 → 底盘电机转速） | |
+| 7 | `BSP/bsp_spi.c`、`bsp_gpio.c`、`bsp_pwm.c`、`Device/Bmi088.c` | `platform/…/spi`、`gpio`、`pwm`，`devices/imu/bmi088`（含加热恒温） | |
+| 8 | `Algorithm/Quaternion.c`、`Task/INS_Task.c` | `algorithm/attitude/quat_ekf`、`subsystems/ins`、`msgs/imu_state` | |
+| 9 | `Device/Motor.c`（达妙部分） | `devices/motor/dm_motor`（含 FDCAN2 的 FD 总线） | |
+| 10 | `Device/Referee_System.c`、`Image_Transmission.c` | `devices/referee/referee`（协议 v2.0.0）、`devices/remote/vt_link` | |
+| 11 | `Device/MiniPC.c`、USB CDC | `platform/…/usb_cdc`、`devices/vision/vision_link` | |
+| 12 | `BSP/bsp_adc.c`、`Algorithm/RLS.c`、蜂鸣器 | `platform/…/adc`、`devices/battery`、`algorithm/power/rls`、`devices/buzzer` | |
 
 ### 风险
 

@@ -30,3 +30,16 @@ void rm_task_delete_self(void)
 {
     vTaskDelete(NULL);
 }
+
+bool rm_task_wait_notify(uint32_t timeout_ms)
+{
+    return ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(timeout_ms)) > 0u;
+}
+
+void rm_task_notify_from_isr(RmTask *task)
+{
+    BaseType_t higher_priority_woken = pdFALSE;
+    vTaskNotifyGiveFromISR(task->handle, &higher_priority_woken);
+    /* 被唤醒的任务优先级更高时，中断返回后立刻切换过去，不用等下一个 tick */
+    portYIELD_FROM_ISR(higher_priority_woken);
+}

@@ -5,7 +5,7 @@
 | 目录 | 内容 |
 | --- | --- |
 | `include/platform/` | 接口头文件：can、uart、spi、gpio、pwm、adc、usb_cdc、time、flash、iwdg |
-| `common/` | 各芯片实现共用的纯计算（如 32 位周期计数扩展成 64 位），只给 platform 内部用，在电脑上测试 |
+| `common/` | 各芯片实现共用的纯计算，只给 platform 内部用，在电脑上测试：`cycle_extend`（DWT 64 位）、`dma_ring`（DMA 循环缓冲取数）、`can_dlc`（DLC 换算）、`can_rx_ring`（CAN 接收环形缓冲）、`ws2812`（状态灯编码） |
 | `stm32h7/` | H723 的实现（FDCAN，DMA 与 Cache 处理） |
 | `stm32f4/` | F407 的实现（bxCAN） |
 | `host/` | PC 上的假实现，供主机测试和仿真 |

@@ -3,6 +3,7 @@ set(RM_ROBOT "_template" CACHE STRING "兵种目录名（robots/ 下）")
 
 add_library(rm_robot STATIC
     common/app_main.c
+    common/comm_rx.c
     ${RM_ROBOT}/robot.c
 )
 target_include_directories(rm_robot PUBLIC common)
