@@ -12,7 +12,7 @@
 | 5 | 系统时钟 550 MHz、VOS0、Flash 等待 3 | `Core/Src/main.c` 的 `SystemClock_Config()` | `PLLM = 3`、`PLLN = 68`、`PLLFRACN = 6144`、`FLASH_LATENCY_3` | ADR 0028；迁移时 CubeMX 曾把等待周期改成 0 |
 | 6 | FDCAN1/2/3 标称速率 1 Mbit/s，FDCAN2 为 FD + BRS | `grep CalculateBaudRate dm_mc02.ioc` | `CalculateBaudRateNominal=1000000` ×3 | UniC 出过 960 kbit/s |
 | 7 | MPU 区域 0：`0x24000000` 起 512 KB 不可缓存 | `Core/Src/main.c` 的 `MPU_Config()` | 存在 | ADR 0021 |
-| 8 | SPI2 数据位 8 bit | `grep "SPI2.DataSize" dm_mc02.ioc` | `SPI_DATASIZE_8BIT` | `.ioc` 缺键时会默认成 4 bit（UniC） |
+| 8 | SPI2、SPI6 数据位 8 bit；SPI6 内核时钟 HSE、分频 4 | `grep -E "SPI[26].DataSize|SPI6.BaudRate|SPI6CLockSelection" dm_mc02.ioc` | `SPI_DATASIZE_8BIT` ×2、`SPI_BAUDRATEPRESCALER_4`、`RCC_SPI6CLKSOURCE_HSE`（SPI6 任一项错，WS2812 乱色且无报错） | `.ioc` 缺键时会默认成 4 bit（UniC） |
 | 9 | FreeRTOS 配置 | `Core/Inc/FreeRTOSConfig.h` | `configCHECK_FOR_STACK_OVERFLOW 2`、`configRECORD_STACK_HIGH_ADDRESS 1`、`configTOTAL_HEAP_SIZE 1024` | 本工程设定 |
 | 10 | 链接脚本自定义段仍在 | `STM32H723xG_flash.ld` | `.dma_buf` 等段存在（加入后） | 重新生成会删掉自定义段（UniC） |
 

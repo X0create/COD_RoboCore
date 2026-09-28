@@ -26,7 +26,9 @@ Copyright (c) 2025 GrassFan_Wang
   PLL1 与 AHB 分频照搬 UniC 实测（CubeMX 时钟树已确认无报错，`c3994d1`）；
   PLL2 保持 100 MHz，FDCAN 分频保持 5 / 14 / 5（CAN FD 数据段 5 Mbit/s 需要 100 MHz）
 - [ ] 核对 HAL 时基为 TIM2、FDCAN1/3 为 1 Mbit/s 经典帧、FDCAN2 为 FD+BRS、SPI2 数据位 8 bit
-- [ ] 按 UniC 实测补上 SPI6（WS2812 状态灯）和 TIM12（蜂鸣器）
+- [x] 按 UniC 实测补上 SPI6（WS2812 状态灯：Transmit Only Master，内核时钟 HSE 24 MHz，÷4 = 6 MHz，8 bit，CPHA 2 Edge，
+  MOSI = PA7 Very High；CubeMX 同时占用 PA5 作 SCK，WS2812 不用）和 TIM12 CH2（PB15，蜂鸣器）。
+  PA7 的速度在界面里改不了，直接写进 `.ioc`（2026-09-28）
 
 每次 Generate Code 后按 `REGEN_CHECKLIST.md` 核对。
 
