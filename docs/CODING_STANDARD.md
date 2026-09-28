@@ -410,6 +410,7 @@ Motor *yaw_motor = malloc(sizeof(Motor));
 | --- | --- | --- |
 | `BreakBeforeBraces` | `Allman` | 花括号独占一行，上下对齐，层次清楚 |
 | `IndentWidth` | 4 | 与 `.editorconfig` 一致 |
+| `IndentExternBlock` | `NoIndent` | 头文件的 `extern "C"` 块内不缩进；Allman 下左花括号另起一行（2026-09-27 首次对真实代码格式化时发现） |
 | `ColumnLimit` | 100 | 兼顾中文注释和并排比较 |
 | `InsertBraces` | `true` | 自动给单行的 `if` / `for` 补上花括号（第 5 节） |
 | `PointerAlignment` | `Right` | `Motor *m`，与《架构设计》中的示例一致 |

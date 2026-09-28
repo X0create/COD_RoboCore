@@ -12,6 +12,7 @@ ColumnLimit: 100
 ContinuationIndentWidth: 4
 IndentCaseLabels: true
 IndentPPDirectives: None
+IndentExternBlock: NoIndent   # extern "C" { } 里的声明不缩进，否则每个头文件整体右移一层
 
 # 花括号：Allman 风格，控制语句一律加花括号
 BreakBeforeBraces: Allman
