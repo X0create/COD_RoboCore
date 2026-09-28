@@ -59,6 +59,7 @@ void startup_task(void *argument)
         }
     }
     comm_rx_start_uarts(); /* robot_init() 里登记的串口（DR16 等），收到数据同样唤醒 comm_rx */
+    comm_rx_start_usb(); /* 登记过 USB 解析者时初始化 USB 设备（CubeMX 的弱定义 startup_task 被覆盖了） */
 
     /* 10–11（设备自检、硬件看门狗）在阶段 1 加入 */
     robot_start(); /* 12. 允许解锁 */

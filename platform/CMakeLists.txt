@@ -1,5 +1,6 @@
 # 与芯片无关、各平台实现共用的纯计算；电脑测试和固件都链接它
 add_library(rm_platform_common STATIC
+    common/byte_ring.c
     common/can_dlc.c
     common/can_rx_ring.c
     common/cycle_extend.c
@@ -19,6 +20,7 @@ if(RM_CHIP)
         ${RM_CHIP}/status_led.c
         ${RM_CHIP}/time.c
         ${RM_CHIP}/uart.c
+        ${RM_CHIP}/usb_cdc.c
     )
     target_include_directories(rm_platform PUBLIC include)
     target_link_libraries(rm_platform

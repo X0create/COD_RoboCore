@@ -3,6 +3,8 @@
  * @brief   新兵种的样板：遥控控制一台 M3508 的转速（照搬 COD-H7-Template `Control_Task.c`）+ 安全门
  * @note    control 任务 1 kHz：读遥控 → 安全门 → 速度环 → 全车停改写 → 电机组发送。
  *          图传链路（VT13 遥控器、键鼠）接 USART10，只解析和发布，暂不参与控制（ADR 0036）。
+ *          USB 虚拟串口接上位机：vision_link 找 0x5A 帧并计数；收到的字节原样回发，用电脑串口助手验证通道
+ *          （视觉协议确定后去掉回发，ADR 0037）。
  *          另接一台达妙 DM8009（FDCAN2，FD；同旧工程配置）：解锁时请求使能、之后零力矩；全车停时阻尼；
  *          每个周期都发一帧（驱动器只在收到帧时回反馈）。
  *          **这个固件会给电机发指令**：未解锁时持续发 0 电流；解锁后按遥控通道 3 转动。上板按台架条件
@@ -26,6 +28,7 @@
 #include "devices/motor/motor_group.h"
 #include "devices/remote/dr16.h"
 #include "devices/remote/vt_link.h"
+#include "devices/vision/vision_link.h"
 #include "msgs/imu_state.h"
 #include "msgs/kbm_state.h"
 #include "msgs/rc_state.h"
@@ -34,6 +37,7 @@
 #include "platform/status_led.h"
 #include "platform/time.h"
 #include "platform/uart.h"
+#include "platform/usb_cdc.h"
 #include "safety_gate.h"
 #include "subsystems/ins/ins.h"
 
@@ -67,6 +71,10 @@ static KbmStateTopic kbm_state; /* 发布：vt_link 读取：心跳任务（以�
 
 static Dr16 dr16;
 static VtLink vt_link;
+static VisionLink vision_link;
+/* comm_rx 累加、心跳读（32 位读写是原子的，只用于调试统计） */
+static volatile uint32_t usb_rx_bytes;
+static volatile uint32_t usb_echo_dropped;
 
 /* 电机：配置是 const，运行状态单独存放（《架构设计》“配置和运行状态分开存放”） */
 static const MotorConfig chassis_motor_config = {
@@ -112,6 +120,18 @@ static StackType_t heartbeat_stack[HEARTBEAT_STACK_WORDS];
 static void on_dbus_bytes(const uint8_t *data, uint32_t len, uint64_t now_us, void *ctx)
 {
     dr16_on_bytes((Dr16 *)ctx, data, len, now_us);
+}
+
+/* USB 收到的数据：交给视觉链路找帧，并原样回发（验证通道用；发送忙时丢弃） */
+static void on_usb_bytes(const uint8_t *data, uint32_t len, uint64_t now_us, void *ctx)
+{
+    (void)now_us;
+    vision_link_on_bytes((VisionLink *)ctx, data, len);
+    usb_rx_bytes += len;
+    if (!usb_cdc_write(data, len))
+    {
+        usb_echo_dropped++; /* 上一包还没发完：这段不回发 */
+    }
 }
 
 static void on_vt_link_bytes(const uint8_t *data, uint32_t len, uint64_t now_us, void *ctx)
@@ -168,6 +188,17 @@ static void log_vt_link(void)
     {
         RM_LOG_I("kbm keys 0x%x, mouse %d %d", (unsigned)kbm.keys, kbm.mouse_x, kbm.mouse_y);
     }
+}
+
+static void log_usb(void)
+{
+    static uint32_t last_bytes;
+    const uint32_t bytes = usb_rx_bytes;
+    RM_LOG_I("usb rx %u B/s, vision frames %u (last id 0x%x), rx dropped %u, echo dropped %u",
+             (unsigned)(bytes - last_bytes), (unsigned)vision_link.frames,
+             (unsigned)vision_link.last_id, (unsigned)usb_cdc_rx_dropped(),
+             (unsigned)usb_echo_dropped);
+    last_bytes = bytes;
 }
 
 static void log_joint(void)
@@ -278,6 +309,7 @@ static void heartbeat_entry(void *arg)
             log_motor();
             log_joint();
             log_vt_link();
+            log_usb();
             log_imu();
             beat++;
         }
@@ -307,6 +339,8 @@ bool robot_init(void)
         RM_LOG_E("dr16 init failed");
         return false;
     }
+    vision_link_init(&vision_link);
+    comm_rx_set_usb(on_usb_bytes, &vision_link);
     if (!vt_link_init(&vt_link, &vt_rc_state, &kbm_state)
         || !comm_rx_add_uart(VT_LINK_UART, on_vt_link_bytes, &vt_link))
     {

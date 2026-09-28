@@ -8,6 +8,8 @@ add_library(rm_devices STATIC
     referee/ref_frame.c
     remote/dr16.c
     remote/vt_link.c
+    vision/vision_frame.c
+    vision/vision_link.c
 )
 # 以 "devices/remote/dr16.h" 的形式 include
 target_include_directories(rm_devices PUBLIC ${PROJECT_SOURCE_DIR})

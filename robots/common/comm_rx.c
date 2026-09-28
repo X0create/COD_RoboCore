@@ -8,6 +8,7 @@
 #include "core/os/os.h"
 #include "platform/can.h"
 #include "platform/time.h"
+#include "platform/usb_cdc.h"
 
 #define COMM_RX_STACK_WORDS 512u
 /* 没有通知时也每隔这么久检查一次，防止某次通知丢失后数据积压 */
@@ -28,6 +29,9 @@ static StackType_t comm_rx_stack[COMM_RX_STACK_WORDS];
 static volatile bool task_created;
 static UartSlot uarts[COMM_RX_MAX_UARTS];
 static uint32_t uart_count;
+static CommRxUartHandler usb_handler; /* 与串口共用同一种回调形式 */
+static void *usb_ctx;
+static bool usb_started;
 
 bool comm_rx_add_uart(UartPort port, CommRxUartHandler handler, void *ctx)
 {
@@ -44,6 +48,24 @@ bool comm_rx_add_uart(UartPort port, CommRxUartHandler handler, void *ctx)
     }
     uarts[uart_count++] = (UartSlot){ .port = port, .handler = handler, .ctx = ctx };
     return true;
+}
+
+void comm_rx_set_usb(CommRxUartHandler handler, void *ctx)
+{
+    usb_handler = handler;
+    usb_ctx = ctx;
+}
+
+void comm_rx_start_usb(void)
+{
+    if (usb_handler != NULL)
+    {
+        usb_started = usb_cdc_start(comm_rx_notify_from_isr, NULL);
+        if (!usb_started)
+        {
+            RM_LOG_E("usb cdc start failed");
+        }
+    }
 }
 
 void comm_rx_start_uarts(void)
@@ -69,6 +91,16 @@ static void drain_uart(const UartSlot *slot)
     }
 }
 
+static void drain_usb(void)
+{
+    uint8_t chunk[64];
+    uint32_t n;
+    while ((n = usb_cdc_read(chunk, sizeof(chunk))) > 0u)
+    {
+        usb_handler(chunk, n, rm_time_now_us(), usb_ctx);
+    }
+}
+
 static void comm_rx_entry(void *arg)
 {
     (void)arg;
@@ -85,6 +117,10 @@ static void comm_rx_entry(void *arg)
             {
                 drain_uart(&uarts[i]);
             }
+        }
+        if (usb_started)
+        {
+            drain_usb();
         }
     }
 }

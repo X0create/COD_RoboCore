@@ -63,6 +63,8 @@
 | 2026-09-28 | 达妙电机 | `Motor.c`：MIT / 位置速度 / 速度三种模式；**使能、失能、设零点帧发往反馈 ID（0x11 等）**，MIT 帧发往控制 ID；浮点→整数不截断（超范围会绕回）；反馈在 CAN 中断里按 ID 依次尝试 4 个电机 | `devices/motor/dm_motor` + 统一接口：只做 MIT；**命令发往电机 CAN ID**；编码截到范围内；每台一个硬件滤波器，comm_rx 任务里解析；状态码进 `error_code`、使能状态进 `enabled`；离线 20 ms | ADR 0035；两份参考实现都把命令发往电机 CAN ID | 主机测试 dm_motor 9 项；上板待 V39–V42 |
 | 2026-09-28 | 达妙使能与发送 | `CAN_Task`：启动时逐台发使能（`osDelay(30)` 硬等；**使能了越界的 `DM_8009_Motor[4]`**），之后每 1 ms 发全 0 MIT；**2 号连发两次、3 号从不发送** | 上电不使能；解锁时子系统请求使能，按“期望状态”与反馈对齐（命令间隔 ≥ 20 ms 等确认，报错先清错一次）；离线清除请求；没人请求却已使能则失能；电机组每台每周期一帧，全车停按 `stop_action`（阻尼 = 只给 Kd 的 MIT，失能 = 失能帧）；FD 总线发 FD 帧 | 运行时契约第 5、6 节；修掉越界与漏发 | 主机测试 motor_group 达妙 9 项 |
 | 2026-09-28 | 图传链路 | `Image_Transmission.c`：与裁判系统共用 USART1（编译开关二选一，115200）；只看缓冲区开头一帧；VT13 不查摇杆范围；0x0309 发送没加帧头和 CRC | `devices/remote/vt_link`：接 USART10（921600）；comm_rx 任务里按字节流找帧（帧头 + CRC，拆段能拼、错位能恢复）；VT13 摇杆超出 364–1684 丢弃（范围待核对）；发布 `VtRcState`、`KbmState`，暂不参与控制；0x0302 / 0x0309 暂不移植；0xA5 帧检查做成公共的 `devices/referee/ref_frame` | ADR 0036 | 主机测试 ref_frame 4 项、vt_link 7 项；上板待 V13、V14 |
+| 2026-09-28 | USB 虚拟串口 | `MiniPC.c`：`CDC_Transmit_HS(Buff, sizeof(*Buff))` 只发 1 字节；接收回调为空；`MX_USB_DEVICE_Init()` 在 CubeMX 生成的默认任务里 | `platform/usb_cdc`：接收钩子在 `usbd_cdc_if.c` 的 USER CODE 区，经字节环形缓冲交给 comm_rx；发送按实际长度、拷贝进缓冲，上一包没发完返回 false；**`MX_USB_DEVICE_Init()` 改由 `usb_cdc_start()` 调用**（框架覆盖了 CubeMX 的弱定义 startup_task，原来的调用从未执行） | ADR 0027、0037 | 主机测试 byte_ring 3 项；上板待 V15 |
+| 2026-09-28 | 视觉通信帧 | 无 | `devices/vision/vision_frame`（0x5A 帧检查与组帧）+ `vision_link`（找帧、计数）；消息字段待视觉组；样板暂时原样回发收到的字节 | ADR 0037 | 主机测试 vision 5 项 |
 | 2026-09-28 | 键盘状态机 | `KeyBoard_Info_Typedef`（短按 / 长按）声明了但没有使用 | **不移植** | 没有调用者；写操作手输入（command）时再做 | —— |
 | 2026-09-28 | 在线检测与话题 | 无统一机制 | `core/watchdog`（喂狗时间戳，在线与否读取时计算）、`core/msg/topic`（最新值 + 时间戳 + 唯一发布者）、daemon 任务 100 Hz 打印上线 / 离线与设备清单 | 《架构设计》核心机制第 2、3 节 | 主机测试 topic 6 项、watchdog 4 项；上板待 V4 |
 
@@ -96,7 +98,7 @@
 | `Motor.c` | 角度折算到 ±180°，多圈信息丢失 | 设备层保留 `int32` 圈数 |
 | `Bmi088.c` | 陀螺零偏用写死的常数 | 第 8 步上电静止标定（标准差判定，ADR 0033）；Flash 参数做好后再存 |
 | `Referee_System.c` | 协议 v1.8.0；CRC 前不检查长度；与图传共用 USART1 | 协议 v2.0.0（**等官方文档**，参考资料互相矛盾，ADR 0036）；只解析 0x0001、0x0201、0x0202、0x0207、0x0208；帧检查复用 `ref_frame`（先查长度再校验）；接 USART1（CubeMX 需改循环 DMA） |
-| `MiniPC.c` | `CDC_Transmit_HS(Buff, sizeof(*Buff))` 只发 1 字节 | 按实际长度发送；USB CDC 保留为视觉默认通道（ADR 0027） |
+| `MiniPC.c` | 接收回调为空 | 消息 ID 与字段等视觉组确定协议后再做（ADR 0037） |
 | `Config.h` | 弹道系数、装甲板尺寸等是全局宏 | 视觉常数归 VisionLink 或上位机（IMU 轴映射已改为安装旋转，见上） |
 | 安全逻辑 | 无统一的遥控丢失 / 电机离线处理 | 全车停（急停、遥控丢失、未解锁、IMU 未就绪）+ 机构停（本机构设备离线）（ADR 0026） |
 | `bsp_adc.c` | ADC1 采电池电压（×11），没有使用者 | `devices/battery`，第一版只提示低电量（ADR 0027） |

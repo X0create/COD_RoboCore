@@ -31,6 +31,8 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
+/* COD RoboCore：接收钩子，由平台层实现（platform/stm32h7/usb_cdc.c，REGEN_CHECKLIST 第 11 条） */
+void usb_cdc_rx_isr(const uint8_t *data, uint32_t len);
 
 /* USER CODE END PV */
 
@@ -264,6 +266,7 @@ static int8_t CDC_Control_HS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_HS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 11 */
+  usb_cdc_rx_isr(Buf, *Len); /* COD RoboCore：交给平台层的环形缓冲 */
   USBD_CDC_SetRxBuffer(&hUsbDeviceHS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceHS);
   return (USBD_OK);
