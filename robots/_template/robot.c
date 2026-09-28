@@ -15,18 +15,21 @@ enum
     PRIORITY_HEARTBEAT = 1,
 };
 
-#define HEARTBEAT_STEP_MS     100u
-#define HEARTBEAT_STEPS       10u /* 10 × 100 ms = 1 s 一拍 */
+#define HEARTBEAT_STEP_MS     25u
+#define HEARTBEAT_STEPS       40u /* 40 × 25 ms = 1 s 一拍 */
 #define HEARTBEAT_STACK_WORDS 256u
 #define LED_GREEN_LEVEL       0x20u /* WS2812 满亮度很刺眼，1/8 亮度足够看清 */
 
 static RmTask heartbeat_task;
 static StackType_t heartbeat_stack[HEARTBEAT_STACK_WORDS];
 
-/* 每拍的第 0、2 步亮：绿色每拍闪两下表示正常（与 UniC 的指示约定一致） */
+/*
+ * 绿色每拍闪两下表示正常：0–50 ms 亮一次，200–225 ms 再亮一次，其余时间灭。
+ * 两次亮的时长不同（50 ms、25 ms，用户 2026-09-28 指定），一长一短容易和其他闪烁码区分。
+ */
 static bool led_on_at(uint32_t step)
 {
-    return step == 0u || step == 2u;
+    return step < 2u || step == 8u;
 }
 
 static void heartbeat_entry(void *arg)
