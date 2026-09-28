@@ -19,8 +19,9 @@
 | 2026-09-28 | Flash 等待周期 | 迁移后被 CubeMX 改成 0 | **3** | 275 MHz AXI 需要 3 个等待周期；为 0 会取指出错 | 配置 |
 | 2026-09-28 | FDCAN 时钟 | PLL2 100 MHz，分频 5 / 14 / 5 | **不变** | 100 MHz 能同时整除 1 Mbit/s 与 CAN FD 数据段 5 Mbit/s（DM8009）；UniC 的 96 MHz 做不到 5 Mbit/s | 配置 |
 | 2026-09-28 | PLL3、USB 时钟 | PLL3 80 MHz（SPI2），USB 用 HSI48 | **不变** | —— | 配置 |
-| 2026-09-28 | FreeRTOS 接口 | CMSIS-RTOS V1，内核 V10.3.1 | **CMSIS-RTOS V2**，内核 V10.6.2 | CubeMX 6.18.1 对 H7 已不支持 V1（迁移时会把 FreeRTOS 整个删掉）；框架直接用原生 API，不受影响（ADR 0025） | 进行中：待在 CubeMX 中启用 |
-| 2026-09-28 | FreeRTOS 任务 | CubeMX 中定义 4 个静态任务（INS、Control、CAN、Detect） | **CubeMX 中不定义任何任务**，由框架静态创建 | 只保留一种创建任务的方式（ADR 0025） | 进行中 |
+| 2026-09-28 | 工具链 | MDK-ARM V5.32 | **CMake**（CubeMX 生成 CMake 工程） | ADR 0019 | 配置：已改 `.ioc`，待 CubeMX 确认 |
+| 2026-09-28 | FreeRTOS 接口 | CMSIS-RTOS V1，内核 V10.3.1 | **CMSIS-RTOS V2**，内核 V10.6.2 | CubeMX 6.18.1 对 H7 已不支持 V1（迁移时会把 FreeRTOS 整个删掉）；框架直接用原生 API，不受影响（ADR 0025） | 配置：CubeMX 中已启用 |
+| 2026-09-28 | FreeRTOS 任务 | CubeMX 中定义 4 个静态任务（INS、Control、CAN、Detect） | CubeMX 中**只定义一个启动任务** `startup`（静态、512 字、最高优先级、入口 `startup_task` 为弱定义，由框架实现，完成后删除自己）；其余任务由框架静态创建 | CMSIS_V2 下 CubeMX 至少要保留一个任务，把它用作启动任务（ADR 0025 修订） | 配置：已改 `.ioc`，待 CubeMX 确认 |
 | 2026-09-27 | CubeMX / 固件包 | CubeMX 6.12.1，FW_H7 V1.11.2 | CubeMX 6.18.1，FW_H7 V1.13.0 | 本机安装的版本；与 UniC 相同 | 配置：已迁移 |
 | 2026-09-27 | 工程名 | `COD_H7_Template` | `dm_mc02` | 按板子命名 | —— |
 

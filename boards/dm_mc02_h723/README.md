@@ -17,8 +17,9 @@ Copyright (c) 2025 GrassFan_Wang
 
 完成的修改同时记入 `docs/CHANGES_FROM_COD_H7_TEMPLATE.md`（新旧对照、原因和验证层级）。
 
-- [ ] 工具链：MDK-ARM → CMake（ADR 0019）
-- [ ] FreeRTOS：删掉 4 个 CubeMX 任务，不定义任何任务或队列；任务由框架静态创建（ADR 0025）
+- [ ] 工具链：MDK-ARM → CMake（ADR 0019）。已改 `.ioc`，待 CubeMX 确认
+- [ ] FreeRTOS：原 4 个任务已随迁移删除；CubeMX 只保留一个启动任务 `startup`（静态、512 字、`osPriorityRealtime7`、
+  入口 `startup_task` 选 As weak，由框架实现）。不定义队列（ADR 0025 修订）。已改 `.ioc`，待 CubeMX 确认
 - [x] CubeMX 6.12.1 → 6.18.1 迁移（FW_H7 V1.13.0）。**迁移时 FreeRTOS 被移除**：6.18.1 不再提供 CMSIS_V1，
   重新启用时选 CMSIS_V2，并删掉自动生成的 `defaultTask`
 - [ ] 系统时钟：原工程 640 MHz 超出 H723 手册最高 550 MHz，改为 **550 MHz**（ADR 0028）：
