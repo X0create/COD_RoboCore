@@ -121,34 +121,48 @@ static void test_gyro_offset_subtracted(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-7f, 0.01f, s.gyro_rad_s[2]);
 }
 
-/* 每 5 次算一次；低 1 °C 时占空比 0.06（旧工程比较值 1200 / 20000）；上限 10% */
-static void test_heater_matches_old_behavior(void)
+/* 调用 n 次加热（1 kHz 下即 n ms） */
+static void heat(int n, float temperature_c)
+{
+    for (int i = 0; i < n; i++)
+    {
+        bmi088_heater_step(&imu, temperature_c);
+    }
+}
+
+/*
+ * UniC 参数：每 100 次算一次；kp 0.05 / °C，ki 每次 0.00025 / °C，上限 25%。
+ * 低 1 °C：第一次 0.05 + 0.00025 = 0.05025；低 20 °C 截到 0.25
+ */
+static void test_heater_unic_params(void)
 {
     TEST_ASSERT_EQUAL_INT(BMI088_OK, bmi088_init(&imu));
-    for (int i = 0; i < 4; i++)
-    {
-        bmi088_heater_step(&imu, 39.0f);
-    }
+    heat(99, 39.0f);
     TEST_ASSERT_EQUAL_UINT(0u, fake_pwm_set_count(PWM_IMU_HEATER));
-    bmi088_heater_step(&imu, 39.0f);
+    heat(1, 39.0f);
     TEST_ASSERT_EQUAL_UINT(1u, fake_pwm_set_count(PWM_IMU_HEATER));
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.06f, fake_pwm_duty(PWM_IMU_HEATER));
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.05025f, fake_pwm_duty(PWM_IMU_HEATER));
+    heat(100, 39.0f);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0505f, fake_pwm_duty(PWM_IMU_HEATER)); /* 积分在累加 */
 
-    for (int i = 0; i < 5; i++)
-    {
-        bmi088_heater_step(&imu, 20.0f);
-    }
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.1f, fake_pwm_duty(PWM_IMU_HEATER));
+    heat(100, 20.0f);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.25f, fake_pwm_duty(PWM_IMU_HEATER));
+}
+
+/* 积分项最多等于上限：长时间低 0.1 °C，比例项只有 0.005，占空比仍不超过 25% */
+static void test_heater_integral_bounded(void)
+{
+    TEST_ASSERT_EQUAL_INT(BMI088_OK, bmi088_init(&imu));
+    heat(100 * 20000, 39.9f);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.25f, fake_pwm_duty(PWM_IMU_HEATER));
+    TEST_ASSERT_FLOAT_WITHIN(1e-2f, 1000.0f, imu.heater_pid.integral);
 }
 
 /* 过热时输出为负：占空比为 0，而不是旧代码转成 uint16_t 后的满占空比 */
 static void test_heater_overtemperature_gives_zero_duty(void)
 {
     TEST_ASSERT_EQUAL_INT(BMI088_OK, bmi088_init(&imu));
-    for (int i = 0; i < 5; i++)
-    {
-        bmi088_heater_step(&imu, 45.0f);
-    }
+    heat(100, 45.0f);
     TEST_ASSERT_EQUAL_UINT(1u, fake_pwm_set_count(PWM_IMU_HEATER));
     TEST_ASSERT_EQUAL_FLOAT(0.0f, fake_pwm_duty(PWM_IMU_HEATER));
 }
@@ -156,10 +170,7 @@ static void test_heater_overtemperature_gives_zero_duty(void)
 static void test_heater_off(void)
 {
     TEST_ASSERT_EQUAL_INT(BMI088_OK, bmi088_init(&imu));
-    for (int i = 0; i < 5; i++)
-    {
-        bmi088_heater_step(&imu, 20.0f);
-    }
+    heat(100, 20.0f);
     bmi088_heater_off(&imu);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, fake_pwm_duty(PWM_IMU_HEATER));
     TEST_ASSERT_EQUAL_FLOAT(0.0f, imu.heater_pid.output);
@@ -175,7 +186,8 @@ int main(void)
     RUN_TEST(test_negative_temperature_code);
     RUN_TEST(test_bad_gyro_id_invalidates_frame);
     RUN_TEST(test_gyro_offset_subtracted);
-    RUN_TEST(test_heater_matches_old_behavior);
+    RUN_TEST(test_heater_unic_params);
+    RUN_TEST(test_heater_integral_bounded);
     RUN_TEST(test_heater_overtemperature_gives_zero_duty);
     RUN_TEST(test_heater_off);
     return UNITY_END();

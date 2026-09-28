@@ -9,7 +9,8 @@
  *          - 陀螺仪每次读从芯片 ID 寄存器开始，ID 不对就判这一帧无效（旧代码只是不更新）；
  *          - 初始化失败返回原因，不在驱动里无限重试；
  *          - 零偏由调用者设置（第 8 步上电标定，ADR 0033），默认 0；旧工程用写死的常数；
- *          - 加热输出为负时占空比为 0（旧代码负数直接转 uint16_t，变成满占空比加热）。
+ *          - 加热输出为负时占空比为 0（旧代码负数直接转 uint16_t，变成满占空比加热）；
+ *          - 加热参数改为 UniC 在同款 MC02 上实测的值（25% 上限、打开积分、每 100 ms 一次，见 bmi088.c）。
  *          恒温控制在设备内部完成（《架构设计》“其他设备”）。
  */
 #pragma once
@@ -67,7 +68,7 @@ bool bmi088_read(Bmi088 *imu, Bmi088Sample *out);
 void bmi088_set_gyro_offset(Bmi088 *imu, const float offset_rad_s[3]);
 
 /**
- * @brief   加热恒温，每次读到新温度时调用（1 kHz）；内部每 5 次算一次 PID（照旧工程每 5 ms 一次）
+ * @brief   加热恒温，每次读到新温度时调用（1 kHz）；内部每 100 次算一次 PID
  */
 void bmi088_heater_step(Bmi088 *imu, float temperature_c);
 

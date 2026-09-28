@@ -42,16 +42,22 @@
 #define TEMP_OFFSET_C           23.0f
 
 /*
- * ---- 加热（照搬旧工程 INS_Task.c）----
- * 旧参数以 TIM3 比较值为单位（周期 20000）：kp 1200、ki 20、积分限幅 0、输出限幅 2000，每 5 ms 算一次。
- * 这里换成占空比（0–1）：全部除以 20000。积分限幅为 0 时积分项恒为 0（旧工程如此）。
+ * ---- 加热（UniC 在同款 MC02 上实测的参数，ADR 0033）----
+ * 加热片每 1% 占空比约换来 0.28 °C；旧工程 10% 上限、积分不起作用，到不了 40 °C。
+ * UniC 把上限提到 25%、打开积分，实测稳态 40.000–40.125 °C、占空比约 16.4%（UniC `imu-heater-authority`）：
+ * - 上限 25%；kp = 上限 / 5 °C（误差 5 °C 时比例项刚好饱和）；ki = 上限 / 100，单位 1 / (°C·s)；
+ * - 每 100 ms 算一次（BMI088 温度寄存器本身更新就慢）。
+ * 本模板 PID 不带 dt（ADR 0029），ki 乘以周期换成每次的增益；积分限幅取“积分项最多等于上限”。
+ * UniC 的 PID 用反算法抗积分饱和，这里没有，预热到 40 °C 时过冲可能比 UniC 大（V6 实测）。
  */
-#define HEATER_PERIOD_MS 5u
+#define HEATER_PERIOD_MS 100u
+#define HEATER_DUTY_CAP  0.25f
+#define HEATER_KI_STEP   (HEATER_DUTY_CAP / 100.0f * ((float)HEATER_PERIOD_MS / 1000.0f))
 #define HEATER_PID_PARAM                                                                           \
-    ((PidParam){ .kp = 1200.0f / 20000.0f,                                                         \
-                 .ki = 20.0f / 20000.0f,                                                           \
-                 .integral_limit = 0.0f,                                                           \
-                 .output_limit = 2000.0f / 20000.0f })
+    ((PidParam){ .kp = HEATER_DUTY_CAP / 5.0f,                                                     \
+                 .ki = HEATER_KI_STEP,                                                             \
+                 .integral_limit = HEATER_DUTY_CAP / HEATER_KI_STEP,                               \
+                 .output_limit = HEATER_DUTY_CAP })
 
 typedef struct
 {
