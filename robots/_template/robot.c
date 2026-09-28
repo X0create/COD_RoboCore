@@ -2,6 +2,7 @@
  * @file    robot.c
  * @brief   新兵种的样板：遥控控制一台 M3508 的转速（照搬 COD-H7-Template `Control_Task.c`）+ 安全门
  * @note    control 任务 1 kHz：读遥控 → 安全门 → 速度环 → 全车停改写 → 电机组发送。
+ *          图传链路（VT13 遥控器、键鼠）接 USART10，只解析和发布，暂不参与控制（ADR 0036）。
  *          另接一台达妙 DM8009（FDCAN2，FD；同旧工程配置）：解锁时请求使能、之后零力矩；全车停时阻尼；
  *          每个周期都发一帧（驱动器只在收到帧时回反馈）。
  *          **这个固件会给电机发指令**：未解锁时持续发 0 电流；解锁后按遥控通道 3 转动。上板按台架条件
@@ -24,8 +25,11 @@
 #include "devices/motor/motor.h"
 #include "devices/motor/motor_group.h"
 #include "devices/remote/dr16.h"
+#include "devices/remote/vt_link.h"
 #include "msgs/imu_state.h"
+#include "msgs/kbm_state.h"
 #include "msgs/rc_state.h"
+#include "msgs/vt_rc_state.h"
 #include "platform/can.h"
 #include "platform/status_led.h"
 #include "platform/time.h"
@@ -52,12 +56,17 @@ enum
 
 /* DR16 接收机接 UART5（接线沿用 COD-H7-Template，《架构设计》“阶段 1 清单”） */
 #define DBUS_UART UART_5
+/* 图传链路接 USART10（921600，ADR 0036） */
+#define VT_LINK_UART UART_10
 
 /* 话题实例 */
 static RcStateTopic rc_state; /* 发布：dr16    读取：control（安全门、速度目标）、心跳任务 */
 static ImuStateTopic imu_state; /* 发布：ins     读取：control（安全门）、心跳任务 */
+static VtRcStateTopic vt_rc_state; /* 发布：vt_link 读取：心跳任务（以后是 command） */
+static KbmStateTopic kbm_state; /* 发布：vt_link 读取：心跳任务（以后是 command） */
 
 static Dr16 dr16;
+static VtLink vt_link;
 
 /* 电机：配置是 const，运行状态单独存放（《架构设计》“配置和运行状态分开存放”） */
 static const MotorConfig chassis_motor_config = {
@@ -105,6 +114,12 @@ static void on_dbus_bytes(const uint8_t *data, uint32_t len, uint64_t now_us, vo
     dr16_on_bytes((Dr16 *)ctx, data, len, now_us);
 }
 
+static void on_vt_link_bytes(const uint8_t *data, uint32_t len, uint64_t now_us, void *ctx)
+{
+    (void)now_us;
+    vt_link_on_bytes((VtLink *)ctx, data, len);
+}
+
 /*
  * 绿色每拍闪两下表示正常：0–50 ms 亮一次，200–225 ms 再亮一次，其余时间灭。
  * 两次亮的时长不同（50 ms、25 ms，用户 2026-09-28 指定），一长一短容易和其他闪烁码区分。
@@ -138,6 +153,21 @@ static void log_motor(void)
     RM_LOG_I("m3508_1 angle %d mrad, speed %d mrad/s, torque %d mNm, %d C",
              (int)(fb.angle_rad * 1000.0f), (int)(fb.speed_rad_s * 1000.0f),
              (int)(fb.torque_nm * 1000.0f), (int)fb.temperature_c);
+}
+
+static void log_vt_link(void)
+{
+    VtRcState rc;
+    if (vt_rc_state_read(&vt_rc_state, &rc, VT_LINK_TIMEOUT_MS))
+    {
+        RM_LOG_I("vt13 ch %d %d %d %d, mode %d, pause %d", rc.ch[0], rc.ch[1], rc.ch[2], rc.ch[3],
+                 (int)rc.mode, (int)rc.pause);
+    }
+    KbmState kbm;
+    if (kbm_state_read(&kbm_state, &kbm, VT_LINK_TIMEOUT_MS))
+    {
+        RM_LOG_I("kbm keys 0x%x, mouse %d %d", (unsigned)kbm.keys, kbm.mouse_x, kbm.mouse_y);
+    }
 }
 
 static void log_joint(void)
@@ -247,6 +277,7 @@ static void heartbeat_entry(void *arg)
             log_rc();
             log_motor();
             log_joint();
+            log_vt_link();
             log_imu();
             beat++;
         }
@@ -274,6 +305,12 @@ bool robot_init(void)
     if (!dr16_init(&dr16, &rc_state) || !comm_rx_add_uart(DBUS_UART, on_dbus_bytes, &dr16))
     {
         RM_LOG_E("dr16 init failed");
+        return false;
+    }
+    if (!vt_link_init(&vt_link, &vt_rc_state, &kbm_state)
+        || !comm_rx_add_uart(VT_LINK_UART, on_vt_link_bytes, &vt_link))
+    {
+        RM_LOG_E("vt_link init failed");
         return false;
     }
     if (!init_motor(&chassis_motor, &chassis_motor_config)

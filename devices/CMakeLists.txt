@@ -5,7 +5,9 @@ add_library(rm_devices STATIC
     motor/dm_motor.c
     motor/motor.c
     motor/motor_group.c
+    referee/ref_frame.c
     remote/dr16.c
+    remote/vt_link.c
 )
 # 以 "devices/remote/dr16.h" 的形式 include
 target_include_directories(rm_devices PUBLIC ${PROJECT_SOURCE_DIR})

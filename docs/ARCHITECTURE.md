@@ -1338,6 +1338,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0033 | 用户 2026-09-28 确认：① 板上资源在平台接口里**按用途命名**（`SPI_DEV_IMU_ACCEL`、`SPI_DEV_IMU_GYRO`、`PWM_IMU_HEATER`），平台实现里用一张表对应到 CubeMX 句柄和片选脚，设备驱动里没有引脚信息；UART、CAN 仍按芯片编号（路数少、各芯片编号方式相近）；② IMU 加热先照搬旧工程（只修负数输出变满占空比的 bug），再单独提交改为 UniC 在同款 MC02 上实测的参数；③ 陀螺零偏在第 8 步上电静止标定（标准差判据，失败上报并视为 IMU 未就绪），本步只提供 `bmi088_set_gyro_offset()` 和 `algorithm/attitude/gyro_bias`，零偏暂为 0。GPIO 接口推迟到第 8 步（陀螺数据就绪中断第一次用到），届时确认方案 | ① 换板只改平台表，驱动不动；片选由 SPI 层在占用总线时一起拉，满足运行时契约第 1 节 ② 搬代码与改行为分开，最终行为有实测依据 ③ 零偏每颗芯片不同，旧工程的常数属于另一块板 |
 | 0034 | 用户 2026-09-28 确认：① ins 任务**先轮询**（1 kHz 绝对时刻延时后读 BMI088，同旧工程），陀螺数据就绪中断与 GPIO / 外部中断接口以后再做；② EKF **两步提交**：先照搬（固定 dt 1 ms），唯一必须的改动是卡方值按 rᵀS⁻¹r 计算（旧代码转置了 S⁻¹ 而不是新息，行为不确定），再单独改用实测 dt。实现要点：ins 只在上电零偏标定通过后发布 `imu_state`，安全门读它时要求不超过 `IMU_STALE_MS`（20 ms），读不到即 IMU 未就绪、全车停；标定失败自动重新采样；芯片→机体用兵种配置的安装旋转矩阵（样板默认单位阵）；加速度模长 < 1 m/s² 的帧丢弃 | ① 不改 CubeMX、不必先定 GPIO 方案，行为同旧工程 ② 搬代码与改行为分开；“IMU 就绪”只在话题新旧一处判定 |
 | 0035 | 用户 2026-09-28 确认：达妙电机 ① 使能 / 失能 / 清错命令发往**电机 CAN ID**（与 MIT 帧同 ID，按 basic_framework、StandardRobot++），不沿用旧工程发往反馈 ID 的做法；② **解锁后由子系统请求使能**，上电不使能，离线后请求被清除（重新上线不自动使能）；③ **只做 MIT 模式**；④ 样板接一台 DM8009（FDCAN2 FD、ID 0x01 / 0x11、±π / 45 / 54）。实现要点：使能按“期望状态”与反馈状态对齐，不用命令队列，两条命令至少间隔 20 ms（等确认或超时）；报错时一次请求只清错一次；没人请求使能而电机报告已使能时发失能；每台每周期必发一帧；FD 总线自动发 FD 帧（平台新增 `can_bus_is_fd()`）；MIT 编码截到范围内 | ① 两份参考一致，旧工程无证据表明生效 ② 运行时契约第 5 节“使能只在解锁后” ③④ 只做有人用的功能，行为对照旧工程 |
+| 0036 | 用户 2026-09-28 确认：① 裁判系统命令解析**等用户提供官方《裁判系统串口协议附录 V2.0.0》**后再写（三份参考资料的 0x0201、0x0003 布局互相矛盾，见附录 A.5）；② 届时只解析有使用者的命令：0x0001、0x0201、0x0202、0x0207、0x0208；③ 裁判系统接 USART1（需在 CubeMX 把 USART1_RX 的 DMA 改为 Circular）、图传链路接 USART10（921600）；④ VT13 图传遥控器和 0x0304 键鼠**只解析、发布**，暂不参与解锁 / 急停，操作输入标准化时再定。与赛季无关的 0xA5 帧检查已做成 `devices/referee/ref_frame`，图传现用、裁判系统复用 | ① 不猜协议布局 ② 只做有人用的功能 ③ 旧工程两者共用 USART1、编译开关二选一 ④ 输入仲裁属于 command 任务 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
@@ -1548,7 +1549,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 7 | `BSP/bsp_spi.c`、`bsp_gpio.c`、`bsp_pwm.c`、`Device/Bmi088.c` | `platform/…/spi`、`gpio`、`pwm`，`devices/imu/bmi088`（含加热恒温） | 代码完成（2026-09-28）：spi、pwm、bmi088、加热（UniC 参数）、`gyro_bias`；gpio 推迟到第 8 步（ADR 0033）；主机测试 15 项；上板待 V5、V6 |
 | 8 | `Algorithm/Quaternion.c`、`Task/INS_Task.c` | `algorithm/attitude/quat_ekf`、`subsystems/ins`、`msgs/imu_state` | 代码完成（2026-09-28）：EKF（卡方公式改正、实测 dt）、上电零偏标定、安装旋转、IMU 未就绪全车停；轮询驱动（ADR 0034）；主机测试 16 项；上板待 V7–V9 |
 | 9 | `Device/Motor.c`（达妙部分） | `devices/motor/dm_motor`（含 FDCAN2 的 FD 总线） | 代码完成（2026-09-28）：MIT、使能按期望状态对齐、FD 帧、跨品牌 ID 查重（ADR 0035）；样板接一台 DM8009；主机测试 18 项；上板待 V39–V42 |
-| 10 | `Device/Referee_System.c`、`Image_Transmission.c` | `devices/referee/referee`（协议 v2.0.0）、`devices/remote/vt_link` | |
+| 10 | `Device/Referee_System.c`、`Image_Transmission.c` | `devices/referee/referee`（协议 v2.0.0）、`devices/remote/vt_link` | 图传完成（2026-09-28）：`ref_frame`（0xA5 帧检查）、`vt_link`（VT13、0x0304），主机测试 11 项，上板待 V13、V14；**裁判系统等官方 V2.0.0 文档**（ADR 0036） |
 | 11 | `Device/MiniPC.c`、USB CDC | `platform/…/usb_cdc`、`devices/vision/vision_link` | |
 | 12 | `BSP/bsp_adc.c`、`Algorithm/RLS.c`、蜂鸣器 | `platform/…/adc`、`devices/battery`、`algorithm/power/rls`、`devices/buzzer` | |
 
@@ -1640,7 +1641,16 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | `0x0305` / `0x0306` | 雷达数据 / 自定义控制器 → 操作端 | 48 / 8 |
 | `0x0310` / `0x0311` | 机器人 ↔ 自定义客户端（v2.0.0 新增） | 300 / 见协议 |
 
-- 图传链路走单独的串口，帧格式与裁判系统相同。COD-H7-Template 里图传为 921600 baud、裁判系统为 115200 baud。
+- **资料冲突（2026-09-28 发现，ADR 0036）**：三份参考对同一命令的布局不一致，官方 V2.0.0 文档不在 `reference/` 中，裁判系统解析暂停，等用户提供：
+
+| 命令 | basic\_framework（注释称 2026 更改） | StandardRobot++（2026-04 提交） | COD-H7-Template（v1.8.0） |
+| --- | --- | --- | --- |
+| `0x0201` | 17 字节：多一个 `float shooter_speed_limit`，电源开关位在第 16 字节 | 13 字节，电源开关位在第 12 字节 | 13 字节，同左 |
+| `0x0003` | 20 字节：己方 1–4、7 号、差值、己方前哨站 / 基地、对方前哨站 / 基地 | 16 字节：己方 8 项 | 红蓝双方 16 项 |
+| `0x0202` | 14 字节（缓冲能量在第 8 字节） | 14 字节，同左 | 旧格式 |
+
+- 图传链路走单独的串口，帧格式与裁判系统相同。COD-H7-Template 里图传与裁判系统**共用 USART1**（编译开关二选一，CubeMX 中为 115200）；本模板图传改接 USART10（921600），裁判系统接 USART1（ADR 0036）。
+- 图传链路上还有 VT13 图传遥控器的帧：`0xA9 0x53` 开头共 21 字节，末 2 字节为前 19 字节的 CRC16（COD-H7-Template `Image_Transmission.c`，引用）。
 - 以上是**引用**，以官方《裁判系统串口协议附录》的最新版本为准。各命令的发送频率和 UI 带宽上限也随赛季变化，**每赛季对照新版协议更新**，并修改协议版本常量；长度表和结构体放在同一个文件里，用 `_Static_assert` 保证两者一致。
 
 ### A.6 上位机串口协议（参考 standard\_robot\_pp\_ros2）
