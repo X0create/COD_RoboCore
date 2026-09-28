@@ -2,6 +2,7 @@
 add_library(rm_devices STATIC
     imu/bmi088.c
     motor/dji_motor.c
+    motor/dm_motor.c
     motor/motor.c
     motor/motor_group.c
     remote/dr16.c

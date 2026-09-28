@@ -1,7 +1,7 @@
 /**
  * @file    motor.c
  * @brief   电机统一接口，见 motor.h
- * @note    按品牌分派只在本文件和 motor_group.c 里（目前只有 DJI，达妙在第 9 步加入）。
+ * @note    按品牌分派只在本文件和 motor_group.c 里。
  */
 #include "motor.h"
 
@@ -9,8 +9,14 @@
 
 #include "core/os/critical.h"
 #include "dji_motor.h"
+#include "dm_motor.h"
 #include "motor_group.h"
 #include "platform/time.h"
+
+static bool is_dm(const MotorConfig *cfg)
+{
+    return cfg->type == MOTOR_DM;
+}
 
 /* 反馈帧回调，在 comm_rx 任务里执行 */
 static void on_feedback(const CanFrame *frame, void *ctx)
@@ -22,7 +28,14 @@ static void on_feedback(const CanFrame *frame, void *ctx)
     }
 
     MotorFeedback fb;
-    dji_decode_feedback(m->cfg, &m->brand.dji, frame->data, &fb);
+    if (is_dm(m->cfg))
+    {
+        dm_decode_feedback(m->cfg, frame->data, &fb);
+    }
+    else
+    {
+        dji_decode_feedback(m->cfg, &m->brand.dji, frame->data, &fb);
+    }
     fb.online = false; /* 在线与否由 motor_read_feedback() 读取时计算 */
     fb.stamp_us = rm_time_now_us();
 
@@ -32,23 +45,64 @@ static void on_feedback(const CanFrame *frame, void *ctx)
     watchdog_feed(&m->wd);
 }
 
-/* 同一路 CAN 上反馈 ID 相同，或占同一个控制帧槽位，就是冲突 */
+static uint32_t feedback_id(const MotorConfig *cfg)
+{
+    return is_dm(cfg) ? cfg->dm.master_id : dji_feedback_id(cfg);
+}
+
+/* 这个电机在总线上占用的 ID：DJI 为反馈 ID 和控制帧 ID，达妙为 CAN ID 和 Master ID */
+static void bus_ids(const MotorConfig *cfg, uint32_t ids[2])
+{
+    if (is_dm(cfg))
+    {
+        ids[0] = cfg->id;
+        ids[1] = cfg->dm.master_id;
+        return;
+    }
+    uint8_t frame, slot;
+    dji_ctrl_slot(cfg, &frame, &slot);
+    ids[0] = dji_feedback_id(cfg);
+    ids[1] = dji_ctrl_frame_id(frame);
+}
+
+/*
+ * 同一路 CAN 上的冲突：
+ * - 两个 DJI：反馈 ID 相同，或占同一个控制帧槽位（它们可以共用一个控制帧）；
+ * - 其余组合：占用的 ID 有重合。
+ */
 static bool conflicts(const MotorConfig *a, const MotorConfig *b)
 {
     if (a->can_bus != b->can_bus)
     {
         return false;
     }
-    uint8_t frame_a, slot_a, frame_b, slot_b;
-    dji_ctrl_slot(a, &frame_a, &slot_a);
-    dji_ctrl_slot(b, &frame_b, &slot_b);
-    return dji_feedback_id(a) == dji_feedback_id(b) || (frame_a == frame_b && slot_a == slot_b);
+    if (!is_dm(a) && !is_dm(b))
+    {
+        uint8_t frame_a, slot_a, frame_b, slot_b;
+        dji_ctrl_slot(a, &frame_a, &slot_a);
+        dji_ctrl_slot(b, &frame_b, &slot_b);
+        return dji_feedback_id(a) == dji_feedback_id(b) || (frame_a == frame_b && slot_a == slot_b);
+    }
+    uint32_t ia[2], ib[2];
+    bus_ids(a, ia);
+    bus_ids(b, ib);
+    for (int i = 0; i < 2; i++)
+    {
+        for (int j = 0; j < 2; j++)
+        {
+            if (ia[i] == ib[j])
+            {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 bool motor_init(Motor *m, const MotorConfig *cfg, MotorGroup *group, const Motor **conflict)
 {
     *conflict = NULL;
-    if (!dji_config_valid(cfg))
+    if (is_dm(cfg) ? !dm_config_valid(cfg) : !dji_config_valid(cfg))
     {
         return false;
     }
@@ -62,7 +116,7 @@ bool motor_init(Motor *m, const MotorConfig *cfg, MotorGroup *group, const Motor
     }
 
     *m = (Motor){ .cfg = cfg };
-    if (!can_subscribe(cfg->can_bus, dji_feedback_id(cfg), on_feedback, m))
+    if (!can_subscribe(cfg->can_bus, feedback_id(cfg), on_feedback, m))
     {
         return false;
     }
@@ -74,7 +128,7 @@ bool motor_init(Motor *m, const MotorConfig *cfg, MotorGroup *group, const Motor
 
 MotorCaps motor_caps(const Motor *m)
 {
-    return dji_caps(m->cfg->type); /* 达妙加入后在这里按品牌分派 */
+    return is_dm(m->cfg) ? dm_caps() : dji_caps(m->cfg->type);
 }
 
 bool motor_supports_torque(const Motor *m)
@@ -101,4 +155,21 @@ void motor_apply_safe_action(Motor *m, SafeAction action)
 {
     m->safe_action = action;
     m->safe_set = true;
+}
+
+void motor_request_enable(Motor *m)
+{
+    if (is_dm(m->cfg))
+    {
+        m->brand.dm.want_enabled = true;
+        m->brand.dm.clear_requested = true;
+    }
+}
+
+void motor_request_disable(Motor *m)
+{
+    if (is_dm(m->cfg))
+    {
+        m->brand.dm.want_enabled = false;
+    }
 }

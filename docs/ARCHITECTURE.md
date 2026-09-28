@@ -493,7 +493,7 @@ motor_set_torque(self->yaw_motor, torque_nm);
 | 实现 | 说明 |
 | --- | --- |
 | `dji_motor.c` | 型号 M3508 / M2006 / GM6020 各有一行常量参数：减速比、力矩常数、原始值量程。同一帧的 4 个电机由 `motor_group` 打包发送，避免手写字节序和帧 ID。控制帧与反馈 ID 的完整对照见附录 A.2 |
-| `dm_motor.c` | 达妙电机，支持 MIT、位置速度、速度三种模式；使能、清错、保存零点命令封装好。**不按型号分类型**：DM4310、DM8009（COD-H7-Template 实际使用）等都是 `MOTOR_DM`，型号差异由 `MotorConfig` 里的 `P_MAX / V_MAX / T_MAX` 和减速比体现（ADR 0027）。瓴控、小米等其他品牌等实际用到时再加 |
+| `dm_motor.c` | 达妙电机，MIT 模式（2026-09-28 按 ADR 0035 只做 MIT；位置速度、速度模式和设零点有人用再加）；使能、失能、清错命令封装好。**不按型号分类型**：DM4310、DM8009（COD-H7-Template 实际使用）等都是 `MOTOR_DM`，型号差异由 `MotorConfig` 里的 `P_MAX / V_MAX / T_MAX` 和减速比体现（ADR 0027）。瓴控、小米等其他品牌等实际用到时再加 |
 
 **DJI 电机的 ID 冲突在初始化时拒绝。** GM6020 的反馈 ID 是 `0x204 + id`，M3508/M2006 的反馈 ID 是 `0x200 + id`：同一路 CAN 上，GM6020 的 1–4 号和 M3508/M2006 的 5–8 号反馈 ID 相同。控制帧也有共用：`0x1FF` 同时承载 C6x0 的 5–8 号和 GM6020 电压模式的 1–4 号。
 
@@ -1337,6 +1337,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0032 | 用户 2026-09-28 确认：① 解锁 / 急停用**右拨杆 `sw[1]`**：拨到“下”= 急停（全车停），在 Safe 模式下先看到“下”再拨到“中”或“上”= 解锁，回到 Safe 后必须重新拨一次（兵种 `config.h` 的 `TEMPLATE_ARM_SWITCH`）；② 本步 control 任务**直接读 `rc_state`**，command 任务、`RobotCmd`、`OperatorInput` 等有第二种输入（键鼠、视觉）时再加。实现要点：安全门是 `SafetyGate` 实例（兵种持有），新增 `robot_start()`（startup 任务最后调用，允许解锁）和 `robot_control_step()`（control 任务每周期调用）两个兵种钩子；模式用 `switch` 实现（不是表驱动），同样可在电脑上逐项测试；comm_rx 优先级高于 control | 一根拨杆同时表达急停（电平）和解锁（边沿），遥控恢复、上电时拨杆在上方都不会自己动；少一个任务，本步验证更集中 |
 | 0033 | 用户 2026-09-28 确认：① 板上资源在平台接口里**按用途命名**（`SPI_DEV_IMU_ACCEL`、`SPI_DEV_IMU_GYRO`、`PWM_IMU_HEATER`），平台实现里用一张表对应到 CubeMX 句柄和片选脚，设备驱动里没有引脚信息；UART、CAN 仍按芯片编号（路数少、各芯片编号方式相近）；② IMU 加热先照搬旧工程（只修负数输出变满占空比的 bug），再单独提交改为 UniC 在同款 MC02 上实测的参数；③ 陀螺零偏在第 8 步上电静止标定（标准差判据，失败上报并视为 IMU 未就绪），本步只提供 `bmi088_set_gyro_offset()` 和 `algorithm/attitude/gyro_bias`，零偏暂为 0。GPIO 接口推迟到第 8 步（陀螺数据就绪中断第一次用到），届时确认方案 | ① 换板只改平台表，驱动不动；片选由 SPI 层在占用总线时一起拉，满足运行时契约第 1 节 ② 搬代码与改行为分开，最终行为有实测依据 ③ 零偏每颗芯片不同，旧工程的常数属于另一块板 |
 | 0034 | 用户 2026-09-28 确认：① ins 任务**先轮询**（1 kHz 绝对时刻延时后读 BMI088，同旧工程），陀螺数据就绪中断与 GPIO / 外部中断接口以后再做；② EKF **两步提交**：先照搬（固定 dt 1 ms），唯一必须的改动是卡方值按 rᵀS⁻¹r 计算（旧代码转置了 S⁻¹ 而不是新息，行为不确定），再单独改用实测 dt。实现要点：ins 只在上电零偏标定通过后发布 `imu_state`，安全门读它时要求不超过 `IMU_STALE_MS`（20 ms），读不到即 IMU 未就绪、全车停；标定失败自动重新采样；芯片→机体用兵种配置的安装旋转矩阵（样板默认单位阵）；加速度模长 < 1 m/s² 的帧丢弃 | ① 不改 CubeMX、不必先定 GPIO 方案，行为同旧工程 ② 搬代码与改行为分开；“IMU 就绪”只在话题新旧一处判定 |
+| 0035 | 用户 2026-09-28 确认：达妙电机 ① 使能 / 失能 / 清错命令发往**电机 CAN ID**（与 MIT 帧同 ID，按 basic_framework、StandardRobot++），不沿用旧工程发往反馈 ID 的做法；② **解锁后由子系统请求使能**，上电不使能，离线后请求被清除（重新上线不自动使能）；③ **只做 MIT 模式**；④ 样板接一台 DM8009（FDCAN2 FD、ID 0x01 / 0x11、±π / 45 / 54）。实现要点：使能按“期望状态”与反馈状态对齐，不用命令队列，两条命令至少间隔 20 ms（等确认或超时）；报错时一次请求只清错一次；没人请求使能而电机报告已使能时发失能；每台每周期必发一帧；FD 总线自动发 FD 帧（平台新增 `can_bus_is_fd()`）；MIT 编码截到范围内 | ① 两份参考一致，旧工程无证据表明生效 ② 运行时契约第 5 节“使能只在解锁后” ③④ 只做有人用的功能，行为对照旧工程 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
@@ -1546,7 +1547,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 6 | `Task/Control_Task.c` | `robots/common/safety_gate`、`robots/common/control_task`、`robots/_template`（遥控 → 底盘电机转速） | 代码完成（2026-09-28），主机测试 9 项（含新旧 PID 闭环等价）；**固件开始发电机指令**，上板待 V33–V38（台架） |
 | 7 | `BSP/bsp_spi.c`、`bsp_gpio.c`、`bsp_pwm.c`、`Device/Bmi088.c` | `platform/…/spi`、`gpio`、`pwm`，`devices/imu/bmi088`（含加热恒温） | 代码完成（2026-09-28）：spi、pwm、bmi088、加热（UniC 参数）、`gyro_bias`；gpio 推迟到第 8 步（ADR 0033）；主机测试 15 项；上板待 V5、V6 |
 | 8 | `Algorithm/Quaternion.c`、`Task/INS_Task.c` | `algorithm/attitude/quat_ekf`、`subsystems/ins`、`msgs/imu_state` | 代码完成（2026-09-28）：EKF（卡方公式改正、实测 dt）、上电零偏标定、安装旋转、IMU 未就绪全车停；轮询驱动（ADR 0034）；主机测试 16 项；上板待 V7–V9 |
-| 9 | `Device/Motor.c`（达妙部分） | `devices/motor/dm_motor`（含 FDCAN2 的 FD 总线） | |
+| 9 | `Device/Motor.c`（达妙部分） | `devices/motor/dm_motor`（含 FDCAN2 的 FD 总线） | 代码完成（2026-09-28）：MIT、使能按期望状态对齐、FD 帧、跨品牌 ID 查重（ADR 0035）；样板接一台 DM8009；主机测试 18 项；上板待 V39–V42 |
 | 10 | `Device/Referee_System.c`、`Image_Transmission.c` | `devices/referee/referee`（协议 v2.0.0）、`devices/remote/vt_link` | |
 | 11 | `Device/MiniPC.c`、USB CDC | `platform/…/usb_cdc`、`devices/vision/vision_link` | |
 | 12 | `BSP/bsp_adc.c`、`Algorithm/RLS.c`、蜂鸣器 | `platform/…/adc`、`devices/battery`、`algorithm/power/rls`、`devices/buzzer` | |

@@ -24,12 +24,27 @@ static CanFrame sent[MAX_SENT];
 static CanBusId sent_bus[MAX_SENT];
 static uint32_t sent_count;
 static bool send_fail;
+static bool bus_fd[CAN_BUS_COUNT];
 
 void fake_can_reset(void)
 {
     sub_count = 0u;
     sent_count = 0u;
     send_fail = false;
+    for (int i = 0; i < (int)CAN_BUS_COUNT; i++)
+    {
+        bus_fd[i] = false;
+    }
+}
+
+void fake_can_set_bus_fd(CanBusId bus, bool fd)
+{
+    bus_fd[bus] = fd;
+}
+
+bool can_bus_is_fd(CanBusId bus)
+{
+    return bus_fd[bus];
 }
 
 bool can_subscribe_range(CanBusId bus, uint32_t first_id, uint32_t last_id, CanRxHandler handler,
@@ -57,9 +72,9 @@ bool can_subscribe(CanBusId bus, uint32_t id, CanRxHandler handler, void *ctx)
 
 bool can_send(CanBusId bus, const CanFrame *frame)
 {
-    if (send_fail || sent_count >= MAX_SENT)
+    if (send_fail || sent_count >= MAX_SENT || (frame->is_fd && !bus_fd[bus]))
     {
-        return false;
+        return false; /* 与真实实现一样：FD 帧不能发往经典总线 */
     }
     sent_bus[sent_count] = bus;
     sent[sent_count++] = *frame;

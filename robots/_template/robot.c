@@ -2,6 +2,8 @@
  * @file    robot.c
  * @brief   新兵种的样板：遥控控制一台 M3508 的转速（照搬 COD-H7-Template `Control_Task.c`）+ 安全门
  * @note    control 任务 1 kHz：读遥控 → 安全门 → 速度环 → 全车停改写 → 电机组发送。
+ *          另接一台达妙 DM8009（FDCAN2，FD；同旧工程配置）：解锁时请求使能、之后零力矩；全车停时阻尼；
+ *          每个周期都发一帧（驱动器只在收到帧时回反馈）。
  *          **这个固件会给电机发指令**：未解锁时持续发 0 电流；解锁后按遥控通道 3 转动。上板按台架条件
  *          （docs/VERIFICATION_TODO.md“接电机”）。
  *          解锁：右拨杆拨到下再拨到中或上；急停：右拨杆拨到下（config.h，ADR 0032）。
@@ -68,6 +70,23 @@ static const MotorConfig chassis_motor_config = {
     .stop_action = SAFE_ACTION_ZERO_TORQUE,
 };
 static Motor chassis_motor;
+
+/* 达妙 DM8009：ID、范围同旧工程 Motor.c 的 DM_8009_Motor[0]；阻尼 Kd 为暂定值，台架确认（V41） */
+static const MotorConfig joint_motor_config = {
+    .name = "dm8009_1",
+    .type = MOTOR_DM,
+    .can_bus = CAN_BUS_2,
+    .id = 0x01u,
+    .direction = 1,
+    .gear_ratio = 1.0f,
+    .stop_action = SAFE_ACTION_DAMP,
+    .dm = { .master_id = 0x11u,
+            .p_max = 3.141593f,
+            .v_max = 45.0f,
+            .t_max = 54.0f,
+            .damp_kd = 1.0f },
+};
+static Motor joint_motor;
 static MotorGroup motors;
 
 /* 以下只在 control 任务里读写（gate.mode 另由心跳任务读来打印） */
@@ -119,6 +138,20 @@ static void log_motor(void)
     RM_LOG_I("m3508_1 angle %d mrad, speed %d mrad/s, torque %d mNm, %d C",
              (int)(fb.angle_rad * 1000.0f), (int)(fb.speed_rad_s * 1000.0f),
              (int)(fb.torque_nm * 1000.0f), (int)fb.temperature_c);
+}
+
+static void log_joint(void)
+{
+    MotorFeedback fb;
+    if (!motor_read_feedback(&joint_motor, &fb))
+    {
+        RM_LOG_I("dm8009_1 offline");
+        return;
+    }
+    RM_LOG_I("dm8009_1 %s, error 0x%x, angle %d mrad, speed %d mrad/s, torque %d mNm",
+             fb.enabled ? "enabled" : "disabled", (unsigned)fb.error_code,
+             (int)(fb.angle_rad * 1000.0f), (int)(fb.speed_rad_s * 1000.0f),
+             (int)(fb.torque_nm * 1000.0f));
 }
 
 static void log_ins_event(InsEvent ev, bool *failing)
@@ -213,6 +246,7 @@ static void heartbeat_entry(void *arg)
             RM_LOG_I("alive %u, mode %s", (unsigned)beat, mode_name(gate.mode));
             log_rc();
             log_motor();
+            log_joint();
             log_imu();
             beat++;
         }
@@ -222,6 +256,19 @@ static void heartbeat_entry(void *arg)
     }
 }
 
+static bool init_motor(Motor *m, const MotorConfig *cfg)
+{
+    const Motor *conflict;
+    if (!motor_init(m, cfg, &motors, &conflict))
+    {
+        RM_LOG_E("motor %s init failed%s%s", cfg->name,
+                 conflict != NULL ? ": id conflict with " : "",
+                 conflict != NULL ? conflict->cfg->name : "");
+        return false;
+    }
+    return true;
+}
+
 bool robot_init(void)
 {
     if (!dr16_init(&dr16, &rc_state) || !comm_rx_add_uart(DBUS_UART, on_dbus_bytes, &dr16))
@@ -229,12 +276,9 @@ bool robot_init(void)
         RM_LOG_E("dr16 init failed");
         return false;
     }
-    const Motor *conflict;
-    if (!motor_init(&chassis_motor, &chassis_motor_config, &motors, &conflict))
+    if (!init_motor(&chassis_motor, &chassis_motor_config)
+        || !init_motor(&joint_motor, &joint_motor_config))
     {
-        RM_LOG_E("motor %s init failed%s%s", chassis_motor_config.name,
-                 conflict != NULL ? ": id conflict with " : "",
-                 conflict != NULL ? conflict->cfg->name : "");
         return false;
     }
     if (!ins_init(&ins, &ins_config, &imu_state))
@@ -282,6 +326,12 @@ void robot_control_step(void)
         float torque_nm = pid_calc(&speed_pid, target_rad_s, fb.speed_rad_s);
         torque_nm = (torque_nm > limit) ? limit : ((torque_nm < -limit) ? -limit : torque_nm);
         motor_set_torque(&chassis_motor, torque_nm);
+    }
+
+    /* 达妙：解锁时请求使能（离线后请求会被清除，需要重新解锁）；之后不写指令即为零力矩 */
+    if (gate_out.entered_manual)
+    {
+        motor_request_enable(&joint_motor);
     }
 
     /* 4. 全车停在发送出口统一执行：即使上面漏判，也不会发出运动指令 */

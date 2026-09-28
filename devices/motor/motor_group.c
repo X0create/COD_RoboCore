@@ -6,7 +6,10 @@
 
 #include <stddef.h>
 
+#include "core/os/critical.h"
 #include "dji_motor.h"
+#include "dm_motor.h"
+#include "platform/time.h"
 
 void motor_group_apply_stop_all(MotorGroup *group)
 {
@@ -40,6 +43,10 @@ static void flush_frame(MotorGroup *group, CanBusId bus, uint8_t frame_index)
 
     for (const Motor *m = group->head; m != NULL; m = m->next)
     {
+        if (m->cfg->type == MOTOR_DM)
+        {
+            continue; /* 达妙每台一帧，见 flush_dm */
+        }
         uint8_t f, slot;
         dji_ctrl_slot(m->cfg, &f, &slot);
         if (m->cfg->can_bus != bus || f != frame_index)
@@ -70,6 +77,70 @@ static void flush_frame(MotorGroup *group, CanBusId bus, uint8_t frame_index)
     }
 }
 
+/*
+ * 达妙电机这个周期发哪一帧（每个周期必发一帧：驱动器只在收到帧时回反馈，不发就判断不了在不在线）。
+ * 使能按“期望状态”对齐：期望与反馈不一致时发命令，两条命令至少间隔 DM_CMD_INTERVAL_US（等确认或超时）。
+ */
+static void flush_dm(MotorGroup *group, Motor *m, uint64_t now_us)
+{
+    DmMotorState *st = &m->brand.dm;
+    const MotorConfig *cfg = m->cfg;
+
+    rm_critical_enter();
+    const bool enabled = m->fb.enabled;
+    const uint8_t error = m->fb.error_code;
+    rm_critical_exit();
+    const bool online = watchdog_is_online(&m->wd);
+
+    if (!online || (m->safe_set && m->safe_action == SAFE_ACTION_DISABLE))
+    {
+        st->want_enabled = false; /* 离线后重新上线不自动使能；失能停机同样放弃使能 */
+    }
+
+    CanFrame frame = { .id = cfg->id, .len = 8u, .is_fd = can_bus_is_fd(cfg->can_bus) };
+    const bool cmd_ready = !st->cmd_sent || now_us - st->last_cmd_us >= DM_CMD_INTERVAL_US;
+    bool is_cmd = false;
+    if (cmd_ready && online && st->want_enabled && error != 0u && st->clear_requested)
+    {
+        dm_encode_command(DM_CMD_CLEAR_ERROR, frame.data); /* 这次使能请求只清一次错 */
+        st->clear_requested = false;
+        is_cmd = true;
+    }
+    else if (cmd_ready && online && st->want_enabled && !enabled && error == 0u)
+    {
+        dm_encode_command(DM_CMD_ENABLE, frame.data);
+        is_cmd = true;
+    }
+    else if (cmd_ready && online && !st->want_enabled && enabled)
+    {
+        dm_encode_command(DM_CMD_DISABLE, frame.data);
+        is_cmd = true;
+    }
+
+    if (is_cmd)
+    {
+        st->cmd_sent = true;
+        st->last_cmd_us = now_us;
+    }
+    else if (m->safe_set && m->safe_action == SAFE_ACTION_DAMP)
+    {
+        dm_encode_mit(cfg, 0.0f, 0.0f, 0.0f, cfg->dm.damp_kd, 0.0f, frame.data);
+    }
+    else if (!m->safe_set && m->torque_set && online)
+    {
+        dm_encode_mit(cfg, 0.0f, 0.0f, 0.0f, 0.0f, m->torque_cmd_nm, frame.data);
+    }
+    else
+    {
+        dm_encode_mit(cfg, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, frame.data); /* 零力矩：Kp、Kd、力矩全 0 */
+    }
+
+    if (!can_send(cfg->can_bus, &frame))
+    {
+        group->tx_dropped++;
+    }
+}
+
 void motor_group_flush(MotorGroup *group)
 {
     for (int bus = 0; bus < (int)CAN_BUS_COUNT; bus++)
@@ -77,6 +148,14 @@ void motor_group_flush(MotorGroup *group)
         for (uint8_t f = 0u; f < DJI_CTRL_FRAMES; f++)
         {
             flush_frame(group, (CanBusId)bus, f);
+        }
+    }
+    const uint64_t now_us = rm_time_now_us();
+    for (Motor *m = group->head; m != NULL; m = m->next)
+    {
+        if (m->cfg->type == MOTOR_DM)
+        {
+            flush_dm(group, m, now_us);
         }
     }
     for (Motor *m = group->head; m != NULL; m = m->next)

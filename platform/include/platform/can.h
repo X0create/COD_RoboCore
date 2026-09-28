@@ -76,6 +76,12 @@ uint32_t can_dispatch(CanBusId bus);
  */
 RM_NODISCARD bool can_send(CanBusId bus, const CanFrame *frame);
 
+/**
+ * @brief   这路总线是否配置成 CAN FD（CubeMX 的 FrameFormat）
+ * @note    FD 帧只能发往全 FD 的总线（ADR 0023）；设备驱动据此决定发 FD 帧还是经典帧
+ */
+bool can_bus_is_fd(CanBusId bus);
+
 /** 接收环形缓冲满、被丢弃的帧数（调试用） */
 uint32_t can_rx_dropped(CanBusId bus);
 

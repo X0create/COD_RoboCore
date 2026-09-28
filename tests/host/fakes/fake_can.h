@@ -20,5 +20,8 @@ uint32_t fake_can_sent_count(void);
 const CanFrame *fake_can_sent(uint32_t i);
 CanBusId fake_can_sent_bus(uint32_t i);
 
+/** 设定某路总线是否为 FD（默认都是经典） */
+void fake_can_set_bus_fd(CanBusId bus, bool fd);
+
 /** 之后的 can_send 全部返回 false（模拟发送队列满） */
 void fake_can_set_send_fail(bool fail);

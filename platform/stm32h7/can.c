@@ -146,11 +146,16 @@ uint32_t can_dispatch(CanBusId bus)
     return count;
 }
 
+bool can_bus_is_fd(CanBusId bus)
+{
+    return handles[bus]->Init.FrameFormat != FDCAN_FRAME_CLASSIC;
+}
+
 bool can_send(CanBusId bus, const CanFrame *frame)
 {
     FDCAN_HandleTypeDef *h = handles[bus];
     uint8_t dlc = 0u;
-    const bool bus_is_fd = h->Init.FrameFormat != FDCAN_FRAME_CLASSIC;
+    const bool bus_is_fd = can_bus_is_fd(bus);
 
     if (frame->id > CAN_STD_ID_MAX || !can_len_to_dlc(frame->len, &dlc)
         || (!frame->is_fd && frame->len > 8u) || (frame->is_fd && !bus_is_fd))

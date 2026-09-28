@@ -123,6 +123,7 @@ void dji_decode_feedback(const MotorConfig *cfg, DjiMotorState *state, const uin
     out->torque_is_estimate = true;
     out->temperature_c = tp->has_temperature ? (float)data[6] : 0.0f;
     out->error_code = 0u;
+    out->enabled = true; /* DJI 电调没有使能概念 */
 }
 
 int16_t dji_torque_to_raw(const MotorConfig *cfg, float torque_nm)

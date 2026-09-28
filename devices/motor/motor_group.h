@@ -6,6 +6,7 @@
  *            2. 需要全车停时调用 motor_group_apply_stop_all()，每个电机改写成它的 stop_action；
  *            3. 周期末尾调用一次 motor_group_flush()：按帧打包入队，然后清空全部槽位。
  *          本周期没写的槽位和离线电机的槽位填零力矩，不“保持上一帧”。
+ *          达妙电机每台每周期一帧：需要时是使能 / 失能 / 清错命令，否则是 MIT 帧；FD 总线上发 FD 帧。
  *          全部函数只在 control 任务里调用（motor_init 除外，它在初始化阶段）。
  */
 #pragma once
