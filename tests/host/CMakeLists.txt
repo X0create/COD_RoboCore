@@ -5,9 +5,10 @@
 add_library(unity STATIC unity/unity.c)
 target_include_directories(unity SYSTEM PUBLIC unity)
 
-# 假实现：临界区（单线程下为空）、可设定的时钟、记录收发的 CAN，代替 FreeRTOS 与芯片外设
+# 假实现：临界区（单线程下为空）、延时、可设定的时钟、CAN、PWM、带 BMI088 寄存器模型的 SPI，代替 FreeRTOS 与芯片外设
 # OBJECT 库：目标文件直接编进测试程序，不受静态库链接顺序影响（被测库在它之后才用到这些符号）
-add_library(rm_host_fakes OBJECT fakes/fake_can.c fakes/fake_os.c fakes/fake_time.c)
+add_library(rm_host_fakes OBJECT
+    fakes/fake_can.c fakes/fake_os.c fakes/fake_pwm.c fakes/fake_spi.c fakes/fake_time.c)
 target_include_directories(rm_host_fakes PUBLIC fakes)
 target_link_libraries(rm_host_fakes PUBLIC rm_core_common)
 rm_target_warnings(rm_host_fakes)
@@ -38,3 +39,5 @@ rm_add_host_test(test_dji_motor devices/test_dji_motor.c rm_devices)
 rm_add_host_test(test_motor_group devices/test_motor_group.c rm_devices rm_host_fakes)
 rm_add_host_test(test_safety_gate robots/test_safety_gate.c rm_robot_logic)
 rm_add_host_test(test_template_config robots/test_template_config.c rm_algorithm rm_devices)
+rm_add_host_test(test_gyro_bias algorithm/test_gyro_bias.c rm_algorithm)
+rm_add_host_test(test_bmi088 devices/test_bmi088.c rm_devices rm_host_fakes)

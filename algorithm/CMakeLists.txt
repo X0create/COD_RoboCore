@@ -1,5 +1,6 @@
 # 纯计算：不依赖芯片和 FreeRTOS，电脑测试和固件都链接它
 add_library(rm_algorithm STATIC
+    attitude/gyro_bias.c
     control/pid.c
     control/ramp.c
     filter/kalman.c

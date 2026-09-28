@@ -5,6 +5,8 @@
 #include "os.h"
 
 #include "critical.h"
+#include "delay.h"
+#include "platform/time.h"
 
 bool rm_task_create(RmTask *task, const char *name, RmTaskEntry entry, void *arg, uint32_t priority,
                     StackType_t *stack, uint32_t stack_words)
@@ -54,4 +56,17 @@ void rm_critical_enter(void)
 void rm_critical_exit(void)
 {
     taskEXIT_CRITICAL();
+}
+
+void rm_delay_ms(uint32_t ms)
+{
+    vTaskDelay(pdMS_TO_TICKS(ms));
+}
+
+void rm_delay_us(uint32_t us)
+{
+    const uint64_t end_us = rm_time_now_us() + us;
+    while (rm_time_now_us() < end_us)
+    {
+    }
 }

@@ -5,7 +5,8 @@
  *          **这个固件会给电机发指令**：未解锁时持续发 0 电流；解锁后按遥控通道 3 转动。上板按台架条件
  *          （docs/VERIFICATION_TODO.md“接电机”）。
  *          解锁：右拨杆拨到下再拨到中或上；急停：右拨杆拨到下（config.h，ADR 0032）。
- *          心跳任务驱动状态灯，每秒通过 RTT 打印模式、遥控和电机反馈；上线 / 离线的变化由 daemon 任务打印。
+ *          imu 任务 1 kHz：读 BMI088、加热恒温（第 8 步换成 subsystems/ins，加上姿态解算）。
+ *          心跳任务驱动状态灯，每秒通过 RTT 打印模式、遥控、电机反馈和 IMU；上线 / 离线的变化由 daemon 任务打印。
  */
 #include "robot.h"
 
@@ -14,8 +15,11 @@
 #include "config.h"
 #include "control_task.h"
 #include "core/log/log.h"
+#include "core/os/critical.h"
+#include "core/os/delay.h"
 #include "core/os/os.h"
 #include "daemon.h"
+#include "devices/imu/bmi088.h"
 #include "devices/motor/motor.h"
 #include "devices/motor/motor_group.h"
 #include "devices/remote/dr16.h"
@@ -33,12 +37,15 @@ enum
     PRIORITY_DAEMON = 2,
     PRIORITY_CONTROL = 3,
     PRIORITY_COMM_RX = 4, /* 高于 control，保证控制周期读到最新反馈（《架构设计》任务划分） */
+    PRIORITY_IMU = 5, /* 最高：IMU 采样时刻要准（第 8 步的 ins） */
 };
 
 #define HEARTBEAT_STEP_MS     25u
 #define HEARTBEAT_STEPS       40u /* 40 × 25 ms = 1 s 一拍 */
 #define HEARTBEAT_STACK_WORDS 256u
 #define LED_GREEN_LEVEL       0x20u /* WS2812 满亮度很刺眼，1/8 亮度足够看清 */
+#define IMU_STACK_WORDS       512u
+#define IMU_RETRY_MS          1000u
 
 /* DR16 接收机接 UART5（接线沿用 COD-H7-Template，《架构设计》“阶段 1 清单”） */
 #define DBUS_UART UART_5
@@ -64,6 +71,13 @@ static MotorGroup motors;
 /* 以下只在 control 任务里读写（gate.mode 另由心跳任务读来打印） */
 static SafetyGate gate;
 static Pid speed_pid;
+/* IMU：imu 任务写，心跳任务在临界区里读来打印 */
+static Bmi088 imu;
+static Bmi088Sample imu_latest;
+static bool imu_valid;
+static RmTask imu_task;
+static StackType_t imu_stack[IMU_STACK_WORDS];
+
 static RmTask heartbeat_task;
 static StackType_t heartbeat_stack[HEARTBEAT_STACK_WORDS];
 
@@ -107,6 +121,60 @@ static void log_motor(void)
              (int)(fb.torque_nm * 1000.0f), (int)fb.temperature_c);
 }
 
+static void imu_entry(void *arg)
+{
+    (void)arg;
+    Bmi088Status status;
+    while ((status = bmi088_init(&imu)) != BMI088_OK)
+    {
+        RM_LOG_E("bmi088 init failed (%d), retry", (int)status);
+        rm_delay_ms(IMU_RETRY_MS);
+    }
+    RM_LOG_I("bmi088 ready");
+
+    RmTaskPeriod last_wake = rm_task_period_start();
+    for (;;)
+    {
+        Bmi088Sample sample;
+        const bool ok = bmi088_read(&imu, &sample);
+        if (ok)
+        {
+            bmi088_heater_step(&imu, sample.temperature_c);
+        }
+        else
+        {
+            bmi088_heater_off(&imu); /* 读不到温度就不加热 */
+        }
+        rm_critical_enter();
+        imu_valid = ok;
+        if (ok)
+        {
+            imu_latest = sample;
+        }
+        rm_critical_exit();
+        rm_task_delay_until(&last_wake, 1u);
+    }
+}
+
+/* 浮点用整数打印：毫摄氏度、毫弧度/秒、毫米/秒² */
+static void log_imu(void)
+{
+    rm_critical_enter();
+    const bool valid = imu_valid;
+    const Bmi088Sample s = imu_latest;
+    rm_critical_exit();
+    if (!valid)
+    {
+        RM_LOG_I("imu not ready");
+        return;
+    }
+    RM_LOG_I("imu %d mC, gyro %d %d %d mrad/s, accel %d %d %d mm/s2",
+             (int)(s.temperature_c * 1000.0f), (int)(s.gyro_rad_s[0] * 1000.0f),
+             (int)(s.gyro_rad_s[1] * 1000.0f), (int)(s.gyro_rad_s[2] * 1000.0f),
+             (int)(s.accel_m_s2[0] * 1000.0f), (int)(s.accel_m_s2[1] * 1000.0f),
+             (int)(s.accel_m_s2[2] * 1000.0f));
+}
+
 static const char *mode_name(RobotMode mode)
 {
     switch (mode)
@@ -138,6 +206,7 @@ static void heartbeat_entry(void *arg)
             RM_LOG_I("alive %u, mode %s", (unsigned)beat, mode_name(gate.mode));
             log_rc();
             log_motor();
+            log_imu();
             beat++;
         }
 
@@ -210,6 +279,11 @@ void robot_control_step(void)
 
 void robot_create_tasks(void)
 {
+    if (!rm_task_create(&imu_task, "imu", imu_entry, NULL, PRIORITY_IMU, imu_stack,
+                        IMU_STACK_WORDS))
+    {
+        RM_LOG_E("create imu task failed");
+    }
     comm_rx_create_task(PRIORITY_COMM_RX);
     control_task_create(PRIORITY_CONTROL);
     daemon_create_task(PRIORITY_DAEMON);

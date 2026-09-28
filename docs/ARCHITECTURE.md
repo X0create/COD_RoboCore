@@ -175,7 +175,7 @@ rm-template/
 │   │   └── mdk/dm_mc02.uvprojx  # Keil 工程（ADR 0019：暂不建立）
 │   └── dji_c_f407/              # 同上
 ├── platform/
-│   ├── include/platform/        # 接口：can uart spi gpio pwm adc usb_cdc time flash iwdg
+│   ├── include/platform/        # 接口：can uart spi gpio pwm adc usb_cdc time flash iwdg（spi、pwm 按用途命名，ADR 0033）
 │   ├── common/                  # 各芯片共用的纯计算（如 DWT 64 位扩展），PC 可测
 │   ├── stm32h7/                 # FDCAN、H7 的 DMA/Cache 处理
 │   ├── stm32f4/                 # bxCAN
@@ -1335,6 +1335,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0030 | 用户 2026-09-28 确认：**遥控丢失超时 200 ms**（沿用 COD-H7-Template，不用计划中的 100 ms）；遥控是否丢失**只以 `rc_state` 话题的新旧判定**（`rc_state_read(…, RC_LOST_TIMEOUT_MS)` 失败即丢失），DR16 的 `Watchdog` 只用于上线 / 离线日志和设备清单；daemon 任务现在只做报告，IWDG 在阶段 1 加入 | 同一故障只在一处判定；只有合法帧才发布，话题时间戳就是最后一次合法帧。代价：从关遥控到判定丢失就要 200 ms，阶段 1 完成标准中“关遥控后 100 ms 内停下”一项按此放宽（见该清单） |
 | 0031 | 用户 2026-09-28 确认：① 电机接口用**输出轴国际单位**（`motor_set_torque` 为 N·m，反馈为 rad、rad/s、N·m），第 6 步把旧 PID 参数按固定公式换算；② 电机反馈离线超时 **20 ms**（`MOTOR_OFFLINE_TIMEOUT_MS`）；③ GM6020 本步只有反馈，`torque_command = false`，电压 / 电流指令写云台时再加；④ DJI 电机的 `stop_action` 只支持零力矩（发 0）和失能（发 0 后停止发送），配成阻尼时 `motor_init()` 拒绝。实现与“电机：统一接口”草图的差异：电机组是 `MotorGroup` 实例（由 `robot.c` 持有，`motor_init` 时传入，便于测试和多组），没有 `begin_cycle`（`motor_group_flush()` 发送后清空槽位）；`motor_init` 多一个 `conflict` 输出参数，日志里写出冲突的两个电机 | ① 换型号 / 减速比不用改子系统，与达妙电机单位一致 ② 1 kHz 反馈下等于连续丢 20 帧，机构停及时 ③④ 只做有人用的功能 |
 | 0032 | 用户 2026-09-28 确认：① 解锁 / 急停用**右拨杆 `sw[1]`**：拨到“下”= 急停（全车停），在 Safe 模式下先看到“下”再拨到“中”或“上”= 解锁，回到 Safe 后必须重新拨一次（兵种 `config.h` 的 `TEMPLATE_ARM_SWITCH`）；② 本步 control 任务**直接读 `rc_state`**，command 任务、`RobotCmd`、`OperatorInput` 等有第二种输入（键鼠、视觉）时再加。实现要点：安全门是 `SafetyGate` 实例（兵种持有），新增 `robot_start()`（startup 任务最后调用，允许解锁）和 `robot_control_step()`（control 任务每周期调用）两个兵种钩子；模式用 `switch` 实现（不是表驱动），同样可在电脑上逐项测试；comm_rx 优先级高于 control | 一根拨杆同时表达急停（电平）和解锁（边沿），遥控恢复、上电时拨杆在上方都不会自己动；少一个任务，本步验证更集中 |
+| 0033 | 用户 2026-09-28 确认：① 板上资源在平台接口里**按用途命名**（`SPI_DEV_IMU_ACCEL`、`SPI_DEV_IMU_GYRO`、`PWM_IMU_HEATER`），平台实现里用一张表对应到 CubeMX 句柄和片选脚，设备驱动里没有引脚信息；UART、CAN 仍按芯片编号（路数少、各芯片编号方式相近）；② IMU 加热先照搬旧工程（只修负数输出变满占空比的 bug），再单独提交改为 UniC 在同款 MC02 上实测的参数；③ 陀螺零偏在第 8 步上电静止标定（标准差判据，失败上报并视为 IMU 未就绪），本步只提供 `bmi088_set_gyro_offset()` 和 `algorithm/attitude/gyro_bias`，零偏暂为 0。GPIO 接口推迟到第 8 步（陀螺数据就绪中断第一次用到），届时确认方案 | ① 换板只改平台表，驱动不动；片选由 SPI 层在占用总线时一起拉，满足运行时契约第 1 节 ② 搬代码与改行为分开，最终行为有实测依据 ③ 零偏每颗芯片不同，旧工程的常数属于另一块板 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 

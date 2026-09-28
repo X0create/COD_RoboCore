@@ -14,6 +14,8 @@ rm_target_warnings(rm_platform_common)
 if(RM_CHIP)
     add_library(rm_platform STATIC
         ${RM_CHIP}/can.c
+        ${RM_CHIP}/pwm.c
+        ${RM_CHIP}/spi.c
         ${RM_CHIP}/status_led.c
         ${RM_CHIP}/time.c
         ${RM_CHIP}/uart.c

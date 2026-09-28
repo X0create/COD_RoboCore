@@ -7,7 +7,7 @@
 | `control/` | PID、斜坡、LQR、前馈 |
 | `filter/` | 低通、卡尔曼 |
 | `math/` | 小矩阵运算（卡尔曼等用，ADR 0029） |
-| `attitude/` | 四元数、姿态 EKF、云台角度 |
+| `attitude/` | 四元数、姿态 EKF、云台角度、陀螺零偏标定 |
 | `kinematics/` | 麦轮、全向轮、舵轮、轮腿 VMC |
 | `power/` | 电机功率模型、参数辨识、功率分配 |
 | `ballistic/` | 弹道解算 |
