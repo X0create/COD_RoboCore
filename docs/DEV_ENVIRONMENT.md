@@ -434,6 +434,24 @@ RTT 控制块在运行时才写好。地址应与 ELF 中 `_SEGGER_RTT` 一致�
 交叉编译器由 `cmake/toolchain-arm-gcc.cmake` 在 `~/tools/arm-gnu-toolchain-*/bin` 中自动查找，CLion 不需要额外设置环境变量。
 构建目录与命令行共用（`build/host`、`build/h723-template-debug`）。
 
+## 12. 推送到 GitHub（已验证 2026-09-28）
+
+仓库：<https://github.com/X0create/COD_RoboCore>（公开）。以下设置只写在本仓库的 `.git/config`，不影响其他仓库：
+
+```bash
+git config user.email "<你的 GitHub 隐私邮箱>"   # GitHub → Settings → Emails，形如 数字+用户名@users.noreply.github.com
+git config credential.helper "/mnt/c/Program\ Files/Git/mingw64/bin/git-credential-manager.exe"
+git config http.proxy http://127.0.0.1:7897
+git remote add origin https://github.com/<用户名>/COD_RoboCore.git
+git push -u origin main
+```
+
+- 用 Windows Git 自带的凭据管理器（GCM）登录：第一次推送弹出窗口，选 **Sign in with your browser** 授权，之后自动记住。
+  **不要在 `Username for 'https://github.com':` 提示里输密码**，GitHub 不接受密码推送。
+- 用隐私邮箱是为了公开仓库时不暴露真实邮箱；GitHub 的 Emails 设置里可以再勾选
+  “Block command line pushes that expose my email”，用了真实邮箱的提交会被拒绝推送。
+- GCM 是 Windows 程序，需要 WSL 能运行 `.exe`（见常见问题中的 `Exec format error`）。
+
 ## 常见问题
 
 | 现象 | 原因和处理 |
@@ -445,6 +463,7 @@ RTT 控制块在运行时才写好。地址应与 ELF 中 `_SEGGER_RTT` 一致�
 | `curl` 等普通命令能下载，`sudo apt` 不行 | 同上：普通命令会用 `http_proxy` 环境变量，`sudo` 执行的命令默认不会 |
 | `xxx: command not found`，而 xxx 是上一条命令的参数 | 长命令粘贴时被折成了两行，重新作为一整行粘贴 |
 | `curl: (2) no URL specified`，下一行把网址当命令报 `No such file or directory` | 同上，网址被换行拆开了。从文档代码框复制，不要从终端历史复制（终端的显示折行会混进换行） |
+| WSL 里运行任何 Windows 程序（`cmd.exe`、Git 凭据管理器、`code .`）都报 `Exec format error` | WSL 开了 systemd（`/etc/wsl.conf` 中 `systemd=true`）后，`systemd-binfmt` 重新加载时会清掉运行 `.exe` 的注册。永久修复：`echo ':WSLInterop:M::MZ::/init:PF' \| sudo tee /etc/binfmt.d/WSLInterop.conf`，再 `sudo systemctl restart systemd-binfmt`；用 `/mnt/c/Windows/System32/cmd.exe /c ver` 验证（2026-09-28 实际遇到并按此解决） |
 | apt 一直显示 `Waiting for cache lock ... held by process N (unattended-upgr)` | WSL 启动后的自动安全更新不走代理，卡在下载。先用 `ps -o pid,etime,cmd --ppid N` 确认子进程是 `/usr/lib/apt/methods/https` 之类的下载器、不是 `dpkg`，再 `sudo kill -TERM <下载器 PID>`，它会自行退出并放开锁；**不要** `kill -9`，不要删锁文件（2026-09-27 实际遇到并按此解决） |
 
 ## 验证记录
@@ -462,6 +481,7 @@ RTT 控制块在运行时才写好。地址应与 ELF 中 `_SEGGER_RTT` 一致�
 | 2026-09-25 | 9（Attach） | 兼容版 J-Link，SWD 1 MHz，连上 Cortex-M7 r1p2 |
 | 2026-09-25 | 9（烧录、运行） | 烧录约 3.1 s 并通过校验；LED 绿色心跳；RTT 日志正常；不接电机 |
 | 2026-09-27 | 4（补充） | ninja-build 1.11.1 安装成功；cmake 3.28.3、gcc 13.3.0、clang-format 18.1.3 |
+| 2026-09-28 | 12 | 修复 WSL interop 后，GCM 浏览器登录，`git push -u origin main` 成功（24 个提交），远程与本地 `940dbf0` 一致 |
 | 2026-09-28 | 11 | CLion 2026.2 + WSL 工具链：Rebuild 固件 81 个文件，FLASH 89904 B；All CTest 2/2 通过 |
 | 2026-09-28 | 10 | COD RoboCore `ebb48ed` 烧录运行，RTT 心跳正常，时间戳跨过 DWT 回绕连续 |
 | 2026-09-27 | 4（apt 永久代理） | 写入 `95proxy` 后，不带 `-o` 的 `sudo apt update` 成功（7144 kB，2 s） |
