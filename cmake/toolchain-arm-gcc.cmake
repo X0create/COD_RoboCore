@@ -1,7 +1,7 @@
 # 交叉编译工具链：arm-none-eabi-gcc（Arm GNU Toolchain 15.2.Rel1）。
 # 查找顺序：
 #   1. 环境变量 ARM_TOOLCHAIN_BIN（终端里由 ~/.bashrc 设置）；
-#   2. ~/tools/arm-gnu-toolchain-*/bin（Configuration Environment.md 规定的安装位置）。
+#   2. ~/tools/arm-gnu-toolchain-*/bin（docs/DEV_ENVIRONMENT.md 规定的安装位置）。
 #      CLion 等 IDE 通过 WSL 调用 CMake 时不一定读 ~/.bashrc，靠这一条找到编译器；
 #   3. PATH。
 # 芯片相关的编译选项（-mcpu 等）写在 cmake/board-<板子>.cmake 里，这里只选编译器。

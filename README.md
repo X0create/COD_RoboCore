@@ -3,7 +3,7 @@
 COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清楚，可以在电脑上测试，并内置失效安全机制。
 一套代码覆盖多个兵种，支持两种主控：达妙 DM-MC02（STM32H723）和大疆 C 板（STM32F407）。
 
-> **当前状态：阶段 0（骨架）进行中。** 仓库里暂时只有基础配置，代码会按实施计划逐步加入。
+> **当前状态：阶段 0（骨架）进行中。** 已在 DM-MC02 上跑通启动流程、RTT 日志和状态灯；进度见 `docs/ARCHITECTURE.md` 的“实施计划”一章。
 
 ## 设计原则
 
@@ -13,7 +13,14 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 - **静态内存**：初始化之后不再分配内存。
 - **单一时间基准**：所有时间戳、超时判断都读同一个时钟。
 
-架构规范与实施计划由队内另行维护，不在本仓库中。
+## 文档
+
+| 文档 | 内容 |
+| --- | --- |
+| `docs/ARCHITECTURE.md` | 架构设计：分层、核心机制、运行时契约、决策记录（ADR），以及**实施计划**和硬件、协议事实表 |
+| `docs/CODING_STANDARD.md` | 编码规范：命名、格式、注释、错误处理、安全相关代码，“必须 / 应该 / 可以”三级 |
+| `docs/DEV_ENVIRONMENT.md` | 开发环境搭建：WSL、工具链、Ozone 烧录调试、CLion，每步带验证状态 |
+| `docs/CHANGES_FROM_COD_H7_TEMPLATE.md` | 与 COD-H7-Template 的差异：新旧对照、原因和验证层级 |
 
 ## 规划中的目录
 
@@ -28,7 +35,7 @@ subsystems/   云台、底盘、发射、轮腿、姿态解算等机构
 robots/       每个兵种（每块板）一个目录：参数、组装、调试通道
 tests/        PC 单元测试（Unity）、板上自测、硬件在环
 tools/        辅助脚本
-docs/         随代码演进的文档：编码规范、决策记录、实时预算
+docs/         架构设计与实施计划、编码规范、开发环境、与旧模板的差异
 ```
 
 ## 开发环境
@@ -55,7 +62,7 @@ DM-MC02 固件（WSL，仓库根目录；需要 `ARM_TOOLCHAIN_BIN` 或 PATH 里
 cmake --preset h723-template-debug && cmake --build --preset h723-template-debug
 ```
 
-输出 `build/h723-template-debug/COD_RoboCore.elf`。烧录与调试方法会在上板验证后补充。
+输出 `build/h723-template-debug/COD_RoboCore.elf`。烧录、调试和 CLion 的用法见 `docs/DEV_ENVIRONMENT.md` 第 10、11 节。
 
 ## 仓库约定
 
