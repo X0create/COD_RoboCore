@@ -14,7 +14,7 @@
 | 7 | MPU 区域 0：`0x24000000` 起 512 KB 不可缓存 | `Core/Src/main.c` 的 `MPU_Config()` | 存在 | ADR 0021 |
 | 8 | SPI2、SPI6 数据位 8 bit；SPI6 内核时钟 HSE、分频 4 | `grep -E "SPI[26].DataSize|SPI6.BaudRate|SPI6CLockSelection" dm_mc02.ioc` | `SPI_DATASIZE_8BIT` ×2、`SPI_BAUDRATEPRESCALER_4`、`RCC_SPI6CLKSOURCE_HSE`（SPI6 任一项错，WS2812 乱色且无报错） | `.ioc` 缺键时会默认成 4 bit（UniC） |
 | 9 | FreeRTOS 配置 | `Core/Inc/FreeRTOSConfig.h` | `configCHECK_FOR_STACK_OVERFLOW 2`、`configRECORD_STACK_HIGH_ADDRESS 1`、`configTOTAL_HEAP_SIZE 1024` | 本工程设定 |
-| 10 | 链接脚本自定义段仍在 | `STM32H723xG_flash.ld` | `.dma_buf` 等段存在（加入后） | 重新生成会删掉自定义段（UniC） |
+| 10 | CubeMX 生成的链接脚本有没有变 | `git diff --ignore-cr-at-eol STM32H723xG_flash.ld` | 无变化；有变化时对照合并进本项目的 `dm_mc02.ld` | 构建只用 `dm_mc02.ld`，生成器改不到它；但芯片内存布局等真改动要人工合并（UniC 出过自定义段被生成器删掉） |
 
 第 1 条的命令（在本目录执行）：
 

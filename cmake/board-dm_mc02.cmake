@@ -11,7 +11,8 @@ set(RM_CPU_FLAGS
 
 add_compile_options(${RM_CPU_FLAGS} -ffunction-sections -fdata-sections)
 add_link_options(${RM_CPU_FLAGS}
-    -T${RM_BOARD_DIR}/STM32H723xG_flash.ld
+    # 本项目自己的链接脚本（由 CubeMX 的 STM32H723xG_flash.ld 派生，重新生成不会覆盖它）
+    -T${RM_BOARD_DIR}/dm_mc02.ld
     --specs=nano.specs
     -Wl,--gc-sections
     -Wl,-Map=${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.map

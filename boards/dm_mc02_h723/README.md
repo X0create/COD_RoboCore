@@ -41,7 +41,10 @@ cmake --preset h723-template-debug && cmake --build --preset h723-template-debug
 ```
 
 根目录的 `CMakeLists.txt` 通过 `add_subdirectory` 复用 CubeMX 生成的 `cmake/stm32cubemx/CMakeLists.txt`（源文件清单随重新生成自动更新），
-芯片编译选项在 `cmake/board-dm_mc02.cmake`。本目录下 CubeMX 生成的 `CMakeLists.txt`、`CMakePresets.json`、
+芯片编译选项在 `cmake/board-dm_mc02.cmake`。
+
+**链接脚本用本目录的 `dm_mc02.ld`**，不用 CubeMX 生成的 `STM32H723xG_flash.ld`：前者由后者复制而来，只多了带
+“COD RoboCore” 注释的段（目前是 `.dma_buf`），CubeMX 重新生成时改不到它。本目录下 CubeMX 生成的 `CMakeLists.txt`、`CMakePresets.json`、
 `cmake/gcc-arm-none-eabi.cmake` 可以单独构建裸板工程，框架构建不使用它们。
 
 生成代码在工作区是 CRLF 换行，提交时由 `.gitattributes` 转成 LF，不影响编译。
