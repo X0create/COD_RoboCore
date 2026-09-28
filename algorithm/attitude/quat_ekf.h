@@ -53,7 +53,7 @@ void quat_ekf_init(QuatEkf *ekf, float q_quat, float q_bias, float r_accel);
  * @brief   更新一次
  * @param   gyro_rad_s  角速度（已减上电标定的零偏）
  * @param   accel_m_s2  加速度（旧工程先经过二阶低通）
- * @param   dt_s        距上次更新的时间
+ * @param   dt_s        距上次更新的实际时间（ins 实测）
  */
 void quat_ekf_update(QuatEkf *ekf, const float gyro_rad_s[3], const float accel_m_s2[3],
                      float dt_s);

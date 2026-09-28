@@ -4,6 +4,8 @@
  */
 #include "ins.h"
 
+#include "platform/time.h"
+
 #define TWO_PI_F 6.28318530718f
 #define PI_F     3.14159265359f
 
@@ -11,7 +13,7 @@
 #define EKF_Q_QUAT  10.0f
 #define EKF_Q_BIAS  0.001f
 #define EKF_R_ACCEL 1000000.0f
-#define EKF_DT_S    0.001f /* 旧工程固定 1 ms（CHANGES“计划中”：改用实测 dt） */
+#define EKF_DT_S    0.001f /* 第一次更新没有上一次的时刻，用标称周期 */
 
 /* 加速度模长小于这个值的读数当作坏帧（静止时约 9.8 m/s²） */
 #define ACCEL_MIN_M_S2 1.0f
@@ -72,7 +74,7 @@ static InsEvent calibrate_step(Ins *ins, const Bmi088Sample *s)
     return INS_EVENT_CALIB_NOT_STILL;
 }
 
-static void run_step(Ins *ins, const Bmi088Sample *s)
+static void run_step(Ins *ins, const Bmi088Sample *s, uint64_t now_us)
 {
     ImuState st;
     float accel_body[3];
@@ -83,7 +85,12 @@ static void run_step(Ins *ins, const Bmi088Sample *s)
         st.accel_m_s2[i] = lpf2_update(&ins->accel_lpf[i], accel_body[i]);
     }
 
-    quat_ekf_update(&ins->ekf, st.gyro_rad_s, st.accel_m_s2, EKF_DT_S);
+    /* 实测两次更新的间隔（旧工程固定 1 ms）：任务被耽误或中间有读失败时，积分时间照实计算 */
+    const float dt_s =
+        ins->have_last_update ? (float)(now_us - ins->last_update_us) * 1e-6f : EKF_DT_S;
+    ins->have_last_update = true;
+    ins->last_update_us = now_us;
+    quat_ekf_update(&ins->ekf, st.gyro_rad_s, st.accel_m_s2, dt_s);
 
     for (int i = 0; i < 4; i++)
     {
@@ -131,6 +138,6 @@ InsEvent ins_step(Ins *ins)
     {
         return calibrate_step(ins, &s);
     }
-    run_step(ins, &s);
+    run_step(ins, &s, rm_time_now_us());
     return INS_EVENT_NONE;
 }

@@ -6,7 +6,8 @@
  *            否则报告原因并重新采样；标定完成前不发布 ImuState，安全门据此全车停；
  *          - 芯片坐标系用兵种配置的安装旋转转到机体系（ADR 0006），旧工程用欧拉角下标重映射；
  *          - 加速度模长接近 0 的读数当作坏帧丢弃（全零会让 EKF 除零后永久变成 NaN）；
- *          - 读失败时关加热、不发布。
+ *          - 读失败时关加热、不发布；
+ *          - EKF 用实测的更新间隔（旧工程固定 1 ms）。
  *          本模块不打日志：ins_step() 返回事件，由调用它的任务记录。
  *          轮询驱动：每 1 ms 调用一次 ins_step()（ADR 0034，同旧工程；数据就绪中断以后再加）。
  */
@@ -61,6 +62,8 @@ typedef struct
     GyroBias calib;
     QuatEkf ekf;
     Lpf2 accel_lpf[3];
+    bool have_last_update;
+    uint64_t last_update_us; /* 上次 EKF 更新的时刻 */
     bool have_yaw;
     float last_yaw_rad;
     int32_t yaw_turns;

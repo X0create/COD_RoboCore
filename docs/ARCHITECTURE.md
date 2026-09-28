@@ -1545,7 +1545,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 5 | `Device/Motor.c`（DJI 部分）、`Task/CAN_Task.c` | `devices/motor/motor.h`、`motor.c`、`dji_motor`、`motor_group` | 代码完成（2026-09-28），主机测试 21 项；样板只收反馈、不发指令；上板待 V30–V32 |
 | 6 | `Task/Control_Task.c` | `robots/common/safety_gate`、`robots/common/control_task`、`robots/_template`（遥控 → 底盘电机转速） | 代码完成（2026-09-28），主机测试 9 项（含新旧 PID 闭环等价）；**固件开始发电机指令**，上板待 V33–V38（台架） |
 | 7 | `BSP/bsp_spi.c`、`bsp_gpio.c`、`bsp_pwm.c`、`Device/Bmi088.c` | `platform/…/spi`、`gpio`、`pwm`，`devices/imu/bmi088`（含加热恒温） | 代码完成（2026-09-28）：spi、pwm、bmi088、加热（UniC 参数）、`gyro_bias`；gpio 推迟到第 8 步（ADR 0033）；主机测试 15 项；上板待 V5、V6 |
-| 8 | `Algorithm/Quaternion.c`、`Task/INS_Task.c` | `algorithm/attitude/quat_ekf`、`subsystems/ins`、`msgs/imu_state` | |
+| 8 | `Algorithm/Quaternion.c`、`Task/INS_Task.c` | `algorithm/attitude/quat_ekf`、`subsystems/ins`、`msgs/imu_state` | 代码完成（2026-09-28）：EKF（卡方公式改正、实测 dt）、上电零偏标定、安装旋转、IMU 未就绪全车停；轮询驱动（ADR 0034）；主机测试 16 项；上板待 V7–V9 |
 | 9 | `Device/Motor.c`（达妙部分） | `devices/motor/dm_motor`（含 FDCAN2 的 FD 总线） | |
 | 10 | `Device/Referee_System.c`、`Image_Transmission.c` | `devices/referee/referee`（协议 v2.0.0）、`devices/remote/vt_link` | |
 | 11 | `Device/MiniPC.c`、USB CDC | `platform/…/usb_cdc`、`devices/vision/vision_link` | |

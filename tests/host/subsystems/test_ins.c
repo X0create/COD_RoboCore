@@ -150,6 +150,27 @@ static void test_bad_frames_stop_publishing(void)
     TEST_ASSERT_EQUAL_INT(INS_EVENT_READ_FAILED, steps(1u));
 }
 
+/* EKF 用实测间隔：每 2 ms 更新一次、绕 z 约 1 rad/s，0.5 s 后航向约 0.5 rad（固定 1 ms 会只有一半） */
+static void test_uses_measured_dt(void)
+{
+    start(&identity);
+    sensor(0, 0, 0);
+    steps(INS_CALIB_SAMPLES + 1u);
+    sensor(0, 0, 939); /* 939 × 2000/32768 °/s ≈ 1.000 rad/s */
+    const float rate = 939.0f * GYRO_LSB;
+    float t_s = 0.0f;
+    for (int i = 0; i < 250; i++)
+    {
+        fake_time_advance_ms(2u);
+        TEST_ASSERT_EQUAL_INT(INS_EVENT_NONE, ins_step(&ins));
+        t_s += 0.002f;
+    }
+    ImuState st;
+    TEST_ASSERT_TRUE(imu_state_read(&topic, &st, IMU_STALE_MS));
+    /* 第一次更新用标称 1 ms，其余 249 次各 2 ms */
+    TEST_ASSERT_FLOAT_WITHIN(5e-3f, rate * (t_s - 0.001f), st.yaw_rad);
+}
+
 /* 静止水平时发布的姿态接近水平 */
 static void test_level_attitude(void)
 {
@@ -170,6 +191,7 @@ int main(void)
     RUN_TEST(test_steady_rotation_rejected);
     RUN_TEST(test_install_rotation_applied);
     RUN_TEST(test_bad_frames_stop_publishing);
+    RUN_TEST(test_uses_measured_dt);
     RUN_TEST(test_level_attitude);
     return UNITY_END();
 }
