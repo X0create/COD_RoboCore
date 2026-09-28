@@ -16,9 +16,11 @@ void safety_gate_set_system_ready(SafetyGate *gate)
     gate->system_ready = true;
 }
 
-SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, uint64_t now_us)
+SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, bool imu_ready,
+                                  uint64_t now_us)
 {
-    const bool rc_online = rc != NULL;
+    /* IMU 未就绪与遥控丢失同样处理：拨杆位置不可用来解锁 */
+    const bool rc_online = rc != NULL && imu_ready;
     const bool stop_position = rc_online && rc->sw[gate->arm_switch] == RC_SW_DOWN;
     SafetyDecision d = { .stop_all = true, .entered_manual = false };
 
@@ -35,7 +37,7 @@ SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, uint64_t 
         case ROBOT_MODE_SAFE:
             if (!rc_online)
             {
-                /* 遥控丢失期间的拨杆位置不可信，恢复后重新拨一次 */
+                /* 遥控丢失（或 IMU 未就绪）期间的拨杆位置不作数，恢复后重新拨一次 */
                 gate->saw_stop_position = false;
             }
             else if (stop_position)

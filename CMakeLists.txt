@@ -24,6 +24,7 @@ add_subdirectory(core)             # 电脑侧只有 rm_core_common，其余只�
 add_subdirectory(algorithm)
 add_subdirectory(msgs)
 add_subdirectory(devices)
+add_subdirectory(subsystems)
 add_subdirectory(robots)           # 电脑侧只有 rm_robot_logic（安全门），其余只用于固件
 
 if(RM_BOARD)

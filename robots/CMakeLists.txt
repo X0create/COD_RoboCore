@@ -22,5 +22,5 @@ add_library(rm_robot STATIC
     ${RM_ROBOT}/robot.c
 )
 target_include_directories(rm_robot PUBLIC common)
-target_link_libraries(rm_robot PUBLIC rm_robot_logic rm_core rm_devices rm_algorithm)
+target_link_libraries(rm_robot PUBLIC rm_robot_logic rm_core rm_subsystems rm_devices rm_algorithm)
 rm_target_warnings(rm_robot)

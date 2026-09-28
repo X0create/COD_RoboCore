@@ -5,7 +5,8 @@
  *          **这个固件会给电机发指令**：未解锁时持续发 0 电流；解锁后按遥控通道 3 转动。上板按台架条件
  *          （docs/VERIFICATION_TODO.md“接电机”）。
  *          解锁：右拨杆拨到下再拨到中或上；急停：右拨杆拨到下（config.h，ADR 0032）。
- *          imu 任务 1 kHz：读 BMI088、加热恒温（第 8 步换成 subsystems/ins，加上姿态解算）。
+ *          ins 任务 1 kHz：subsystems/ins（BMI088、上电零偏标定、EKF、加热），标定完成后才发布 imu_state；
+ *          IMU 未就绪时安全门全车停。
  *          心跳任务驱动状态灯，每秒通过 RTT 打印模式、遥控、电机反馈和 IMU；上线 / 离线的变化由 daemon 任务打印。
  */
 #include "robot.h"
@@ -15,20 +16,20 @@
 #include "config.h"
 #include "control_task.h"
 #include "core/log/log.h"
-#include "core/os/critical.h"
 #include "core/os/delay.h"
 #include "core/os/os.h"
 #include "daemon.h"
-#include "devices/imu/bmi088.h"
 #include "devices/motor/motor.h"
 #include "devices/motor/motor_group.h"
 #include "devices/remote/dr16.h"
+#include "msgs/imu_state.h"
 #include "msgs/rc_state.h"
 #include "platform/can.h"
 #include "platform/status_led.h"
 #include "platform/time.h"
 #include "platform/uart.h"
 #include "safety_gate.h"
+#include "subsystems/ins/ins.h"
 
 /* FreeRTOS 优先级，数字越大越高；本兵种全部任务的优先级只写在这里 */
 enum
@@ -37,21 +38,22 @@ enum
     PRIORITY_DAEMON = 2,
     PRIORITY_CONTROL = 3,
     PRIORITY_COMM_RX = 4, /* 高于 control，保证控制周期读到最新反馈（《架构设计》任务划分） */
-    PRIORITY_IMU = 5, /* 最高：IMU 采样时刻要准（第 8 步的 ins） */
+    PRIORITY_INS = 5, /* 最高：IMU 采样时刻要准（《架构设计》任务划分） */
 };
 
 #define HEARTBEAT_STEP_MS     25u
 #define HEARTBEAT_STEPS       40u /* 40 × 25 ms = 1 s 一拍 */
 #define HEARTBEAT_STACK_WORDS 256u
 #define LED_GREEN_LEVEL       0x20u /* WS2812 满亮度很刺眼，1/8 亮度足够看清 */
-#define IMU_STACK_WORDS       512u
-#define IMU_RETRY_MS          1000u
+#define INS_STACK_WORDS       1024u /* EKF 的矩阵运算在栈上有临时变量，按预算表给 4 KB */
+#define INS_RETRY_MS          1000u
 
 /* DR16 接收机接 UART5（接线沿用 COD-H7-Template，《架构设计》“阶段 1 清单”） */
 #define DBUS_UART UART_5
 
 /* 话题实例 */
 static RcStateTopic rc_state; /* 发布：dr16    读取：control（安全门、速度目标）、心跳任务 */
+static ImuStateTopic imu_state; /* 发布：ins     读取：control（安全门）、心跳任务 */
 
 static Dr16 dr16;
 
@@ -71,12 +73,10 @@ static MotorGroup motors;
 /* 以下只在 control 任务里读写（gate.mode 另由心跳任务读来打印） */
 static SafetyGate gate;
 static Pid speed_pid;
-/* IMU：imu 任务写，心跳任务在临界区里读来打印 */
-static Bmi088 imu;
-static Bmi088Sample imu_latest;
-static bool imu_valid;
-static RmTask imu_task;
-static StackType_t imu_stack[IMU_STACK_WORDS];
+static const InsConfig ins_config = { .install_rotation = TEMPLATE_IMU_INSTALL_ROTATION };
+static Ins ins;
+static RmTask ins_task;
+static StackType_t ins_stack[INS_STACK_WORDS];
 
 static RmTask heartbeat_task;
 static StackType_t heartbeat_stack[HEARTBEAT_STACK_WORDS];
@@ -121,58 +121,65 @@ static void log_motor(void)
              (int)(fb.torque_nm * 1000.0f), (int)fb.temperature_c);
 }
 
-static void imu_entry(void *arg)
+static void log_ins_event(InsEvent ev, bool *failing)
+{
+    switch (ev)
+    {
+        case INS_EVENT_NONE:
+            *failing = false;
+            break;
+        case INS_EVENT_READ_FAILED:
+            if (!*failing)
+            {
+                RM_LOG_W("imu read failed"); /* 只在从正常变为失败时打印一次 */
+            }
+            *failing = true;
+            break;
+        case INS_EVENT_CALIBRATED:
+            RM_LOG_I("gyro calibrated, imu ready");
+            break;
+        case INS_EVENT_CALIB_NOT_STILL:
+            RM_LOG_W("gyro calibration rejected: moving, retry (keep the robot still)");
+            break;
+        case INS_EVENT_CALIB_BIAS_TOO_LARGE:
+            RM_LOG_W("gyro calibration rejected: bias too large, retry");
+            break;
+    }
+}
+
+static void ins_entry(void *arg)
 {
     (void)arg;
     Bmi088Status status;
-    while ((status = bmi088_init(&imu)) != BMI088_OK)
+    while ((status = ins_start(&ins)) != BMI088_OK)
     {
         RM_LOG_E("bmi088 init failed (%d), retry", (int)status);
-        rm_delay_ms(IMU_RETRY_MS);
+        rm_delay_ms(INS_RETRY_MS);
     }
-    RM_LOG_I("bmi088 ready");
+    RM_LOG_I("bmi088 ready, calibrating gyro (keep still %u ms)", (unsigned)INS_CALIB_SAMPLES);
 
+    bool failing = false;
     RmTaskPeriod last_wake = rm_task_period_start();
     for (;;)
     {
-        Bmi088Sample sample;
-        const bool ok = bmi088_read(&imu, &sample);
-        if (ok)
-        {
-            bmi088_heater_step(&imu, sample.temperature_c);
-        }
-        else
-        {
-            bmi088_heater_off(&imu); /* 读不到温度就不加热 */
-        }
-        rm_critical_enter();
-        imu_valid = ok;
-        if (ok)
-        {
-            imu_latest = sample;
-        }
-        rm_critical_exit();
+        log_ins_event(ins_step(&ins), &failing);
         rm_task_delay_until(&last_wake, 1u);
     }
 }
 
-/* 浮点用整数打印：毫摄氏度、毫弧度/秒、毫米/秒² */
+/* 浮点用整数打印：毫弧度、毫摄氏度 */
 static void log_imu(void)
 {
-    rm_critical_enter();
-    const bool valid = imu_valid;
-    const Bmi088Sample s = imu_latest;
-    rm_critical_exit();
-    if (!valid)
+    ImuState st;
+    if (!imu_state_read(&imu_state, &st, IMU_STALE_MS))
     {
         RM_LOG_I("imu not ready");
         return;
     }
-    RM_LOG_I("imu %d mC, gyro %d %d %d mrad/s, accel %d %d %d mm/s2",
-             (int)(s.temperature_c * 1000.0f), (int)(s.gyro_rad_s[0] * 1000.0f),
-             (int)(s.gyro_rad_s[1] * 1000.0f), (int)(s.gyro_rad_s[2] * 1000.0f),
-             (int)(s.accel_m_s2[0] * 1000.0f), (int)(s.accel_m_s2[1] * 1000.0f),
-             (int)(s.accel_m_s2[2] * 1000.0f));
+    RM_LOG_I("imu yaw %d pitch %d roll %d mrad, yaw total %d mrad, %d mC",
+             (int)(st.yaw_rad * 1000.0f), (int)(st.pitch_rad * 1000.0f),
+             (int)(st.roll_rad * 1000.0f), (int)(st.yaw_total_rad * 1000.0f),
+             (int)(st.temperature_c * 1000.0f));
 }
 
 static const char *mode_name(RobotMode mode)
@@ -230,6 +237,11 @@ bool robot_init(void)
                  conflict != NULL ? conflict->cfg->name : "");
         return false;
     }
+    if (!ins_init(&ins, &ins_config, &imu_state))
+    {
+        RM_LOG_E("ins init failed");
+        return false;
+    }
     safety_gate_init(&gate, TEMPLATE_ARM_SWITCH);
     const PidParam speed_param = TEMPLATE_SPEED_PID_PARAM;
     pid_init(&speed_pid, PID_POSITION, &speed_param);
@@ -248,11 +260,14 @@ void robot_control_step(void)
     /* 1. 一次性读输入快照 */
     RcState rc;
     const bool rc_online = rc_state_read(&rc_state, &rc, RC_LOST_TIMEOUT_MS);
+    ImuState imu;
+    const bool imu_ready = imu_state_read(&imu_state, &imu, IMU_STALE_MS);
     MotorFeedback fb;
     const bool motor_online = motor_read_feedback(&chassis_motor, &fb);
 
-    /* 2. 安全门：遥控丢失、急停、未解锁 → 全车停 */
-    const SafetyDecision gate_out = safety_gate_update(&gate, rc_online ? &rc : NULL, now_us);
+    /* 2. 安全门：遥控丢失、急停、未解锁、IMU 未就绪 → 全车停 */
+    const SafetyDecision gate_out =
+        safety_gate_update(&gate, rc_online ? &rc : NULL, imu_ready, now_us);
 
     /* 3. 速度环（旧工程 Control_Task）。全车停或电机离线（机构停）时清积分，不写指令：
      *    槽位没写就填零力矩，恢复时从零开始，不会因积分猛冲 */
@@ -279,10 +294,10 @@ void robot_control_step(void)
 
 void robot_create_tasks(void)
 {
-    if (!rm_task_create(&imu_task, "imu", imu_entry, NULL, PRIORITY_IMU, imu_stack,
-                        IMU_STACK_WORDS))
+    if (!rm_task_create(&ins_task, "ins", ins_entry, NULL, PRIORITY_INS, ins_stack,
+                        INS_STACK_WORDS))
     {
-        RM_LOG_E("create imu task failed");
+        RM_LOG_E("create ins task failed");
     }
     comm_rx_create_task(PRIORITY_COMM_RX);
     control_task_create(PRIORITY_CONTROL);

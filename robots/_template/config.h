@@ -35,3 +35,12 @@
 
 /** 解锁 / 急停拨杆：右拨杆 sw[1]（ADR 0032；左右以 V11 上板核对为准） */
 #define TEMPLATE_ARM_SWITCH 1u
+
+/**
+ * IMU 安装旋转：机体系向量 = R × 芯片系向量（按行存储，ADR 0006）。
+ * 默认芯片轴与机体轴同向（X 前、Y 左、Z 上）；实际朝向以 V7 上板结果为准，改这里即可。
+ */
+#define TEMPLATE_IMU_INSTALL_ROTATION                                                              \
+    {                                                                                              \
+        1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f                                       \
+    }
