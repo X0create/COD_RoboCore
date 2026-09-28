@@ -21,6 +21,7 @@ endif()
 
 add_subdirectory(platform)
 add_subdirectory(core)             # 电脑侧只有 core/util，其余只用于固件（见 core/CMakeLists.txt）
+add_subdirectory(algorithm)
 
 if(RM_BOARD)
     # robots 目前只用于固件（依赖 FreeRTOS）
