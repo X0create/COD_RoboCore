@@ -4,9 +4,9 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| `common/` | `app_main()`、模式状态机、安全门 |
+| `common/` | `app_main()`、模式状态机、安全门（全车停） |
 | `_template/` | 新兵种的样板，由 `tools/new_robot.py` 复制 |
-| `<兵种>/` | `config.h`、`robot.c`（组装与话题实例）、`safety_table.c`、`debug.c` |
+| `<兵种>/` | `config.h`（含每个电机全车停时的 `stop_action`）、`robot.c`（组装与话题实例）、`debug.c` |
 
 - 负责：选模块、填参数、模式状态机、创建任务。
 - **可以** include：所有下层。
