@@ -1,0 +1,27 @@
+# 编辑器统一格式。CLion 原生支持；VS Code 需要安装 EditorConfig 插件。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Markdown 行尾两个空格表示换行，不能删
+[*.md]
+trim_trailing_whitespace = false
+
+# Makefile 规定必须用 Tab 缩进
+[Makefile]
+indent_style = tab
+
+# 配置类文件习惯用 2 空格
+[*.{yml,yaml,json}]
+indent_size = 2
+
+# 只在 Windows 上运行的脚本用 CRLF，与 .gitattributes 一致
+[*.{bat,cmd,ps1}]
+end_of_line = crlf
+

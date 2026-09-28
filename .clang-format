@@ -1,0 +1,52 @@
+# COD RoboCore 代码格式。规则说明见 docs/CODING_STANDARD.md 附录 B。
+# 目标版本：clang-format 18（与 CI 一致）。
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+# 缩进与行宽
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+ContinuationIndentWidth: 4
+IndentCaseLabels: true
+IndentPPDirectives: None
+
+# 花括号：Allman 风格，控制语句一律加花括号
+BreakBeforeBraces: Allman
+InsertBraces: true
+
+# 禁止把短语句压到一行
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+# 指针与空格
+PointerAlignment: Right
+DerivePointerAlignment: false
+SpaceBeforeParens: ControlStatements
+Cpp11BracedListStyle: false
+
+# 对齐
+AlignAfterOpenBracket: Align
+AlignConsecutiveMacros: Consecutive
+AlignTrailingComments: true
+BreakBeforeBinaryOperators: NonAssignment
+
+# 空行与注释
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+ReflowComments: false
+
+# include：组内排序，保留分组
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
+
+# 文件结尾
+LineEnding: LF
+InsertNewlineAtEOF: true
+...
