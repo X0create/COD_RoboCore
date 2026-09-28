@@ -4,6 +4,8 @@
  */
 #include "os.h"
 
+#include "critical.h"
+
 bool rm_task_create(RmTask *task, const char *name, RmTaskEntry entry, void *arg, uint32_t priority,
                     StackType_t *stack, uint32_t stack_words)
 {
@@ -42,4 +44,14 @@ void rm_task_notify_from_isr(RmTask *task)
     vTaskNotifyGiveFromISR(task->handle, &higher_priority_woken);
     /* 被唤醒的任务优先级更高时，中断返回后立刻切换过去，不用等下一个 tick */
     portYIELD_FROM_ISR(higher_priority_woken);
+}
+
+void rm_critical_enter(void)
+{
+    taskENTER_CRITICAL();
+}
+
+void rm_critical_exit(void)
+{
+    taskEXIT_CRITICAL();
 }

@@ -1332,6 +1332,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0028 | H723 系统时钟 **550 MHz**（手册上限），不沿用 COD-H7-Template 的 640 MHz（用户 2026-09-27 确认）。PLL1 与总线分频照搬 UniC 实测配置（HSE 24 MHz ÷ 3 × 68.75，AHB ÷ 2 = 275 MHz，Flash 等待 3）；**FDCAN 保留 COD-H7-Template 的 PLL2 100 MHz 与 5 / 14 / 5 分频**（2026-09-27 更正：96 MHz 分不出 CAN FD 数据段 5 Mbit/s） | 640 MHz 超出手册，CubeMX 6.18.1 也判为无效值；UniC 已在同一块板上实测 550 MHz；100 MHz 能同时整除 1 Mbit/s 和 5 Mbit/s |
 | 0025 | FreeRTOS 由 CubeMX 生成（内核版本随 CubeMX 固件包：COD-H7-Template 所用的旧包为 V10.3.1，本模板用的 CubeMX 6.18.1 + FW_H7 V1.13.0 为 V10.6.2）；CubeMX 里不定义任何任务；框架在 `app_main()` 中用 `xTaskCreateStatic` 等原生 API 静态创建全部任务；HAL 时基用 TIM | 理由见下文 |
 | 0029 | 用户 2026-09-28 确认：① 卡尔曼等算法的矩阵运算用本层自写的 `algorithm/math/matrix`（加、减、乘、转置、列主元高斯-约当求逆），不引入 CMSIS-DSP；② PID 先保持 COD-H7-Template 的行为（不带 dt、微分作用在误差上），显式 dt 与“微分作用在测量值上”留到第 6 步控制任务能在台架上对比时，作为单独的“改行为”提交 | ① 矩阵最大 6×6，自写约 150 行即可在电脑上直接测试，不必为主机测试配置 CMSIS-DSP；求逆的舍入与旧工程有极小差异 ② 旧参数可直接使用，符合“搬代码与改行为分开” |
+| 0030 | 用户 2026-09-28 确认：**遥控丢失超时 200 ms**（沿用 COD-H7-Template，不用计划中的 100 ms）；遥控是否丢失**只以 `rc_state` 话题的新旧判定**（`rc_state_read(…, RC_LOST_TIMEOUT_MS)` 失败即丢失），DR16 的 `Watchdog` 只用于上线 / 离线日志和设备清单；daemon 任务现在只做报告，IWDG 在阶段 1 加入 | 同一故障只在一处判定；只有合法帧才发布，话题时间戳就是最后一次合法帧。代价：从关遥控到判定丢失就要 200 ms，阶段 1 完成标准中“关遥控后 100 ms 内停下”一项按此放宽（见该清单） |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
@@ -1504,9 +1505,9 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 
 接线沿用 COD-H7-Template：M3508 接 FDCAN1，ID 1；DR16 接 UART5。
 
-- [ ] `core/msg`：话题通用实现（临界区拷贝 + 时间戳 + 认领）；`msgs/robot_cmd`、`msgs/rc_state`
-- [ ] `core/watchdog`：在线状态在读取时计算；清单打印
-- [ ] `devices/remote/dr16`：检查帧长和取值范围，输出 `RcState`；用录制帧和错误帧做单元测试（模糊测试推迟到阶段 5 以后）
+- [ ] `core/msg`：话题通用实现（临界区拷贝 + 时间戳 + 认领）；`msgs/robot_cmd`、`msgs/rc_state`（2026-09-28：`core/msg/topic` 与 `msgs/rc_state` 完成，`robot_cmd` 未做）
+- [x] `core/watchdog`：在线状态在读取时计算；清单打印（2026-09-28，daemon 任务打印；上板待 V4）
+- [x] `devices/remote/dr16`：检查帧长和取值范围，输出 `RcState`；用录制帧和错误帧做单元测试（模糊测试推迟到阶段 5 以后）（2026-09-28，主机测试 9 项，帧由独立的组帧函数生成、并用 Python 算的字节核对；上板待 V10–V12）
 - [ ] `devices/motor`：`motor.h` 统一接口 + `dji_motor.c`（先只做 M3508）、ID 冲突检查、反馈快照
 - [ ] `motor_group`：按周期打包；没有写入的槽位填零力矩
 - [ ] `robots/common/safety_gate`：遥控丢失、急停、未解锁 → `stop_all`；全车停时发送出口把每个电机改写为 `stop_action`（ADR 0026）
@@ -1520,7 +1521,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
   - 关遥控、拨急停、拔 CAN、复位这四种情况下，M3508 分别多久停转，写进 `docs/budget.md`；
   - 恢复解锁后是否不猛冲。
 
-**完成标准**：遥控能控制电机转速；四种故障下电机都在 100 ms 内停下（台架实测）；恢复解锁后不猛冲。
+**完成标准**：遥控能控制电机转速；四种故障下电机都在 100 ms 内停下（台架实测；其中“关遥控”一项从关遥控算起为 200 ms 丢失判定 + 停机时间，ADR 0030）；恢复解锁后不猛冲。
 
 ### COD-H7-Template 全量移植（2026-09-28 起）
 
@@ -1536,7 +1537,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 1 | `BSP/bsp_can.c` | `platform/include/platform/can.h`、`platform/stm32h7/can.c`（DLC 换算、接收环形缓冲放 `platform/common/`） | 代码完成（2026-09-28），待上板 V30 |
 | 2 | `Algorithm/CRC.c` | `core/util/crc.{h,c}` | 代码完成（2026-09-28），主机测试 6 项；纯计算，无需上板 |
 | 3 | `Controller/PID.c`、`Algorithm/Ramp.c`、`LPF.c`、`Kalman_Filter.c` | `algorithm/control/pid`、`algorithm/control/ramp`、`algorithm/filter/lpf`、`algorithm/filter/kalman` || 代码完成（2026-09-28）：PID、斜坡、低通、卡尔曼 + `algorithm/math/matrix`，主机测试 29 项；纯计算，无需上板 |
-| 4 | `Device/Remote_Control.c`、`Task/Detect_Task.c` | `devices/remote/dr16`、`core/watchdog`、`msgs/rc_state` | |
+| 4 | `Device/Remote_Control.c`、`Task/Detect_Task.c` | `devices/remote/dr16`、`core/watchdog`、`msgs/rc_state` | 代码完成（2026-09-28），另补 `core/msg/topic`、daemon 任务；主机测试 19 项；上板待 V4、V10–V12 |
 | 5 | `Device/Motor.c`（DJI 部分）、`Task/CAN_Task.c` | `devices/motor/motor.h`、`motor.c`、`dji_motor`、`motor_group` | |
 | 6 | `Task/Control_Task.c` | `robots/common/safety_gate`、`robots/common/control_task`、`robots/_template`（遥控 → 底盘电机转速） | |
 | 7 | `BSP/bsp_spi.c`、`bsp_gpio.c`、`bsp_pwm.c`、`Device/Bmi088.c` | `platform/…/spi`、`gpio`、`pwm`，`devices/imu/bmi088`（含加热恒温） | |
@@ -1611,6 +1612,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 - DBUS 串口：100 kbit/s、8 位数据、偶校验、1 位停止位，**电平反相**。C 板用硬件反相；MC02 要确认是用硬件反相，还是用 H7 USART 的 RX 反相功能（待验证）。
 - 每 14 ms 一帧，每帧 18 字节。摇杆 4 个通道各 11 位，有效范围 364–1684，中位 1024；拨杆取值 1 = 上、3 = 中、2 = 下；另有鼠标和键盘字段。
 - 超出范围的帧整帧丢弃、不喂狗；按帧间隔或串口空闲中断重新同步（taproot 用 6 ms 的读超时来重新同步）。
+- MC02：CubeMX 里 UART5 没有开 RX 反相（`AdvFeatureInit = NO_INIT`），与 COD-H7-Template 相同而旧工程能收到遥控，**推断板上有硬件反相**（待 V10 确认）。字节 16–17（拨轮）部分接收机固件发 0，本模板不对它做范围检查（推测，待 V11）。
 
 ### A.5 裁判系统与图传链路（引用 basic\_framework 协议 v2.0.0，2026-08-23；对照 COD-H7-Template v1.8.0）
 

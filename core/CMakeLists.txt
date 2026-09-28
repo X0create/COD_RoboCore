@@ -1,10 +1,15 @@
-# 纯计算的小工具：不依赖芯片和 FreeRTOS，电脑测试和固件都链接它
-add_library(rm_core_util STATIC
+# 与芯片无关的部分：不直接依赖 FreeRTOS 和 HAL，电脑测试和固件都链接它。
+# 其中话题、看门狗要用 rm_critical_*()（core/os/critical.h）和 rm_time_now_us()（platform/time.h）：
+# 固件里由 rm_core、rm_platform 提供，电脑测试里由 tests/host/fakes 提供
+add_library(rm_core_common STATIC
+    msg/topic.c
     util/crc.c
+    watchdog/watchdog.c
 )
-# 以 "core/util/crc.h" 的形式 include
-target_include_directories(rm_core_util PUBLIC ${PROJECT_SOURCE_DIR})
-rm_target_warnings(rm_core_util)
+# 以 "core/util/crc.h" 的形式 include；rm_platform_common 带来 platform/include
+target_include_directories(rm_core_common PUBLIC ${PROJECT_SOURCE_DIR})
+target_link_libraries(rm_core_common PUBLIC rm_platform_common)
+rm_target_warnings(rm_core_common)
 
 # 以下只用于固件（依赖 FreeRTOS）；电脑侧的假实现以后再加
 if(NOT RM_BOARD)
@@ -26,5 +31,5 @@ add_library(rm_core STATIC
 )
 # 以 "core/log/log.h" 的形式 include
 target_include_directories(rm_core PUBLIC ${PROJECT_SOURCE_DIR})
-target_link_libraries(rm_core PUBLIC rm_core_util rm_platform segger_rtt rm_vendor)
+target_link_libraries(rm_core PUBLIC rm_core_common rm_platform segger_rtt rm_vendor)
 rm_target_warnings(rm_core)

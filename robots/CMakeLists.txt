@@ -4,8 +4,9 @@ set(RM_ROBOT "_template" CACHE STRING "兵种目录名（robots/ 下）")
 add_library(rm_robot STATIC
     common/app_main.c
     common/comm_rx.c
+    common/daemon.c
     ${RM_ROBOT}/robot.c
 )
 target_include_directories(rm_robot PUBLIC common)
-target_link_libraries(rm_robot PUBLIC rm_core)
+target_link_libraries(rm_robot PUBLIC rm_core rm_devices)
 rm_target_warnings(rm_robot)
