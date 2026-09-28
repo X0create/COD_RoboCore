@@ -191,6 +191,7 @@ rm-template/
 ├── algorithm/                   # 纯计算，PC 可测；个别可选 C++ 实现也放这里，对外只有 .h
 │   ├── control/                 # pid ramp lqr feedforward
 │   ├── filter/                  # lpf kalman
+│   ├── math/                    # matrix（小矩阵运算，ADR 0029）
 │   ├── attitude/                # quaternion quat_ekf gimbal_angles
 │   ├── kinematics/              # mecanum omni steer leg_vmc
 │   ├── power/                   # 电机功率模型、RLS 参数辨识、功率分配（纯计算）
@@ -525,9 +526,9 @@ motor_set_torque(self->yaw_motor, torque_nm);
 
 | 模块 | 要点 |
 | --- | --- |
-| `Pid` | 参数用带字段名的 `PidParam`；显式传入 dt；可选“微分作用在测量值上”避免目标跳变尖峰；积分限幅按输出单位；不检查 NaN（外部数据已在设备层入口检查过一次，ADR 0026），`pid_reset()` 清状态 |
+| `Pid` | 参数用带字段名的 `PidParam`；（以下为目标写法，2026-09-28 暂保持旧行为，见 ADR 0029）显式传入 dt；可选“微分作用在测量值上”避免目标跳变尖峰；积分限幅按输出单位；不检查 NaN（外部数据已在设备层入口检查过一次，ADR 0026），`pid_reset()` 清状态 |
 | `Quat` | 乘法、共轭、归一化、twist、旋转向量；约定 \[w,x,y,z\]、Hamilton、Body→World |
-| `QuatEkf` | 状态 \[q, bx, by\]，输出归一化，静态矩阵内存，卡方检验按公式实现（修正旧代码的实现错误）。旧代码的矩阵运算依赖 CMSIS-DSP 的 `arm_mat_*`，并用 `pvPortMalloc` 分配内存：迁移时改为调用方提供静态存储；矩阵运算要么在主机测试里也编译 CMSIS-DSP 的通用 C 实现，要么换成本层自带的小矩阵函数，二选一 |
+| `QuatEkf` | 状态 \[q, bx, by\]，输出归一化，静态矩阵内存，卡方检验按公式实现（修正旧代码的实现错误）。旧代码的矩阵运算依赖 CMSIS-DSP 的 `arm_mat_*`，并用 `pvPortMalloc` 分配内存：迁移时改为调用方提供静态存储；矩阵运算用本层的 `algorithm/math/matrix`，卡尔曼的五个步骤用 `algorithm/filter/kalman` 的公开函数组合（ADR 0029） |
 | `GimbalAngles` | 从 q 算炮管航向、仰角及其严格导数（来自《四元数云台控制实现说明》方案 C） |
 | `BodyTilt` | 轮腿机体俯仰角及其严格导数；旧公式 atan2(u\_y, u\_z) 是旧坐标系下的，在 FLU 下重新推导并测试后才迁移 |
 | `Lqr`、`Vmc` | 轮腿；增益表按腿长拟合 |
@@ -1330,6 +1331,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0027 | 补充外设与设备（用户 2026-09-27 确认）：平台接口加 `adc`、`usb_cdc`；设备加 `Battery`（电池电压）、`PwmActuator`（舵机、气泵）、`Buzzer`；达妙电机统一为 `MOTOR_DM`，型号差异进配置；视觉默认走 USB CDC；标定用遥控器组合键 + Ozone，第一版不做串口命令行 | 对照 COD-H7-Template、basic\_framework、StandardRobot++、taproot 后发现的缺口；COD-H7-Template 实际用 DM8009、USB CDC 和 ADC 电池电压 |
 | 0028 | H723 系统时钟 **550 MHz**（手册上限），不沿用 COD-H7-Template 的 640 MHz（用户 2026-09-27 确认）。PLL1 与总线分频照搬 UniC 实测配置（HSE 24 MHz ÷ 3 × 68.75，AHB ÷ 2 = 275 MHz，Flash 等待 3）；**FDCAN 保留 COD-H7-Template 的 PLL2 100 MHz 与 5 / 14 / 5 分频**（2026-09-27 更正：96 MHz 分不出 CAN FD 数据段 5 Mbit/s） | 640 MHz 超出手册，CubeMX 6.18.1 也判为无效值；UniC 已在同一块板上实测 550 MHz；100 MHz 能同时整除 1 Mbit/s 和 5 Mbit/s |
 | 0025 | FreeRTOS 由 CubeMX 生成（内核版本随 CubeMX 固件包：COD-H7-Template 所用的旧包为 V10.3.1，本模板用的 CubeMX 6.18.1 + FW_H7 V1.13.0 为 V10.6.2）；CubeMX 里不定义任何任务；框架在 `app_main()` 中用 `xTaskCreateStatic` 等原生 API 静态创建全部任务；HAL 时基用 TIM | 理由见下文 |
+| 0029 | 用户 2026-09-28 确认：① 卡尔曼等算法的矩阵运算用本层自写的 `algorithm/math/matrix`（加、减、乘、转置、列主元高斯-约当求逆），不引入 CMSIS-DSP；② PID 先保持 COD-H7-Template 的行为（不带 dt、微分作用在误差上），显式 dt 与“微分作用在测量值上”留到第 6 步控制任务能在台架上对比时，作为单独的“改行为”提交 | ① 矩阵最大 6×6，自写约 150 行即可在电脑上直接测试，不必为主机测试配置 CMSIS-DSP；求逆的舍入与旧工程有极小差异 ② 旧参数可直接使用，符合“搬代码与改行为分开” |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
@@ -1533,7 +1535,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | --- | --- | --- | --- |
 | 1 | `BSP/bsp_can.c` | `platform/include/platform/can.h`、`platform/stm32h7/can.c`（DLC 换算、接收环形缓冲放 `platform/common/`） | 代码完成（2026-09-28），待上板 V30 |
 | 2 | `Algorithm/CRC.c` | `core/util/crc.{h,c}` | 代码完成（2026-09-28），主机测试 6 项；纯计算，无需上板 |
-| 3 | `Controller/PID.c`、`Algorithm/Ramp.c`、`LPF.c`、`Kalman_Filter.c` | `algorithm/control/pid`、`algorithm/control/ramp`、`algorithm/filter/lpf`、`algorithm/filter/kalman` || PID、斜坡、低通代码完成（2026-09-28），主机测试 18 项；卡尔曼待定矩阵库（见算法层表 `QuatEkf`） |
+| 3 | `Controller/PID.c`、`Algorithm/Ramp.c`、`LPF.c`、`Kalman_Filter.c` | `algorithm/control/pid`、`algorithm/control/ramp`、`algorithm/filter/lpf`、`algorithm/filter/kalman` || 代码完成（2026-09-28）：PID、斜坡、低通、卡尔曼 + `algorithm/math/matrix`，主机测试 29 项；纯计算，无需上板 |
 | 4 | `Device/Remote_Control.c`、`Task/Detect_Task.c` | `devices/remote/dr16`、`core/watchdog`、`msgs/rc_state` | |
 | 5 | `Device/Motor.c`（DJI 部分）、`Task/CAN_Task.c` | `devices/motor/motor.h`、`motor.c`、`dji_motor`、`motor_group` | |
 | 6 | `Task/Control_Task.c` | `robots/common/safety_gate`、`robots/common/control_task`、`robots/_template`（遥控 → 底盘电机转速） | |
