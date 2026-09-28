@@ -12,7 +12,21 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(warnings)
 
+# 主控板由预设指定（如 dm_mc02）；留空时只构建电脑侧的库和测试
+set(RM_BOARD "" CACHE STRING "主控板：dm_mc02；留空表示只构建电脑侧")
+if(RM_BOARD)
+    enable_language(ASM)           # 启动文件 startup_*.s
+    include(board-${RM_BOARD})     # 芯片编译选项，必须在创建任何目标之前
+endif()
+
 add_subdirectory(platform)
+
+if(RM_BOARD)
+    # 固件目标。CubeMX 生成的 CMakeLists 把 main.c 等源文件加到名为 ${CMAKE_PROJECT_NAME} 的目标上，
+    # 所以目标名必须等于项目名；生成代码不套用本仓库的严格警告
+    add_executable(${CMAKE_PROJECT_NAME})
+    add_subdirectory(${RM_BOARD_DIR}/cmake/stm32cubemx ${CMAKE_BINARY_DIR}/stm32cubemx)
+endif()
 
 option(RM_HOST_TESTS "编译电脑侧单元测试（只在 host-tests 预设中打开）" OFF)
 if(RM_HOST_TESTS)

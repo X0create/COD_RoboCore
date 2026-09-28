@@ -11,10 +11,22 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "RM_HOST_TESTS": "ON"
       }
+    },
+    {
+      "name": "h723-template-debug",
+      "displayName": "DM-MC02 固件（arm-none-eabi-gcc，Debug）",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/h723-template-debug",
+      "toolchainFile": "${sourceDir}/cmake/toolchain-arm-gcc.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "RM_BOARD": "dm_mc02"
+      }
     }
   ],
   "buildPresets": [
-    { "name": "host-tests", "configurePreset": "host-tests" }
+    { "name": "host-tests", "configurePreset": "host-tests" },
+    { "name": "h723-template-debug", "configurePreset": "h723-template-debug" }
   ],
   "testPresets": [
     {

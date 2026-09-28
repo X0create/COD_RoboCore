@@ -49,7 +49,13 @@ docs/         随代码演进的文档：编码规范、决策记录、实时预
 cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset host-tests
 ```
 
-固件构建与烧录命令会在板级工程完成后补充。
+DM-MC02 固件（WSL，仓库根目录；需要 `ARM_TOOLCHAIN_BIN` 或 PATH 里有 `arm-none-eabi-gcc`）：
+
+```bash
+cmake --preset h723-template-debug && cmake --build --preset h723-template-debug
+```
+
+输出 `build/h723-template-debug/COD_RoboCore.elf`。烧录与调试方法会在上板验证后补充。
 
 ## 仓库约定
 

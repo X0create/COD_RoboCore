@@ -19,9 +19,10 @@
 | 2026-09-28 | Flash 等待周期 | 迁移后被 CubeMX 改成 0 | **3** | 275 MHz AXI 需要 3 个等待周期；为 0 会取指出错 | 配置 |
 | 2026-09-28 | FDCAN 时钟 | PLL2 100 MHz，分频 5 / 14 / 5 | **不变** | 100 MHz 能同时整除 1 Mbit/s 与 CAN FD 数据段 5 Mbit/s（DM8009）；UniC 的 96 MHz 做不到 5 Mbit/s | 配置 |
 | 2026-09-28 | PLL3、USB 时钟 | PLL3 80 MHz（SPI2），USB 用 HSI48 | **不变** | —— | 配置 |
-| 2026-09-28 | 工具链 | MDK-ARM V5.32 | **CMake**（CubeMX 生成 CMake 工程） | ADR 0019 | 配置：已改 `.ioc`，待 CubeMX 确认 |
+| 2026-09-28 | FreeRTOS 配置 | 默认值；最小栈 2048 字，任务名长 64 | 栈溢出检测 2、记录栈顶地址（Ozone 显示栈大小）、FreeRTOS 堆 1 KB（CMSIS_V2 强制保留动态分配，框架不用）、打开 `xTaskDelayUntil` 与 `uxTaskGetStackHighWaterMark` | 静态分配为主；调试可见栈使用 | 配置：已改 `.ioc`，待 CubeMX 确认 |
+| 2026-09-28 | 工具链 | MDK-ARM V5.32 | **CMake**（CubeMX 生成 CMake 工程） | ADR 0019 | 配置：CubeMX 中已确认 |
 | 2026-09-28 | FreeRTOS 接口 | CMSIS-RTOS V1，内核 V10.3.1 | **CMSIS-RTOS V2**，内核 V10.6.2 | CubeMX 6.18.1 对 H7 已不支持 V1（迁移时会把 FreeRTOS 整个删掉）；框架直接用原生 API，不受影响（ADR 0025） | 配置：CubeMX 中已启用 |
-| 2026-09-28 | FreeRTOS 任务 | CubeMX 中定义 4 个静态任务（INS、Control、CAN、Detect） | CubeMX 中**只定义一个启动任务** `startup`（静态、512 字、最高优先级、入口 `startup_task` 为弱定义，由框架实现，完成后删除自己）；其余任务由框架静态创建 | CMSIS_V2 下 CubeMX 至少要保留一个任务，把它用作启动任务（ADR 0025 修订） | 配置：已改 `.ioc`，待 CubeMX 确认 |
+| 2026-09-28 | FreeRTOS 任务 | CubeMX 中定义 4 个静态任务（INS、Control、CAN、Detect） | CubeMX 中**只定义一个启动任务** `startup`（静态、512 字、最高优先级、入口 `startup_task` 为弱定义，由框架实现，完成后删除自己）；其余任务由框架静态创建 | CMSIS_V2 下 CubeMX 至少要保留一个任务，把它用作启动任务（ADR 0025 修订） | 配置：CubeMX 中已确认 |
 | 2026-09-27 | CubeMX / 固件包 | CubeMX 6.12.1，FW_H7 V1.11.2 | CubeMX 6.18.1，FW_H7 V1.13.0 | 本机安装的版本；与 UniC 相同 | 配置：已迁移 |
 | 2026-09-27 | 工程名 | `COD_H7_Template` | `dm_mc02` | 按板子命名 | —— |
 
@@ -29,7 +30,8 @@
 
 | 日期 | 项目 | COD-H7-Template | 本模板 | 原因 | 验证 |
 | --- | --- | --- | --- | --- | --- |
-| 2026-09-27 | 构建 | Keil MDK（AC6） | **CMake + Ninja + arm-none-eabi-gcc**；Keil 以后再加 | 一套构建同时出固件和电脑测试（ADR 0019） | 编译：电脑侧已通过；固件侧待 CubeMX 生成 |
+| 2026-09-28 | NVIC 代码生成 | 各中断都调用 HAL 处理函数 | 同左（重新启用 FreeRTOS 后 CubeMX 把 18 个中断的 “Call HAL handler” 关掉了，已勾回） | 否则 TIM2 时基、DMA、SPI2 中断函数为空 | 生成：31 / 31 调用 HAL（`REGEN_CHECKLIST.md` 第 1 条） |
+| 2026-09-27 | 构建 | Keil MDK（AC6） | **CMake + Ninja + arm-none-eabi-gcc 15.2.1**；Keil 以后再加 | 一套构建同时出固件和电脑测试（ADR 0019） | 编译：2026-09-28 固件编译通过，0 警告，FLASH 91384 B、DTCM 42400 B（只含 CubeMX 生成代码） |
 | 2026-09-27 | 编译警告 | —— | 手写代码开 `-Wall -Wextra … -Werror`，有警告即失败 | 0 警告要求由编译器保证 | 编译 |
 | 2026-09-27 | 单元测试 | 无 | Unity v2.7.0，电脑上运行 | 算法和协议解析能在电脑上测 | 主机测试 |
 | 2026-09-27 | 文件编码 | 源码注释为 GBK | **UTF-8 + LF** | GBK 在 gcc、Git、clang-format 下乱码（ADR 0002） | —— |
