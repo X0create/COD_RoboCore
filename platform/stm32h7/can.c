@@ -185,6 +185,22 @@ bool can_send(CanBusId bus, const CanFrame *frame)
     return status == HAL_OK;
 }
 
+bool can_is_bus_off(CanBusId bus)
+{
+    return buses[bus].started && (handles[bus]->Instance->PSR & FDCAN_PSR_BO) != 0u;
+}
+
+/* 先 Stop 再 Start（做法同 COD_UniCFramework `can_bus_off_recover`）：直接清 CCCR.INIT 会让 HAL 的
+ * State 字段和硬件对不上，之后 HAL 拒绝发送。Stop / Start 不动消息 RAM 和中断使能，滤波器配置保留。 */
+void can_recover(CanBusId bus)
+{
+    FDCAN_HandleTypeDef *h = handles[bus];
+    if (HAL_FDCAN_Stop(h) == HAL_OK)
+    {
+        (void)HAL_FDCAN_Start(h); /* 失败时仍是 bus-off，daemon 100 ms 后再试 */
+    }
+}
+
 uint32_t can_rx_dropped(CanBusId bus)
 {
     return buses[bus].ring.dropped;

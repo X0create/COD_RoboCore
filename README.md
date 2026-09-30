@@ -58,6 +58,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 | | SPI（BMI088） | ✅ | |
 | | PWM：IMU 加热 · 蜂鸣器 | ✅ · 🧪 | 加热闭环已稳在约 40 °C；蜂鸣器待听 |
 | | ADC：电池电压 | ✅ | 读数正常；分压比 11 待万用表核对 |
+| | CAN bus-off 自动恢复 | 🧪 | daemon 检测到后重启控制器，待 V44 |
 | | 串口（循环 DMA） | 🧪 | 等接 DR16 / 图传 |
 | | USB 虚拟串口 | 🧪 | |
 | | 64 位微秒时钟 · RTT 日志 · 状态灯 | ✅ | 时钟跨过多次 32 位回绕仍连续 |
@@ -225,7 +226,7 @@ cmake --preset h723-template-debug && cmake --build --preset h723-template-debug
 
 - 所有文本文件为 **UTF-8 编码、LF 换行**，由 `.gitattributes` 和 `.editorconfig` 保证。
 - 提交说明的格式是 `类型: 做了什么`，类型包括 `feat` 新功能、`fix` 修复、`docs` 文档、`build` 构建、`test` 测试、`chore` 杂项。
-- 编译必须 **0 警告**。
+- 编译必须 **0 警告**。推送到 GitHub 后，`.github/workflows/ci.yml` 自动做格式检查、电脑侧单元测试和固件编译。
 
 ## 参考与致谢
 

@@ -82,6 +82,20 @@ RM_NODISCARD bool can_send(CanBusId bus, const CanFrame *frame);
  */
 bool can_bus_is_fd(CanBusId bus);
 
+/**
+ * @brief   这路总线是否处于 bus-off
+ * @note    发送错误太多时控制器会自动脱离总线。STM32 FDCAN 进入 bus-off 后停在初始化状态，
+ *          不会自己回来，要调用 can_recover()。未启动的总线返回 false
+ */
+bool can_is_bus_off(CanBusId bus);
+
+/**
+ * @brief   从 bus-off 恢复：重新启动控制器，滤波器和接收中断的配置保留
+ * @pre     can_start() 成功过；由 daemon 任务调用，同一路两次调用至少间隔 100 ms（《架构设计》“发送队列满了怎么办”）
+ * @note    恢复期间 can_send() 返回 false（丢帧），和发送队列满的处理相同
+ */
+void can_recover(CanBusId bus);
+
 /** 接收环形缓冲满、被丢弃的帧数（调试用） */
 uint32_t can_rx_dropped(CanBusId bus);
 

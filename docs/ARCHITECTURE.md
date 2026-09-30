@@ -1033,7 +1033,7 @@ UniC 最早照搬了 5 / 14 / 5，但它的时钟是 96 MHz，结果实际只有
 只有两条规则（ADR 0026）：
 
 - **队列满了就丢帧并计数**（`ERR_CAN_TX_QUEUE_FULL`）。运动指令每个周期都会重新生成，丢一帧下个周期就补上；长期发不出去时，电机反馈超时会触发机构停，电调自身也有通信超时。不另设“发送链路故障”状态。
-- **bus-off**：daemon 发现后记 `ERR_CAN_BUS_OFF`，每 100 ms 最多调用一次 `can_recover()`。
+- **bus-off**：daemon 发现后记 `ERR_CAN_BUS_OFF`，每 100 ms 最多调用一次 `can_recover()`。（2026-09-30 实现：`can_is_bus_off()` + `can_recover()`，daemon 每 10 ms 检查，同一路至少隔 100 ms 重启一次并打 RTT 警告；错误表随阶段 1 的 `RM_ASSERT` 一起做。STM32 FDCAN 进入 bus-off 后停在初始化状态、不会自己回来，旧工程没有处理，一次 bus-off 这路电机就一直离线到重启。）
 
 另外，达妙的操作命令（使能、清错、保存零点）按协议要求**按顺序发送**：每条等反馈确认或超时后再发下一条。这是协议正确性，不是安全措施。
 
@@ -1275,7 +1275,7 @@ CMake 是唯一的“真相来源”：它同时生成板子固件和 PC 测试�
 
 CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-tidy 18.1.3、cppcheck 2.13.0 等，与 UniC 相同），本地开发环境按 `docs/DEV_ENVIRONMENT.md` 搭建成相同版本，否则格式检查在本地和 CI 上结果不一致。
 
-仓库在 GitHub 就用 GitHub Actions，在 Gitee 就用 Gitee Go，脚本内容相同。
+仓库在 GitHub 就用 GitHub Actions，在 Gitee 就用 Gitee Go，脚本内容相同。2026-09-30 已加 `.github/workflows/ci.yml`：格式检查、电脑侧单元测试、DM-MC02 固件编译（`-Werror`）；clang-tidy、cppcheck、覆盖率、sanitizer 和 Gitee Go 待加。
 
 ## 编码规范、迁移与决策记录
 

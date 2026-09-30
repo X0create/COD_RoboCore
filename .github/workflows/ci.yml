@@ -1,0 +1,76 @@
+# 每次推送到 GitHub 自动检查：代码格式、电脑侧单元测试、DM-MC02 固件编译（-Werror，有警告即失败）。
+# 本地等价的命令见 README“快速开始”。Gitee 不运行这个文件。
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host:
+    name: 格式检查 + 单元测试
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: 安装工具
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build clang-format-18
+
+      - name: 格式检查（clang-format 18）
+        run: |
+          git ls-files -- '*.c' '*.h' \
+            | grep -v -e segger_rtt -e '^boards/' -e 'tests/host/unity/' \
+            | xargs clang-format-18 --dry-run --Werror
+
+      - name: 电脑侧单元测试
+        run: |
+          cmake --preset host-tests
+          cmake --build --preset host-tests
+          ctest --preset host-tests
+
+  firmware:
+    name: 固件编译（DM-MC02）
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TOOLCHAIN: arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi
+      TOOLCHAIN_URL: https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/binrel
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: 安装工具
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build
+
+      - name: 缓存交叉编译器
+        id: toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/tools/${{ env.TOOLCHAIN }}
+          key: ${{ env.TOOLCHAIN }}
+
+      - name: 下载并校验交叉编译器（Arm GNU Toolchain 15.2.Rel1）
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/tools && cd "$RUNNER_TEMP"
+          curl -L --fail -O "$TOOLCHAIN_URL/$TOOLCHAIN.tar.xz"
+          curl -L --fail -O "$TOOLCHAIN_URL/$TOOLCHAIN.tar.xz.sha256asc"
+          sha256sum -c "$TOOLCHAIN.tar.xz.sha256asc"
+          tar -xf "$TOOLCHAIN.tar.xz" -C ~/tools
+
+      - name: 编译固件
+        run: |
+          cmake --preset h723-template-debug
+          cmake --build --preset h723-template-debug
