@@ -462,9 +462,10 @@ GDB 服务器路径是 `custom-gdb-server` 的 `executable` 属性，实参是 `
 
 - **RTT 日志**：CLion 本身不显示 RTT。另建一个“Shell 脚本”运行配置“RTT 日志”（解释器 `C:\Windows\System32\cmd.exe`、
   选项 `/c`、脚本 `C:\Program Files\SEGGER\JLink_V980\JLinkRTTClient.exe`，文件 `.idea/runConfigurations/RTT.xml`），
-  再建“复合”配置“MC02 调试 + RTT”同时启动两者，RTT 显示在 CLion 的运行窗口里（2026-09-30）。
+  再建“复合”配置“MC02 调试 + RTT”同时启动两者（**未验证**：2026-09-30 贴回的 RTT 实际来自单独打开的 exe）。
+  更好的做法是 CLion 的 **Segger J-Link 调试服务器**：自带 RTT 控制台和实时监视（见 11.2，待验证）。
   RTTClient 连的是 GDB 服务器的 `localhost:19021`。
-- **实时监视**：调试窗口的“实时监视”页签可以在不暂停的情况下刷新变量（例如 `ins.imu.gyro_offset_rad_s`）。
+- **实时监视**：只有“调试服务器”方式（如 Segger J-Link 调试服务器）才能用；“嵌入式 GDB 服务器”运行配置下不可用（2026-09-30 用户实测）。
 - **断点与源码**：ELF 里的源码路径若是 `/mnt/d/...`，Windows 版 GDB 报 `No source file named D:/...`、断点打不上。
   根目录 `CMakeLists.txt` 已在 `/mnt/<盘符>/` 下构建时加 `-fdebug-prefix-map`，把路径写成 `D:/...`。
 - `Error during python setup: Undefined info command: "pretty-printer"`：CubeCLT 的 GDB 不带 Python 时出现，不影响调试；
@@ -524,5 +525,5 @@ git push -u origin main
 | 2026-09-28 | 10 | COD RoboCore `ebb48ed` 烧录运行，RTT 心跳正常，时间戳跨过 DWT 回绕连续 |
 | 2026-09-29 | 11.1 | CLion 嵌入式 GDB 服务器 + J-Link V9.80 + CubeCLT 1.19 的 GDB：兼容版 J-Link 连接、FreeRTOS 插件加载、烧录成功；RTTClient 收到启动日志 |
 | 2026-09-29 | 11.1（断点） | `-fdebug-prefix-map` 后 Windows 版 GDB 离线对 ELF 设 `app_main.c`、`tasks.c` 断点成功（未上板复测） |
-| 2026-09-30 | 11.1（GDB、RTT） | 换 CLion 自带 GDB 17.1 后 python 报错消失；“MC02 调试 + RTT”复合配置在 CLion 里显示 RTT 日志 |
+| 2026-09-30 | 11.1（GDB） | 换 CLion 自带 GDB 17.1 后 python 报错消失；RTT 复合配置未验证，实时监视在此方式下不可用 |
 | 2026-09-27 | 4（apt 永久代理） | 写入 `95proxy` 后，不带 `-o` 的 `sudo apt update` 成功（7144 kB，2 s） |
