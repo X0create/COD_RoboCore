@@ -72,7 +72,11 @@ void bmi088_set_gyro_offset(Bmi088 *imu, const float offset_rad_s[3]);
  */
 void bmi088_heater_step(Bmi088 *imu, float temperature_c);
 
-/** 关闭加热并清 PID（读不到温度时调用） */
+/**
+ * @brief   关闭加热（读不到温度时调用）
+ * @note    不清 PID：偶尔一次读失败后，下一次读到温度就从原来的积分接着控制。
+ *          清掉的话，稳态约 16% 占空比全靠积分维持，要重新攒几十秒，温度会往下掉（2026-09-30 改）
+ */
 void bmi088_heater_off(Bmi088 *imu);
 
 #ifdef __cplusplus

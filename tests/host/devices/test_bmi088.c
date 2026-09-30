@@ -178,13 +178,19 @@ static void test_heater_overtemperature_gives_zero_duty(void)
     TEST_ASSERT_EQUAL_FLOAT(0.0f, fake_pwm_duty(PWM_IMU_HEATER));
 }
 
+/* 读失败时关加热但保留积分：下一次读到温度就回到原来的占空比，不用重新攒积分 */
 static void test_heater_off(void)
 {
     TEST_ASSERT_EQUAL_INT(BMI088_OK, bmi088_init(&imu));
-    heat(100, 20.0f);
+    heat(100 * 3000, 39.9f); /* 稳态附近 5 分钟，积分已攒起来 */
+    const float integral = imu.heater_pid.integral;
+    const float duty = fake_pwm_duty(PWM_IMU_HEATER);
+    TEST_ASSERT_TRUE(duty > 0.05f);
     bmi088_heater_off(&imu);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, fake_pwm_duty(PWM_IMU_HEATER));
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, imu.heater_pid.output);
+    TEST_ASSERT_EQUAL_FLOAT(integral, imu.heater_pid.integral);
+    heat(100, 39.9f);
+    TEST_ASSERT_FLOAT_WITHIN(1e-3f, duty, fake_pwm_duty(PWM_IMU_HEATER)); /* 回到原来的占空比 */
 }
 
 int main(void)

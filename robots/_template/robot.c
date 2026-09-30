@@ -286,6 +286,12 @@ static void log_imu(void)
              (int)(st.yaw_rad * 1000.0f), (int)(st.pitch_rad * 1000.0f),
              (int)(st.roll_rad * 1000.0f), (int)(st.yaw_total_rad * 1000.0f),
              (int)(st.temperature_c * 1000.0f), (int)(bias_z * 1e6f));
+    /* 机体系加速度（已低通）与角速度（已减零偏）：静止水平时约 0 0 9800 mm/s²、各轴几 mrad/s（V5、V7） */
+    RM_LOG_I("imu accel %d %d %d mm/s2, gyro %d %d %d mrad/s, read failures %u",
+             (int)(st.accel_m_s2[0] * 1000.0f), (int)(st.accel_m_s2[1] * 1000.0f),
+             (int)(st.accel_m_s2[2] * 1000.0f), (int)(st.gyro_rad_s[0] * 1000.0f),
+             (int)(st.gyro_rad_s[1] * 1000.0f), (int)(st.gyro_rad_s[2] * 1000.0f),
+             (unsigned)ins.read_failures);
 }
 
 static const char *mode_name(RobotMode mode)

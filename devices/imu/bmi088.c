@@ -250,6 +250,6 @@ void bmi088_heater_step(Bmi088 *imu, float temperature_c)
 
 void bmi088_heater_off(Bmi088 *imu)
 {
-    pid_reset(&imu->heater_pid);
+    (void)imu;
     pwm_set_duty(PWM_IMU_HEATER, 0.0f);
 }
