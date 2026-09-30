@@ -51,3 +51,7 @@ rm_add_host_test(test_vision_link devices/test_vision_link.c rm_devices rm_host_
 rm_add_host_test(test_rls algorithm/test_rls.c rm_algorithm)
 rm_add_host_test(test_battery devices/test_battery.c rm_devices)
 rm_add_host_test(test_buzzer devices/test_buzzer.c rm_devices rm_host_fakes)
+rm_add_host_test(test_omni algorithm/test_omni.c rm_algorithm)
+rm_add_host_test(test_mecanum algorithm/test_mecanum.c rm_algorithm)
+rm_add_host_test(test_steer algorithm/test_steer.c rm_algorithm)
+rm_add_host_test(test_chassis subsystems/test_chassis.c rm_subsystems rm_host_fakes)

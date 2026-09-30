@@ -193,7 +193,7 @@ rm-template/
 │   ├── filter/                  # lpf kalman
 │   ├── math/                    # matrix（小矩阵运算，ADR 0029）
 │   ├── attitude/                # quaternion quat_ekf gimbal_angles
-│   ├── kinematics/              # mecanum omni steer leg_vmc
+│   ├── kinematics/              # chassis_vel omni mecanum steer（leg_vmc 以后）
 │   ├── power/                   # 电机功率模型、RLS 参数辨识、功率分配（纯计算）
 │   └── ballistic/
 ├── devices/
@@ -1345,6 +1345,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0040 | 用户 2026-09-30 授权“需要取舍的选更优的改”：PID **位置式加抗积分饱和**（条件积分：积分只累加到输出刚好等于 `output_limit` 为止，误差与输出同向时不再多攒；增量式不需要）。部分取代 ADR 0029 的“PID 先保持旧行为”；显式 dt、微分作用在测量值上仍按 0029 等台架对比 | 起因：IMU 加热冷态预热时比例项长时间饱和，积分攒满（限幅 1000）后到 40 °C 还要顶着 25% 占空比，造成过冲（V6、风险清单“加热无抗饱和的过冲”）；速度环堵转后同理会猛冲。条件积分只改变饱和时的行为，未饱和时与旧公式完全相同 | `algorithm/control/pid` |
 | 0041 | 用户 2026-09-30 授权选更优：参考 HNU_RM_SHARK_C / basic_framework 的 cmd 任务，**`OperatorInput`、`KeyTracker`、`RobotCmd` 和 command 任务与第一个真正的子系统（云台或底盘）一起做**，不先写字段；届时采用两点做法：① 模式切换要看子系统反馈（例如云台回中完成才进入陀螺仪模式、底盘在云台就绪后才跟随）；② 云台从失能进入受控时先用编码器闭环带斜坡回中，回中完成时记录 IMU 航向作零点，再切 IMU 闭环，编码器差值按最短方向算 | 现在只有样板的一台电机，`RobotCmd` 的云台 / 底盘 / 发射字段没有使用者，先写只能猜（违背“只写必要”）；解锁和急停仍只认 DR16（ADR 0032、0036） | 阶段 4、5 |
 | 0042 | 用户 2026-09-30 授权“选更优的改”：IMU 加热参数按**本板实测**重定：每 **1280 ms** 算一次（与 BMI088 温度寄存器更新同步）、上限 **8%**、kp **0.01 / °C**、积分时间 **10 s**。取代 ADR 0033 第二步的 UniC 参数（上限 25%、kp 0.05、每 100 ms） | 实测（`docs/data/heater_2026-09-30.csv`，电池供电）：稳态只需约 2% 占空比；25% 时加热片附近约 24 °C/s，芯片读数时间常数约 3 s；温度 1.28 s 才更新一次。UniC 参数在本板上冷启动冲到约 46 °C、稳定后 38–41 °C 摆动（上板与拟合模型一致）。三节点热模型（`tools/heater_model.py`，拟合误差 0.2 °C）上新参数：环境 15–35 °C、加热功率 ±30% 时峰值不超过 41.4 °C、稳态峰峰 < 0.1 °C；代价是冷启动到温慢一些（25 °C 环境约 10–20 s）。UniC 的 16% 稳态占空比可能是加热片供电电压不同。**上板复测（同日）**：9 s 到温、无过冲，稳态 40.125–40.25 °C，与模型一致 | `devices/imu/bmi088` |
+| 0043 | 用户 2026-09-30 决定：① **底盘三种轮组都做，轮腿暂不做**：一个 `subsystems/chassis` 按 `ChassisConfig.type` 选四轮全向轮 / 麦轮 / 舵轮，运动学在 `algorithm/kinematics/`（`omni`、`mecanum`、`steer`，共用 `chassis_vel.h`）；② 第一版**底盘直接读遥控**（`robot.c` 把摇杆换算成 `ChassisVel`），`OperatorInput` / `RobotCmd` / command 任务推迟到云台加入时（修订 ADR 0041“与第一个子系统一起做”的时机）；③ 新兵种目录 `robots/infantry/`、预设 `h723-infantry-debug`，样板 `_template` 保持不变。实现约定：轮号从左前起逆时针（全向轮 X 形同序）；平移斜坡按合成加速度限幅（分轴限幅会让斜向加速时方向先偏到 45°）；机构停 = 任一电机离线时目标改 0、按斜坡受控减速；全车停时斜坡起点对齐正解出的实测速度；舵轮转向电机须支持力矩指令且角度零点上电即确定（GM6020 的指令按 ADR 0031 ③ 仍待加） | 用户要求各种轮组都有；先让四个轮子转起来并上台架，指令层等有第二个子系统（云台）时再定字段，避免猜 | 阶段 5 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
@@ -1558,6 +1559,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 10 | `Device/Referee_System.c`、`Image_Transmission.c` | `devices/referee/referee`（协议 v2.0.0）、`devices/remote/vt_link` | 图传完成（2026-09-28）：`ref_frame`（0xA5 帧检查）、`vt_link`（VT13、0x0304），主机测试 11 项，上板待 V13、V14；**裁判系统等官方 V2.0.0 文档**（ADR 0036） |
 | 11 | `Device/MiniPC.c`、USB CDC | `platform/…/usb_cdc`、`devices/vision/vision_link` | 通道和帧层完成（2026-09-28，ADR 0037）：usb_cdc、byte_ring、vision_frame、vision_link；主机测试 8 项；上板待 V15；**消息字段等视觉组协议** |
 | 12 | `BSP/bsp_adc.c`、`Algorithm/RLS.c`、蜂鸣器 | `platform/…/adc`、`devices/battery`、`algorithm/power/rls`、`devices/buzzer` | 代码完成（2026-09-28，ADR 0038）：adc、battery（6S / 21.0 V）、buzzer（启动 / 解锁 / 上锁 / 低电量）、rls（标准公式重写，暂未接入）；主机测试 12 项；上板待 V16–V18 |
+| 13 | （旧工程只有一台电机的速度环） | `algorithm/kinematics/{omni,mecanum,steer}`、`subsystems/chassis`、`robots/infantry` | 代码完成（2026-09-30，ADR 0043）：三种运动学 + 底盘子系统 + 步兵固件（四轮全向轮）；主机测试 26 项；上板待 V45–V49（车架空） |
 
 ### 风险
 

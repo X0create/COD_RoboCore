@@ -1,4 +1,4 @@
-# 当前构建的兵种。阶段 0 只有样板 _template；以后由预设用 RM_ROBOT 选择（如 infantry）
+# 当前构建的兵种（robots/ 下的目录名），由预设选择：h723-template-debug 为样板，h723-infantry-debug 为步兵
 set(RM_ROBOT "_template" CACHE STRING "兵种目录名（robots/ 下）")
 
 # 与芯片无关的纯逻辑（安全门），电脑测试和固件都链接它

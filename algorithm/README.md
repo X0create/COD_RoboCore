@@ -8,7 +8,7 @@
 | `filter/` | 低通、卡尔曼 |
 | `math/` | 小矩阵运算（卡尔曼等用，ADR 0029） |
 | `attitude/` | 四元数、姿态 EKF、云台角度、陀螺零偏标定 |
-| `kinematics/` | 麦轮、全向轮、舵轮、轮腿 VMC |
+| `kinematics/` | 底盘运动学：全向轮 `omni`、麦轮 `mecanum`、舵轮 `steer`（共用底盘速度类型 `chassis_vel.h`）；轮腿 VMC 以后加 |
 | `power/` | 电机功率模型、参数辨识、功率分配 |
 | `ballistic/` | 弹道解算 |
 

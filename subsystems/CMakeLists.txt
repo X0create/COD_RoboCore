@@ -1,5 +1,6 @@
 # 子系统：各机构的闭环；只用 devices、algorithm、core、msgs，电脑测试和固件都链接它
 add_library(rm_subsystems STATIC
+    chassis/chassis.c
     ins/ins.c
 )
 # 以 "subsystems/ins/ins.h" 的形式 include

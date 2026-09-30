@@ -22,11 +22,21 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "RM_BOARD": "dm_mc02"
       }
+    },
+    {
+      "name": "h723-infantry-debug",
+      "displayName": "DM-MC02 步兵固件（arm-none-eabi-gcc，Debug）",
+      "inherits": "h723-template-debug",
+      "binaryDir": "${sourceDir}/build/h723-infantry-debug",
+      "cacheVariables": {
+        "RM_ROBOT": "infantry"
+      }
     }
   ],
   "buildPresets": [
     { "name": "host-tests", "configurePreset": "host-tests" },
-    { "name": "h723-template-debug", "configurePreset": "h723-template-debug" }
+    { "name": "h723-template-debug", "configurePreset": "h723-template-debug" },
+    { "name": "h723-infantry-debug", "configurePreset": "h723-infantry-debug" }
   ],
   "testPresets": [
     {
