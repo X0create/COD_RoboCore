@@ -149,13 +149,24 @@ static void test_heater_unic_params(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.25f, fake_pwm_duty(PWM_IMU_HEATER));
 }
 
-/* 积分项最多等于上限：长时间低 0.1 °C，比例项只有 0.005，占空比仍不超过 25% */
+/* 长时间低 0.1 °C：占空比不超过 25%；抗积分饱和（ADR 0040）使积分只攒到“比例 + 积分 = 上限”为止，
+ * 即 (0.25 − 0.005) / ki = 980，而不是积分限幅 1000 */
 static void test_heater_integral_bounded(void)
 {
     TEST_ASSERT_EQUAL_INT(BMI088_OK, bmi088_init(&imu));
     heat(100 * 20000, 39.9f);
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.25f, fake_pwm_duty(PWM_IMU_HEATER));
-    TEST_ASSERT_FLOAT_WITHIN(1e-2f, 1000.0f, imu.heater_pid.integral);
+    TEST_ASSERT_FLOAT_WITHIN(1e-1f, 980.0f, imu.heater_pid.integral);
+}
+
+/* 冷启动预热后到达目标：积分没有攒满，过了 40 °C 占空比马上降下来（旧行为会顶在 25% 很久，造成过冲） */
+static void test_heater_no_windup_after_warmup(void)
+{
+    TEST_ASSERT_EQUAL_INT(BMI088_OK, bmi088_init(&imu));
+    heat(100 * 600, 25.0f); /* 冷态 60 s，比例项一直饱和 */
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.25f, fake_pwm_duty(PWM_IMU_HEATER));
+    heat(100, 40.5f); /* 刚过目标 */
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, fake_pwm_duty(PWM_IMU_HEATER));
 }
 
 /* 过热时输出为负：占空比为 0，而不是旧代码转成 uint16_t 后的满占空比 */
@@ -188,6 +199,7 @@ int main(void)
     RUN_TEST(test_gyro_offset_subtracted);
     RUN_TEST(test_heater_unic_params);
     RUN_TEST(test_heater_integral_bounded);
+    RUN_TEST(test_heater_no_windup_after_warmup);
     RUN_TEST(test_heater_overtemperature_gives_zero_duty);
     RUN_TEST(test_heater_off);
     return UNITY_END();

@@ -63,25 +63,43 @@ float pid_calc(Pid *pid, float target, float measure)
 
     if (pid->type == PID_POSITION)
     {
-        pid->integral =
-            (p->ki != 0.0f) ? clamp(pid->integral + pid->err[0], p->integral_limit) : 0.0f;
         pid->p_out = p->kp * pid->err[0];
-        pid->i_out = p->ki * pid->integral;
         pid->d_out = p->kd * (pid->err[0] - pid->err[1]);
-    }
-    else
-    {
-        pid->p_out = p->kp * (pid->err[0] - pid->err[1]);
-        pid->i_out = p->ki * pid->err[0];
-        pid->d_out = p->kd * (pid->err[0] - 2.0f * pid->err[1] + pid->err[2]);
+        if (d_filter_enabled(p))
+        {
+            pid->d_out = lpf1_update(&pid->d_lpf, pid->d_out);
+        }
+        const float integral =
+            (p->ki != 0.0f) ? clamp(pid->integral + pid->err[0], p->integral_limit) : 0.0f;
+        /* 抗积分饱和：累加后输出会越限、且误差与输出同向时，积分只加到输出刚好等于限幅为止 */
+        const float sum = pid->p_out + p->ki * integral + pid->d_out;
+        const bool winding = fabsf(sum) > p->output_limit && (sum > 0.0f) == (pid->err[0] > 0.0f);
+        if (!winding || p->ki == 0.0f)
+        {
+            pid->integral = integral;
+        }
+        else
+        {
+            const float edge = (sum > 0.0f) ? p->output_limit : -p->output_limit;
+            const float room = (edge - pid->p_out - pid->d_out) / p->ki;
+            /* 只沿误差方向补到边界；P、D 已经超限时积分保持不动 */
+            if ((pid->err[0] > 0.0f) ? (room > pid->integral) : (room < pid->integral))
+            {
+                pid->integral = room;
+            }
+        }
+        pid->i_out = p->ki * pid->integral;
+        pid->output = clamp(pid->p_out + pid->i_out + pid->d_out, p->output_limit);
+        return pid->output;
     }
 
+    pid->p_out = p->kp * (pid->err[0] - pid->err[1]);
+    pid->i_out = p->ki * pid->err[0];
+    pid->d_out = p->kd * (pid->err[0] - 2.0f * pid->err[1] + pid->err[2]);
     if (d_filter_enabled(p))
     {
         pid->d_out = lpf1_update(&pid->d_lpf, pid->d_out);
     }
-
-    const float sum = pid->p_out + pid->i_out + pid->d_out;
-    pid->output = clamp((pid->type == PID_POSITION) ? sum : pid->output + sum, p->output_limit);
+    pid->output = clamp(pid->output + pid->p_out + pid->i_out + pid->d_out, p->output_limit);
     return pid->output;
 }

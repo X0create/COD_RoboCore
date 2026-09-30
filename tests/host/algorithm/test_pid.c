@@ -1,6 +1,7 @@
 /**
  * @file    test_pid.c
- * @brief   pid 的单元测试：各项计算、限幅、死区、微分滤波、增量式、复位；期望值按旧工程 PID.c 的公式手算
+ * @brief   pid 的单元测试：各项计算、限幅、死区、微分滤波、增量式、复位、抗积分饱和；
+ *          除抗积分饱和（ADR 0040）外，期望值按旧工程 PID.c 的公式手算
  */
 #include "algorithm/control/pid.h"
 
@@ -85,6 +86,35 @@ static void test_output_clamped(void)
 }
 
 /* 误差进入死区后输出保持上一次的值，不归零 */
+/* 抗积分饱和：输出顶到限幅、误差同向时积分不再累加；误差一反向，输出立刻跟着反向（ADR 0040） */
+static void test_integral_frozen_while_saturated(void)
+{
+    Pid pid;
+    PidParam p = param(1.0f, 0.5f, 0.0f);
+    p.output_limit = 10.0f;
+    pid_init(&pid, PID_POSITION, &p);
+    for (int i = 0; i < 50; i++)
+    {
+        TEST_ASSERT_EQUAL_FLOAT(10.0f, pid_calc(&pid, 100.0f, 0.0f)); /* P 项 100 已饱和 */
+    }
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, pid.integral); /* 没有攒积分 */
+    /* 冲过目标 2：旧行为积分已攒到上千，输出仍顶在 +10；现在 = P(-2) + I(0.5 × -2) */
+    TEST_ASSERT_EQUAL_FLOAT(-3.0f, pid_calc(&pid, 100.0f, 102.0f));
+}
+
+/* 没饱和时照常累加；会越限时只补到边界；误差反向（往回拉）时照常累加 */
+static void test_integral_accumulates_when_unwinding(void)
+{
+    Pid pid;
+    PidParam p = param(0.0f, 1.0f, 0.0f);
+    p.output_limit = 5.0f;
+    pid_init(&pid, PID_POSITION, &p);
+    TEST_ASSERT_EQUAL_FLOAT(4.0f, pid_calc(&pid, 4.0f, 0.0f));
+    TEST_ASSERT_EQUAL_FLOAT(5.0f, pid_calc(&pid, 4.0f, 0.0f)); /* 累加到 8 会越限：只补到 5 */
+    TEST_ASSERT_EQUAL_FLOAT(5.0f, pid.integral);
+    TEST_ASSERT_EQUAL_FLOAT(2.0f, pid_calc(&pid, 0.0f, 3.0f)); /* 误差 -3：5 - 3 = 2 */
+}
+
 static void test_deadband_holds_output(void)
 {
     Pid pid;
@@ -130,6 +160,8 @@ int main(void)
     RUN_TEST(test_derivative_is_error_difference);
     RUN_TEST(test_derivative_filter);
     RUN_TEST(test_output_clamped);
+    RUN_TEST(test_integral_frozen_while_saturated);
+    RUN_TEST(test_integral_accumulates_when_unwinding);
     RUN_TEST(test_deadband_holds_output);
     RUN_TEST(test_incremental);
     RUN_TEST(test_reset_clears_state);
