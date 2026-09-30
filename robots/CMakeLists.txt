@@ -14,12 +14,14 @@ if(NOT RM_BOARD)
     return()
 endif()
 
+# 兵种目录下的全部 .c（至少有 robot.c；步兵另有 debug.c）
+file(GLOB rm_robot_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${RM_ROBOT}/*.c)
 add_library(rm_robot STATIC
     common/app_main.c
     common/comm_rx.c
     common/control_task.c
     common/daemon.c
-    ${RM_ROBOT}/robot.c
+    ${rm_robot_sources}
 )
 target_include_directories(rm_robot PUBLIC common)
 target_link_libraries(rm_robot PUBLIC rm_robot_logic rm_core rm_subsystems rm_devices rm_algorithm)

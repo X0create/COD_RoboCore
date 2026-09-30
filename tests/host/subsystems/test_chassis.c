@@ -167,9 +167,9 @@ static void test_stop_all_writes_nothing_and_aligns_to_measured(void)
         TEST_ASSERT_FALSE(wheel[i]->torque_set);
     }
     /* 四轮同速 5 rad/s = 原地逆时针转：wz = 5 × 0.08 / 0.25（反馈经过 rpm 取整，留一点余量） */
-    TEST_ASSERT_FLOAT_WITHIN(1e-3f, 0.0f, chassis.ref.vx_m_s);
-    TEST_ASSERT_FLOAT_WITHIN(1e-3f, 0.0f, chassis.ref.vy_m_s);
-    TEST_ASSERT_FLOAT_WITHIN(5e-3f, 1.6f, chassis.ref.wz_rad_s);
+    TEST_ASSERT_FLOAT_WITHIN(1e-3f, 0.0f, chassis.target.velocity.vx_m_s);
+    TEST_ASSERT_FLOAT_WITHIN(1e-3f, 0.0f, chassis.target.velocity.vy_m_s);
+    TEST_ASSERT_FLOAT_WITHIN(5e-3f, 1.6f, chassis.target.velocity.wz_rad_s);
 }
 
 /* 解锁后目标按斜坡上升；向前走时左侧两轮负力矩、右侧两轮正力矩 */
@@ -180,13 +180,13 @@ static void test_ramps_and_drives_wheels_by_inverse_kinematics(void)
 
     const ChassisVel target = { .vx_m_s = 1.0f };
     chassis_step(&chassis, &target, false, 1.0f, DT_S);
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 2.0f * DT_S, chassis.ref.vx_m_s);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 2.0f * DT_S, chassis.target.velocity.vx_m_s);
     for (int k = 1; k < 100; k++)
     {
         feed_all(0.0f);
         chassis_step(&chassis, &target, false, 1.0f, DT_S);
     }
-    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 0.2f, chassis.ref.vx_m_s);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 0.2f, chassis.target.velocity.vx_m_s);
 
     TEST_ASSERT_TRUE(wheel[0]->torque_set);
     TEST_ASSERT_TRUE(wheel[0]->torque_cmd_nm < 0.0f);
@@ -229,7 +229,7 @@ static void test_wheel_offline_decelerates_under_control(void)
         motor_group_flush(&group);
         fake_time_advance_ms(1u);
     }
-    TEST_ASSERT_FLOAT_WITHIN(1e-3f, 1.0f, chassis.ref.vx_m_s);
+    TEST_ASSERT_FLOAT_WITHIN(1e-3f, 1.0f, chassis.target.velocity.vx_m_s);
 
     /* 轮 2 不再有反馈，超过离线时间 */
     for (int k = 0; k <= (int)MOTOR_OFFLINE_TIMEOUT_MS; k++)
@@ -239,10 +239,10 @@ static void test_wheel_offline_decelerates_under_control(void)
         feed(3, 0.0f);
         fake_time_advance_ms(1u);
     }
-    const float before = chassis.ref.vx_m_s;
+    const float before = chassis.target.velocity.vx_m_s;
     chassis_step(&chassis, &target, false, 1.0f, DT_S);
-    TEST_ASSERT_FALSE(chassis.all_online);
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, before - 2.0f * DT_S, chassis.ref.vx_m_s);
+    TEST_ASSERT_FALSE(chassis.measure.all_online);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, before - 2.0f * DT_S, chassis.target.velocity.vx_m_s);
     TEST_ASSERT_FALSE(wheel[2]->torque_set);
     TEST_ASSERT_TRUE(wheel[0]->torque_set);
     TEST_ASSERT_TRUE(wheel[3]->torque_set);
@@ -286,7 +286,7 @@ static void test_steer_turns_wheels_toward_target(void)
     }
     for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
     {
-        TEST_ASSERT_FLOAT_WITHIN(1e-4f, atan2f(1.0f, 0.5f), c.heading_ref_rad[i]);
+        TEST_ASSERT_FLOAT_WITHIN(1e-4f, atan2f(1.0f, 0.5f), c.target.heading_rad[i]);
         TEST_ASSERT_TRUE(steer[i]->torque_set);
         TEST_ASSERT_TRUE(steer[i]->torque_cmd_nm > 0.0f);
         TEST_ASSERT_TRUE(wheel[i]->torque_cmd_nm > 0.0f);
@@ -333,10 +333,10 @@ static void test_steer_motor_offline_is_mechanism_stop(void)
         feed_id(7u, DJI_M2006_GEAR_RATIO, 0.0f); /* 轮 3 的转向电机（ID 8）不再有反馈 */
         fake_time_advance_ms(1u);
     }
-    const float before = c.ref.vx_m_s;
+    const float before = c.target.velocity.vx_m_s;
     chassis_step(&c, &target, false, 1.0f, DT_S);
-    TEST_ASSERT_FALSE(c.all_online);
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, before - 2.0f * DT_S, c.ref.vx_m_s);
+    TEST_ASSERT_FALSE(c.measure.all_online);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, before - 2.0f * DT_S, c.target.velocity.vx_m_s);
     TEST_ASSERT_FALSE(steer[3]->torque_set);
     TEST_ASSERT_TRUE(steer[0]->torque_set);
 }

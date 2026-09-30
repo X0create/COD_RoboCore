@@ -6,7 +6,7 @@
 | --- | --- |
 | `common/` | `app_main()` 与启动任务、`comm_rx` 任务（CAN 帧分发、串口字节交给设备解析）、`control` 任务（1 kHz 调用 `robot_control_step()`）、`daemon` 任务（设备上线 / 离线报告）、安全门与模式（`safety_gate`，全车停） |
 | `_template/` | 新兵种的样板，由 `tools/new_robot.py` 复制 |
-| `infantry/` | 步兵（预设 `h723-infantry-debug`）。第一版只有底盘：四轮全向轮，遥控直接给底盘速度（ADR 0043） |
+| `infantry/` | 步兵（预设 `h723-infantry-debug`）。第一版只有底盘：四轮全向轮，遥控直接给底盘速度（ADR 0043）；`robot.c` 是组装和每 1 ms 的控制，`debug.c` 是状态灯、蜂鸣器和 RTT 打印 |
 | `<兵种>/` | `config.h`（PID 参数、解锁拨杆等固定参数）、`robot.c`（组装、话题实例、`robot_control_step()`）、`debug.c` |
 
 - 负责：选模块、填参数、模式状态机、创建任务。
