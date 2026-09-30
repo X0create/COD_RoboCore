@@ -63,6 +63,48 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 依赖方向从上到下：`robots` → `subsystems` → `devices` → `platform`；`algorithm`、`msgs`、`core` 可被各层使用，
 `algorithm` 是纯计算。标“（规划）”的目录还没有代码。
 
+```mermaid
+flowchart TB
+    subgraph R["robots 兵种层"]
+        R1["common：app_main、comm_rx、控制任务、守护任务、安全门"]
+        R2["_template：config.h + robot.c"]
+    end
+    subgraph S["subsystems 子系统"]
+        S1["ins 惯性导航"]
+        S2["gimbal / chassis / shoot（规划）"]
+    end
+    subgraph D["devices 设备驱动"]
+        D1["motor：DJI、达妙、电机组"]
+        D2["imu：BMI088"]
+        D3["remote：DR16、VT13"]
+        D4["referee / vision / battery / buzzer"]
+    end
+    subgraph P["platform 外设接口"]
+        P1["include：can、uart、spi、pwm、adc、usb_cdc、time"]
+        P2["stm32h7 实现"]
+        P3["stm32f4 实现（规划）"]
+        P4["common：环形缓冲、计数扩展"]
+    end
+    subgraph B["boards 板级（CubeMX 生成）"]
+        B1["dm_mc02_h723"]
+    end
+    subgraph X["各层共用"]
+        A["algorithm：PID、滤波、EKF、矩阵（纯计算）"]
+        M["msgs：带时间戳的消息类型"]
+        C["core：话题、看门狗、日志、OS 封装"]
+    end
+    T["tests/host：电脑侧单元测试 + 假外设"]
+
+    R --> S --> D --> P
+    P2 --> B
+    R -.-> X
+    S -.-> X
+    D -.-> X
+    T -. 替换 platform .-> P
+```
+
+实线箭头是调用方向，只能从上往下；虚线表示各层都可以使用 algorithm、msgs、core。电脑测试时用 `tests/host/fakes/` 替换 platform 的实现。
+
 ```text
 COD_RoboCore/
 ├── boards/                  每块板一个目录（CubeMX 生成代码，只改 USER CODE 区）
