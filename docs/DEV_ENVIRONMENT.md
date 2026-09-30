@@ -473,6 +473,30 @@ GDB 服务器路径是 `custom-gdb-server` 的 `executable` 属性，实参是 `
   this configuration` 警告不用管，它随后按 armv7e-m 工作。
 - 兼容版 J-Link 用 J-Link V9.80 软件可以连接和烧录（2026-09-29），没有提示升级固件。
 
+### 11.2 CLion 调试配置文件（Segger J-Link）与“烧录没生效”的陷阱（2026-09-30）
+
+**实时监视、RTT 控制台只有“调试配置文件”方式才有**（设置 → 构建、执行、部署 → 调试器 → 调试配置文件 → `+` → Segger J-Link）。
+工程用 WSL 工具链编译，而调试工具都在 Windows 上，所以要这样搭（已跑通连接、断点、实时监视）：
+
+1. 工具链加一个 Windows“系统”工具链（本机名 `STM32CubeCLT`，编译器填 CubeCLT 的 `arm-none-eabi-gcc.exe`，只为通过检测，不参与编译）；
+   WSL 工具链保持默认。
+2. 外部工具 `WSL 构建固件`：`C:\Windows\System32\wsl.exe`，实参
+   `-d Ubuntu-24.04 --cd "$ProjectFileDir$" -- cmake --build --preset h723-template-debug`（保存在 `.idea/tools/`）。
+3. 自定义构建目标 `COD_RoboCore`：工具链选上面的 Windows 工具链，构建用 `WSL 构建固件`。
+4. Segger J-Link 调试配置文件：GDB 服务器 `JLinkGDBServerCL.exe`、设备 `STM32H723VG`、1000 kHz、调试器 CLion 自带 `gdb.exe`、
+   控制台端口 **19021**（填 2331 会和 GDB 端口冲突）。
+5. 运行配置“自定义构建应用程序”，目标选第 3 步，可执行文件选 ELF；右上角同时选这个配置和 Segger J-Link，点**调试**。
+
+直接用“CMake 应用程序”配置 + Segger 配置文件不行：CLion 按 WSL 处理，把 `/mnt/d/...` 路径交给 Windows 的 GDB。
+
+**陷阱：经 J-Link GDB 服务器“烧录成功”，芯片里其实还是旧程序**（2026-09-30 实测，原因未查清）：
+`load`、`compare-sections` 都显示成功 / `matched`，连 `monitor flash erase` 后重烧也一样，但 CPU 跑的仍是旧固件——
+RTT 控制块、变量地址都是旧版的内存布局，所以 CLion 的 RTT 控制台为空、实时监视和 GDB 读出的结构体字段错位
+（例如 `ins.last_update_us` 显示成“栈地址 + 计数”的怪值）。J-Link DLL 在电脑侧缓存 Flash 内容，读回和比较很可能读的是缓存。
+同一时间用 Ozone Download & Reset，Console 有 `Flash download: ... Erase ... Program ... Verify` 并真正生效。
+- **判断板上是不是新固件**：RTT 里有没有新加的字样；或 GDB `p _SEGGER_RTT.acID` 应为 `"SEGGER RTT"`（地址取自当前 ELF）。
+- **目前做法**：烧录用 Ozone；CLion 只连接调试（Segger 配置文件的下载选“从不”）、看实时监视和 RTT。
+
 ## 12. 推送到 GitHub（已验证 2026-09-28）
 
 仓库：<https://github.com/X0create/COD_RoboCore>（公开）。以下设置只写在本仓库的 `.git/config`，不影响其他仓库：
@@ -526,4 +550,5 @@ git push -u origin main
 | 2026-09-29 | 11.1 | CLion 嵌入式 GDB 服务器 + J-Link V9.80 + CubeCLT 1.19 的 GDB：兼容版 J-Link 连接、FreeRTOS 插件加载、烧录成功；RTTClient 收到启动日志 |
 | 2026-09-29 | 11.1（断点） | `-fdebug-prefix-map` 后 Windows 版 GDB 离线对 ELF 设 `app_main.c`、`tasks.c` 断点成功（未上板复测） |
 | 2026-09-30 | 11.1（GDB） | 换 CLion 自带 GDB 17.1 后 python 报错消失；RTT 复合配置未验证，实时监视在此方式下不可用 |
+| 2026-09-30 | 11.2 | Segger J-Link 调试配置文件 + 自定义构建应用程序：连接、断点、实时监视可用；经 GDB 服务器烧录未真正写入芯片（Ozone 烧录正常） |
 | 2026-09-27 | 4（apt 永久代理） | 写入 `95proxy` 后，不带 `-o` 的 `sudo apt update` 成功（7144 kB，2 s） |
