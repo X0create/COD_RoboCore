@@ -447,8 +447,8 @@ Ubuntu 自带的 `/usr/bin/gdb` 又只认电脑程序。调试时要先关掉 Oz
 | 字段 | 填写 |
 | --- | --- |
 | 目标 / 可执行的二进制文件 | `COD_RoboCore` |
-| 调试器 | 自定义 GDB 可执行文件：STM32CubeCLT 自带的 `…\STM32CubeCLT_1.19.0\GNU-tools-for-STM32inrm-none-eabi-gdb.exe` |
-| 上传可执行文件 | 如果已更新 |
+| 调试器 | 自定义 GDB 可执行文件：CLion 自带的 `C:\Users\<用户名>\AppData\Local\Programs\CLion\bin\gdb\win\x64\bin\gdb.exe`（带 Python，能读 ARM 程序）。STM32CubeCLT 的 `arm-none-eabi-gdb.exe` 也能用，但不带 Python，会报 pretty-printer 错误 |
+| 上传可执行文件 | 始终（“如果已更新”在程序没变时不下载也不复位，会直接连上正在跑的程序，`app_main` 的断点停不下来） |
 | 'target remote' 实参 | `localhost:2331` |
 | GDB 服务器 | `C:\Program Files\SEGGER\JLink_V980\JLinkGDBServerCL.exe` |
 | GDB 服务器实参 | `-select USB -device STM32H723VG -if SWD -speed 1000 -port 2331 -nogui -singlerun -rtos GDBServer/RTOSPlugin_FreeRTOS` |
@@ -460,12 +460,16 @@ Ubuntu 自带的 `/usr/bin/gdb` 又只认电脑程序。调试时要先关掉 Oz
 （写错时报“未指定可执行文件”）；自定义调试器写成 `<debugger kind="GDB">路径</debugger>`；
 GDB 服务器路径是 `custom-gdb-server` 的 `executable` 属性，实参是 `PROGRAM_PARAMS`。
 
-- **RTT 日志**：CLion 不显示 RTT。调试运行时打开 `C:\Program Files\SEGGER\JLink_V980\JLinkRTTClient.exe`
-  （连 GDB 服务器的 `localhost:19021`）。
+- **RTT 日志**：CLion 本身不显示 RTT。另建一个“Shell 脚本”运行配置“RTT 日志”（解释器 `C:\Windows\System32\cmd.exe`、
+  选项 `/c`、脚本 `C:\Program Files\SEGGER\JLink_V980\JLinkRTTClient.exe`，文件 `.idea/runConfigurations/RTT.xml`），
+  再建“复合”配置“MC02 调试 + RTT”同时启动两者，RTT 显示在 CLion 的运行窗口里（2026-09-30）。
+  RTTClient 连的是 GDB 服务器的 `localhost:19021`。
+- **实时监视**：调试窗口的“实时监视”页签可以在不暂停的情况下刷新变量（例如 `ins.imu.gyro_offset_rad_s`）。
 - **断点与源码**：ELF 里的源码路径若是 `/mnt/d/...`，Windows 版 GDB 报 `No source file named D:/...`、断点打不上。
   根目录 `CMakeLists.txt` 已在 `/mnt/<盘符>/` 下构建时加 `-fdebug-prefix-map`，把路径写成 `D:/...`。
-- 右下角 `Error during python setup: Undefined info command: "pretty-printer"` 不影响调试：CubeCLT 的 GDB 不带 Python，
-  只是没有变量美化显示。
+- `Error during python setup: Undefined info command: "pretty-printer"`：CubeCLT 的 GDB 不带 Python 时出现，不影响调试；
+  换成 CLion 自带的 GDB 后消失（2026-09-30）。自带 GDB 启动时的 `A handler for the OS ABI "Windows" is not built into
+  this configuration` 警告不用管，它随后按 armv7e-m 工作。
 - 兼容版 J-Link 用 J-Link V9.80 软件可以连接和烧录（2026-09-29），没有提示升级固件。
 
 ## 12. 推送到 GitHub（已验证 2026-09-28）
@@ -520,4 +524,5 @@ git push -u origin main
 | 2026-09-28 | 10 | COD RoboCore `ebb48ed` 烧录运行，RTT 心跳正常，时间戳跨过 DWT 回绕连续 |
 | 2026-09-29 | 11.1 | CLion 嵌入式 GDB 服务器 + J-Link V9.80 + CubeCLT 1.19 的 GDB：兼容版 J-Link 连接、FreeRTOS 插件加载、烧录成功；RTTClient 收到启动日志 |
 | 2026-09-29 | 11.1（断点） | `-fdebug-prefix-map` 后 Windows 版 GDB 离线对 ELF 设 `app_main.c`、`tasks.c` 断点成功（未上板复测） |
+| 2026-09-30 | 11.1（GDB、RTT） | 换 CLion 自带 GDB 17.1 后 python 报错消失；“MC02 调试 + RTT”复合配置在 CLion 里显示 RTT 日志 |
 | 2026-09-27 | 4（apt 永久代理） | 写入 `95proxy` 后，不带 `-o` 的 `sudo apt update` 成功（7144 kB，2 s） |
