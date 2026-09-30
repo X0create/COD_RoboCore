@@ -63,48 +63,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 依赖方向从上到下：`robots` → `subsystems` → `devices` → `platform`；`algorithm`、`msgs`、`core` 可被各层使用，
 `algorithm` 是纯计算。标“（规划）”的目录还没有代码。
 
-```mermaid
-flowchart LR
-    subgraph stack["⬇️ 分层：只能从上往下调用"]
-        direction TB
-        robots["🤖 <b>robots 兵种层</b><br/>这台车怎么组装、怎么控制<br/><i>启动流程 · 任务 · 安全门<br/>config.h 参数与接线</i>"]
-        subsystems["⚙️ <b>subsystems 子系统</b><br/>一个机构或功能的完整逻辑<br/><i>惯导 ins（已有）<br/>云台 / 底盘 / 发射（规划）</i>"]
-        devices["🔌 <b>devices 设备驱动</b><br/>协议字节 ⇄ 物理量<br/><i>DJI / 达妙电机 · BMI088<br/>DR16 · VT13 · 视觉帧</i>"]
-        platform["🧩 <b>platform 外设接口</b><br/>唯一直接操作硬件的一层<br/><i>can · uart · spi · pwm<br/>adc · usb_cdc · time</i>"]
-        boards["🛠️ <b>boards 板级</b><br/>CubeMX 代码 · 链接脚本<br/><i>DM-MC02（STM32H723）<br/>C 板（规划）</i>"]
-        robots ==> subsystems ==> devices ==> platform ==> boards
-    end
-
-    subgraph shared["🔧 各层都可以用"]
-        direction TB
-        algorithm["📐 <b>algorithm</b> 纯计算<br/><i>PID · 斜坡 · 低通 · 卡尔曼<br/>四元数 EKF · 矩阵</i>"]
-        msgs["📨 <b>msgs</b> 模块间传递的数据<br/><i>imu_state · rc_state<br/>vt_rc_state · kbm_state</i>"]
-        core["🧱 <b>core</b> 基础设施<br/><i>带时间戳的话题<br/>设备看门狗 · RTT 日志</i>"]
-        tests["🧪 <b>tests/host</b> 单元测试<br/><i>假 CAN / SPI / PWM / 时钟<br/>替换 platform</i>"]
-        algorithm ~~~ msgs ~~~ core ~~~ tests
-    end
-
-    stack ~~~ shared
-
-    classDef app fill:#E3F2FD,stroke:#1E88E5,stroke-width:2px,color:#0D47A1
-    classDef sub fill:#E8F5E9,stroke:#43A047,stroke-width:2px,color:#1B5E20
-    classDef dev fill:#FFF3E0,stroke:#FB8C00,stroke-width:2px,color:#E65100
-    classDef plat fill:#F3E5F5,stroke:#8E24AA,stroke-width:2px,color:#4A148C
-    classDef board fill:#ECEFF1,stroke:#546E7A,stroke-width:2px,color:#263238
-    classDef common fill:#FFFDE7,stroke:#F9A825,stroke-width:1px,color:#5D4037
-    classDef test fill:#FCE4EC,stroke:#D81B60,stroke-width:1px,stroke-dasharray:4 3,color:#880E4F
-    class robots app
-    class subsystems sub
-    class devices dev
-    class platform plat
-    class boards board
-    class algorithm,msgs,core common
-    class tests test
-    style stack fill:#FAFAFA,stroke:#90A4AE,stroke-width:1px
-    style shared fill:#FFFFF5,stroke:#FBC02D,stroke-width:1px,stroke-dasharray:5 4
-```
-
-左边是分层，粗箭头是调用方向，只能从上往下；右边的 algorithm、msgs、core 各层都可以使用。电脑上测试时，用 `tests/host/fakes/` 替换 platform 的实现。
+![分层结构图](docs/images/architecture.svg)
 
 ```text
 COD_RoboCore/
@@ -144,8 +103,8 @@ COD_RoboCore/
 ├── tests/host/              电脑侧单元测试（Unity）
 │   └── fakes/               假 CAN / SPI / PWM / 时钟 / OS
 ├── cmake/                   交叉编译工具链、板级编译选项、警告设置
-├── tools/                   （规划）辅助脚本：新建兵种、依赖检查、链接检查
-├── docs/                    架构设计与实施计划、编码规范、开发环境、与旧模板的差异、待验证清单
+├── tools/                   gen_readme_diagrams.py（生成本页的图）；（规划）新建兵种、依赖检查
+├── docs/                    架构设计与实施计划、编码规范、开发环境、与旧模板的差异、待验证清单；images/ 放本页的图
 └── CMakePresets.json        两个预设：host-tests（电脑测试）、h723-template-debug（MC02 固件）
 ```
 
@@ -165,96 +124,11 @@ COD_RoboCore/
 
 中断只收数据并唤醒 `comm_rx`，所有协议解析都在任务里做；1 kHz 的任务里不打日志。
 
-### 一个控制周期里数据怎么流动
+![一个控制周期里的数据流](docs/images/runtime.svg)
 
-```mermaid
-flowchart TB
-    subgraph IN["🔩 硬件输入"]
-        direction LR
-        can_in["CAN1 / CAN2<br/>电机反馈"]
-        uart_in["UART5 / USART10<br/>DR16 遥控 · 图传"]
-        usb_in["USB<br/>视觉上位机"]
-    end
-    spi_in["🔩 SPI2<br/>BMI088 IMU"]
+判断“丢失 / 离线”在读取时当场做（按写入时刻算数据有多旧），不需要另外的定时器。
 
-    isr["⚡ 中断<br/>只收数据、唤醒任务<br/>不解析"]
-
-    subgraph TASKS["📥 接收与解算"]
-        direction LR
-        parse["<b>comm_rx 任务</b><br/>收到数据才运行，优先级 4<br/>交给对应设备解析<br/>校验通过才算设备在线"]
-        ins_step["<b>ins 任务</b><br/>1 kHz，优先级 5（最高）<br/>零偏标定 / 在线修正<br/>四元数 EKF · 恒温加热"]
-    end
-
-    subgraph TOPIC["📨 话题：数据 + 写入时刻"]
-        direction LR
-        rc["rc_state<br/>遥控"]
-        fb["电机反馈"]
-        imu["imu_state<br/>姿态"]
-    end
-
-    subgraph CTRL["🎮 control 任务（1 kHz，优先级 3）"]
-        direction LR
-        snap["① 读快照<br/>过期 = 没有"]
-        gate["② 安全门<br/>能不能动"]
-        subsys["③ 子系统<br/>PID 等计算"]
-        stop["④ 全车停时<br/>改写成停机动作"]
-        send["⑤ 电机组<br/>打包"]
-        snap --> gate --> subsys --> stop --> send
-    end
-
-    out["🔩 CAN 发送给电机"]
-
-    subgraph AUX["🩺 低优先级任务：只读话题"]
-        direction LR
-        daemon["daemon（100 Hz）<br/>报告设备上线 / 离线"]
-        hb["heartbeat（40 Hz）<br/>状态灯 · 蜂鸣器 · 电池 · 日志"]
-    end
-
-    IN --> isr --> TASKS
-    spi_in --> TASKS
-    TASKS --> TOPIC
-    TOPIC --> CTRL
-    TOPIC -.-> AUX
-    CTRL --> out
-
-    classDef hw fill:#ECEFF1,stroke:#546E7A,color:#263238
-    classDef isrc fill:#FFEBEE,stroke:#E53935,color:#B71C1C
-    classDef task fill:#E3F2FD,stroke:#1E88E5,color:#0D47A1
-    classDef topic fill:#FFFDE7,stroke:#F9A825,color:#5D4037
-    classDef safe fill:#FFF3E0,stroke:#FB8C00,stroke-width:2px,color:#E65100
-    classDef aux fill:#F3E5F5,stroke:#8E24AA,color:#4A148C
-    class can_in,uart_in,usb_in,spi_in,out hw
-    class isr isrc
-    class parse,ins_step,snap,subsys,send task
-    class rc,imu,fb topic
-    class gate,stop safe
-    class daemon,hb aux
-```
-
-话题里的每份数据都带着写入时刻。读取的一方规定“最多能接受多旧的数据”，超过就当作没有数据：
-遥控超过 200 ms 没更新就是“遥控丢失”，电机反馈超过 20 ms 就是“电机离线”。判断在读取时当场做，不需要另外的定时器。
-
-### 安全门：什么时候能动
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> Init: 上电
-    Init --> Safe: 启动完成
-    Safe --> Manual: 遥控在线 + IMU 就绪<br/>拨杆先到“下”，再到“中 / 上”
-    Manual --> Safe: 拨杆到“下”（急停）<br/>或遥控丢失超过 200 ms<br/>或 IMU 未就绪
-    note left of Safe
-        全车停：每个电机执行自己的停机动作
-        DJI 零力矩 / 失能，达妙阻尼
-        回到 Safe 后必须重新拨杆才能解锁
-    end note
-    note right of Manual
-        允许动作
-        解锁后 300 ms 内输出从 0 慢慢升到正常
-    end note
-```
-
-安全门只管“全车停”。某个机构自己的设备离线（例如云台电机掉线），由那个子系统自己停下，这叫“机构停”。
+![安全门状态图](docs/images/safety_gate.svg)
 
 ## 开发环境
 
