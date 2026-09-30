@@ -26,6 +26,7 @@ bool ins_init(Ins *ins, const InsConfig *cfg, ImuStateTopic *out)
 {
     *ins = (Ins){ .cfg = cfg, .out = out, .phase = INS_PHASE_CALIBRATING };
     gyro_bias_reset(&ins->calib);
+    gyro_bias_reset(&ins->still);
     quat_ekf_init(&ins->ekf, EKF_Q_QUAT, EKF_Q_BIAS, EKF_R_ACCEL);
     for (int i = 0; i < 3; i++)
     {
@@ -74,11 +75,38 @@ static InsEvent calibrate_step(Ins *ins, const Bmi088Sample *s)
     return INS_EVENT_CALIB_NOT_STILL;
 }
 
+/* 静止窗口满了：机体 z 轴均值小且平稳，就把一部分并入零偏。零偏是芯片系的，机体 z 分量对应安装旋转的第 3 行 */
+static void track_yaw_bias(Ins *ins, const float gyro_body[3])
+{
+    gyro_bias_add(&ins->still, gyro_body);
+    if (ins->still.count < INS_STILL_SAMPLES)
+    {
+        return;
+    }
+    float mean[3];
+    const GyroBiasResult r = gyro_bias_result(&ins->still, INS_STILL_SAMPLES, INS_STILL_MAX_STD,
+                                              INS_STILL_MAX_RATE, mean);
+    gyro_bias_reset(&ins->still);
+    if (r != GYRO_BIAS_OK)
+    {
+        return;
+    }
+    const float dz = INS_STILL_GAIN * mean[2];
+    const float *r_z = &ins->cfg->install_rotation[6];
+    float offset[3];
+    for (int i = 0; i < 3; i++)
+    {
+        offset[i] = ins->imu.gyro_offset_rad_s[i] + r_z[i] * dz;
+    }
+    bmi088_set_gyro_offset(&ins->imu, offset);
+}
+
 static void run_step(Ins *ins, const Bmi088Sample *s, uint64_t now_us)
 {
     ImuState st;
     float accel_body[3];
     rotate(ins->cfg->install_rotation, s->gyro_rad_s, st.gyro_rad_s);
+    track_yaw_bias(ins, st.gyro_rad_s);
     rotate(ins->cfg->install_rotation, s->accel_m_s2, accel_body);
     for (int i = 0; i < 3; i++)
     {

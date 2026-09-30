@@ -270,7 +270,7 @@ static void ins_entry(void *arg)
     }
 }
 
-/* 浮点用整数打印：毫弧度、毫摄氏度 */
+/* 浮点用整数打印：毫弧度、毫摄氏度、微弧度每秒。零偏直接读 ins 内部（单个 float 读写是原子的，只供观察在线修正） */
 static void log_imu(void)
 {
     ImuState st;
@@ -279,10 +279,13 @@ static void log_imu(void)
         RM_LOG_I("imu not ready");
         return;
     }
-    RM_LOG_I("imu yaw %d pitch %d roll %d mrad, yaw total %d mrad, %d mC",
+    const float *r_z = &ins_config.install_rotation[6];
+    const float *off = ins.imu.gyro_offset_rad_s;
+    const float bias_z = r_z[0] * off[0] + r_z[1] * off[1] + r_z[2] * off[2];
+    RM_LOG_I("imu yaw %d pitch %d roll %d mrad, yaw total %d mrad, %d mC, yaw bias %d urad/s",
              (int)(st.yaw_rad * 1000.0f), (int)(st.pitch_rad * 1000.0f),
              (int)(st.roll_rad * 1000.0f), (int)(st.yaw_total_rad * 1000.0f),
-             (int)(st.temperature_c * 1000.0f));
+             (int)(st.temperature_c * 1000.0f), (int)(bias_z * 1e6f));
 }
 
 static const char *mode_name(RobotMode mode)

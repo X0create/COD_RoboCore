@@ -7,7 +7,8 @@
  *          - 芯片坐标系用兵种配置的安装旋转转到机体系（ADR 0006），旧工程用欧拉角下标重映射；
  *          - 加速度模长接近 0 的读数当作坏帧丢弃（全零会让 EKF 除零后永久变成 NaN）；
  *          - 读失败时关加热、不发布；
- *          - EKF 用实测的更新间隔（旧工程固定 1 ms）。
+ *          - EKF 用实测的更新间隔（旧工程固定 1 ms）；
+ *          - 运行中静止时在线修正航向轴零偏（ADR 0039，见下方 INS_STILL_*）。
  *          本模块不打日志：ins_step() 返回事件，由调用它的任务记录。
  *          轮询驱动：每 1 ms 调用一次 ins_step()（ADR 0034，同旧工程；数据就绪中断以后再加）。
  */
@@ -31,6 +32,17 @@ extern "C"
 #define INS_CALIB_SAMPLES  2000u /* 1 kHz 下 2 s */
 #define INS_CALIB_MAX_STD  0.05f /* rad/s，约 3.8 倍静止噪声；碰一下（≥ 0.1 rad/s）就会拒绝 */
 #define INS_CALIB_MAX_BIAS 0.15f /* rad/s，BMI088 零偏远小于 0.1；更大说明在匀速转 */
+
+/*
+ * 运行中在线修正航向轴零偏（ADR 0039）。零偏随芯片温度变化：上电标定时加热刚开始，升到 40 °C 后零偏就不准了
+ * （2026-09-30 实测：冷态标定后静止航向漂约 0.67 °/s，热态标定约 0.006 °/s）。x、y 轴零偏 EKF 已用重力估计，
+ * 航向轴不可观测，由这里补：每 1 s 一个窗口，机体 z 轴角速度的标准差和均值都小于阈值就判为静止，
+ * 把均值的 INS_STILL_GAIN 倍并入零偏。代价：比 INS_STILL_MAX_RATE 慢、又很平稳的真实转动会被部分当成零偏。
+ */
+#define INS_STILL_SAMPLES  1000u /* 1 kHz 下 1 s */
+#define INS_STILL_MAX_STD  0.03f /* rad/s，静止噪声约 0.013 */
+#define INS_STILL_MAX_RATE 0.02f /* rad/s（约 1.1 °/s），大于冷热零偏差 0.012；均值更大当作在转 */
+#define INS_STILL_GAIN     0.1f /* 每个静止窗口修掉残余的 10%，时间常数约 10 s */
 
 typedef struct
 {
@@ -60,6 +72,7 @@ typedef struct
     Bmi088 imu;
     InsPhase phase;
     GyroBias calib;
+    GyroBias still; /* 运行中的静止检测窗口（机体系角速度） */
     QuatEkf ekf;
     Lpf2 accel_lpf[3];
     bool have_last_update;

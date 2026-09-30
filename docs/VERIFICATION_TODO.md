@@ -12,7 +12,7 @@
 | # | 验证什么 | 前提 | 操作 | 期望 | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | V1 | 第二次 DWT 回绕 | 只接 J-Link | 跑过 16 s，看 RTT 时间戳 | 在约 7.8 s、15.6 s 处都连续，不跳变不倒退 | 通过（2026-09-30，CLion + RTTClient：`alive N` 恒在 N×1000+12 ms，64–84 s 连续，其间跨过第 9、10 次回绕） |
-| V2 | FreeRTOS 任务窗口 | 同上 | 跑起来后 Halt，打开 View → FreeRTOS | 有 `imu`、`comm_rx`、`control`、`daemon`、`heartbeat`、`IDLE`、`Tmr Svc`，没有 `startup`；Stack Info 显示总大小（不再是 N/A） | 待验证 |
+| V2 | FreeRTOS 任务窗口 | 同上 | 跑起来后 Halt，打开 View → FreeRTOS | 有 `imu`、`comm_rx`、`control`、`daemon`、`heartbeat`、`IDLE`、`Tmr Svc`，没有 `startup`；Stack Info 显示总大小（不再是 N/A） | 通过（2026-09-30，CLion GDB `info threads`：IDLE、heartbeat、comm_rx、control、ins、daemon、Tmr Svc，无 startup；IMU 任务名是 `ins` 不是 `imu`。栈总大小是 Ozone 的显示项，CLion 下未看） |
 | V3 | 状态灯新节奏 | 同上 | 目测 | 绿灯每秒闪两下：先亮 50 ms，间隔约 150 ms 再亮 25 ms | 通过（2026-09-30，目测每秒闪两下） |
 | V4 | 设备清单 | 同上 | 上电看 RTT 开头 | `devices:` 下列出 `dr16 (timeout 200 ms)` | 通过（2026-09-30，列出 dm8009_1、m3508_1、vt_link、vision_link、dr16 (timeout 200 ms)） |
 | V5 | BMI088 读数与引脚 | 只接 J-Link，板子水平放稳 | 上电看 RTT | 出现 `bmi088 ready`（否则打印失败原因，说明片选 PC0 / PC3 或 SPI2 的推断有误）；`accel` 约 `0 0 9800` mm/s²（翻转板子 Z 变 -9800）；`gyro` 各轴只有几 mrad/s（零偏未标定）；转动板子时对应轴变化 | 部分通过（2026-09-30）：`bmi088 ready`，片选 / SPI 推断正确；平放 pitch 7、roll 0 mrad，说明 Z 轴朝上。固件没有打印 accel / gyro 原始值，这两项待补打印后再看 |
@@ -20,6 +20,7 @@
 | V7 | 姿态与安装方向 | 只接 J-Link | 上电静止 3 s 后，依次把板子前端（定义的 X 方向）抬起、左侧抬起、水平转动 | 抬前端 `pitch` 变为负（绕 +Y 右手为正，Y 朝左时正转是低头）、抬左侧 `roll` 变为正（绕 +X 右手为正，正转是左侧抬起）、从上往下看逆时针转 `yaw` 增大；不对就改 `robots/_template/config.h` 的 `TEMPLATE_IMU_INSTALL_ROTATION` | 待验证 |
 | V8 | 上电零偏标定 | 同上 | ① 静止上电；② 上电后 2 s 内一直轻晃板子，再放下 | ① 出现 `gyro calibrated, imu ready`；② 先出现 `gyro calibration rejected: moving` 并重试，放下后通过；标定完成前 `mode` 一直是 `safe`（IMU 未就绪） | 部分通过（2026-09-30）：两次静止上电后都进入 `imu yaw …` 输出（IMU 就绪），`mode` 保持 `safe`；`gyro calibrated` 那一行落在 RTT 丢失的时段里没看到；② 晃动拒绝未测 |
 | V9 | 静止航向漂移 | 同上，加热稳定后 | 静止放 10 分钟，记录 `yaw` | 漂移量记入本表（UniC 实测标定后约 0.02 °/s 量级）；俯仰、横滚不漂 | **冷态标定不合格、热态标定合格（2026-09-30）**：① 冷启动（标定时加热刚开始）静止 yaw 约 11.8 mrad/s（≈0.67 °/s）；② 板子已在 40 °C 时复位重标定，14–153 s 内 yaw 从 -23 到 -37 mrad，约 0.10 mrad/s（≈0.006 °/s），pitch、roll 不漂。结论：零偏随温度变化，标定须在温度稳定后做（方案待定）。UniC 同样是上电即标定，它的 0.02 °/s 实测条件未记录 |
+| V43 | 航向零偏在线修正（ADR 0039） | 只接 J-Link，室温下**冷启动** | 上电后静止放 5 分钟，记录每秒的 `yaw` 和 `yaw bias … urad/s`；再用手把板子**很慢地**水平转半圈（约 1 °/s） | ① `yaw bias` 随升温变化后稳定，稳定后 yaw 漂移 < 0.02 °/s，升温期间漂移明显小于 0.67 °/s；② 慢转时 yaw 跟着变、`yaw bias` 基本不动（均值超过 0.02 rad/s 不更新）；比这更慢的转动会被部分吸收，记录实际情况 | 待验证 |
 
 ## 接遥控器
 

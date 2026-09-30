@@ -497,7 +497,7 @@ git push -u origin main
 | `curl` 等普通命令能下载，`sudo apt` 不行 | 同上：普通命令会用 `http_proxy` 环境变量，`sudo` 执行的命令默认不会 |
 | `xxx: command not found`，而 xxx 是上一条命令的参数 | 长命令粘贴时被折成了两行，重新作为一整行粘贴 |
 | `curl: (2) no URL specified`，下一行把网址当命令报 `No such file or directory` | 同上，网址被换行拆开了。从文档代码框复制，不要从终端历史复制（终端的显示折行会混进换行） |
-| WSL 里运行任何 Windows 程序（`cmd.exe`、Git 凭据管理器、`code .`）都报 `Exec format error` | WSL 开了 systemd（`/etc/wsl.conf` 中 `systemd=true`）后，`systemd-binfmt` 重新加载时会清掉运行 `.exe` 的注册。永久修复：`echo ':WSLInterop:M::MZ::/init:PF' \| sudo tee /etc/binfmt.d/WSLInterop.conf`，再 `sudo systemctl restart systemd-binfmt`；用 `/mnt/c/Windows/System32/cmd.exe /c ver` 验证（2026-09-28 实际遇到并按此解决） |
+| WSL 里运行任何 Windows 程序（`cmd.exe`、Git 凭据管理器、`code .`）都报 `Exec format error` | WSL 开了 systemd（`/etc/wsl.conf` 中 `systemd=true`）后，`systemd-binfmt` 重新加载时会清掉运行 `.exe` 的注册。永久修复：`echo ':WSLInterop:M::MZ::/init:PF' \| sudo tee /etc/binfmt.d/WSLInterop.conf`，再 `sudo systemctl restart systemd-binfmt`；用 `/mnt/c/Windows/System32/cmd.exe /c ver` 验证（2026-09-28 实际遇到并按此解决）。2026-09-30 又出现：`WSLInterop.conf` 还在，但 `/proc/sys/fs/binfmt_misc/` 里没有 `WSLInterop`（`git push` 卡住 40 多分钟，加 `GIT_TRACE=1` 才看到凭据管理器 `Exec format error`）。临时办法：在 Windows 的 Git Bash 里推送；恢复要 `sudo systemctl restart systemd-binfmt` |
 | apt 一直显示 `Waiting for cache lock ... held by process N (unattended-upgr)` | WSL 启动后的自动安全更新不走代理，卡在下载。先用 `ps -o pid,etime,cmd --ppid N` 确认子进程是 `/usr/lib/apt/methods/https` 之类的下载器、不是 `dpkg`，再 `sudo kill -TERM <下载器 PID>`，它会自行退出并放开锁；**不要** `kill -9`，不要删锁文件（2026-09-27 实际遇到并按此解决） |
 
 ## 验证记录

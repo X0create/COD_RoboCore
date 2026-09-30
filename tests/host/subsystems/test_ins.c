@@ -1,6 +1,7 @@
 /**
  * @file    test_ins.c
- * @brief   ins 的单元测试：标定前不发布、标定通过后发布、在动时拒绝并重试、安装旋转、坏帧处理
+ * @brief   ins 的单元测试：标定前不发布、标定通过后发布、在动时拒绝并重试、安装旋转、坏帧处理、
+ *          静止时在线修正航向零偏
  * @note    BMI088 由假 SPI 的寄存器模型提供数据（fake_spi.h）
  */
 #include "subsystems/ins/ins.h"
@@ -15,6 +16,8 @@
 static const InsConfig identity = { .install_rotation = { 1, 0, 0, 0, 1, 0, 0, 0, 1 } };
 /* 芯片 x 轴朝机体 y（左）、芯片 y 轴朝机体 -x：绕 z 转 90° */
 static const InsConfig rot_z90 = { .install_rotation = { 0, -1, 0, 1, 0, 0, 0, 0, 1 } };
+/* 芯片 x 轴朝机体 z（上）：机体 x = 芯片 y，机体 y = 芯片 z，机体 z = 芯片 x */
+static const InsConfig chip_x_up = { .install_rotation = { 0, 1, 0, 0, 0, 1, 1, 0, 0 } };
 
 static Ins ins;
 static ImuStateTopic topic;
@@ -183,6 +186,62 @@ static void test_level_attitude(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-2f, 0.0f, st.roll_rad);
 }
 
+/* 标定后芯片升温、零偏变了（航向轴多出 10 LSB ≈ 0.011 rad/s）：静止 60 s 后零偏被跟上，航向不再漂 */
+static void test_still_tracks_yaw_bias(void)
+{
+    start(&identity);
+    sensor(0, 0, 0);
+    steps(INS_CALIB_SAMPLES + 1u);
+    sensor(0, 0, 10);
+    steps(60000u);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 10.0f * GYRO_LSB, ins.imu.gyro_offset_rad_s[2]);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, ins.imu.gyro_offset_rad_s[0]);
+
+    ImuState before;
+    ImuState after;
+    TEST_ASSERT_TRUE(imu_state_read(&topic, &before, IMU_STALE_MS));
+    steps(10000u);
+    TEST_ASSERT_TRUE(imu_state_read(&topic, &after, IMU_STALE_MS));
+    TEST_ASSERT_FLOAT_WITHIN(1e-3f, before.yaw_rad, after.yaw_rad); /* 10 s 内漂移 < 1 mrad */
+}
+
+/* 慢速匀速转（30 LSB ≈ 0.032 rad/s，超过 INS_STILL_MAX_RATE）：不当成零偏 */
+static void test_slow_rotation_not_absorbed(void)
+{
+    start(&identity);
+    sensor(0, 0, 0);
+    steps(INS_CALIB_SAMPLES + 1u);
+    sensor(0, 0, 30);
+    steps(30000u);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, ins.imu.gyro_offset_rad_s[2]);
+}
+
+/* 在动（角速度来回变化）：不更新零偏 */
+static void test_vibration_not_absorbed(void)
+{
+    start(&identity);
+    sensor(0, 0, 0);
+    steps(INS_CALIB_SAMPLES + 1u);
+    for (uint32_t i = 0u; i < 5000u; i++)
+    {
+        sensor(0, 0, (i % 2u) ? 60 : -40); /* 均值 10 LSB，但标准差约 0.05 rad/s */
+        steps(1u);
+    }
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, ins.imu.gyro_offset_rad_s[2]);
+}
+
+/* 修正的是机体 z 轴：芯片 x 朝上时改芯片 x 的零偏，芯片 z 不动 */
+static void test_tracks_body_z_through_install_rotation(void)
+{
+    start(&chip_x_up);
+    sensor(0, 0, 0);
+    steps(INS_CALIB_SAMPLES + 1u);
+    sensor(10, 0, 0);
+    steps(60000u);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 10.0f * GYRO_LSB, ins.imu.gyro_offset_rad_s[0]);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, ins.imu.gyro_offset_rad_s[2]);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -193,5 +252,9 @@ int main(void)
     RUN_TEST(test_bad_frames_stop_publishing);
     RUN_TEST(test_uses_measured_dt);
     RUN_TEST(test_level_attitude);
+    RUN_TEST(test_still_tracks_yaw_bias);
+    RUN_TEST(test_slow_rotation_not_absorbed);
+    RUN_TEST(test_vibration_not_absorbed);
+    RUN_TEST(test_tracks_body_z_through_install_rotation);
     return UNITY_END();
 }
