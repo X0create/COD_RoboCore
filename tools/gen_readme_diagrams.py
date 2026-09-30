@@ -92,7 +92,7 @@ class Svg:
                 f'markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" '
                 f'fill="{MUTED}"/></marker></defs>')
         OUT.mkdir(parents=True, exist_ok=True)
-        (OUT / name).write_text(head + "".join(self.parts) + "</svg>\n", encoding="utf-8")
+        (OUT / name).write_text(head + "".join(self.parts) + "</svg>\n", encoding="utf-8", newline="\n")
 
 
 def architecture():
