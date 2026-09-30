@@ -17,6 +17,13 @@ set(RM_BOARD "" CACHE STRING "主控板：dm_mc02；留空表示只构建电脑�
 if(RM_BOARD)
     enable_language(ASM)           # 启动文件 startup_*.s
     include(board-${RM_BOARD})     # 芯片编译选项，必须在创建任何目标之前
+
+    # 在 WSL 里构建、在 Windows 上调试（CLion 用 Windows 版 GDB、Ozone）时，把调试信息里的
+    # /mnt/<盘符>/ 改写成 <盘符>:/，调试器才找得到源码、打得上断点。只改调试信息，不影响 __FILE__
+    if(CMAKE_SOURCE_DIR MATCHES "^/mnt/([a-z])/")
+        string(TOUPPER "${CMAKE_MATCH_1}" rm_drive)
+        add_compile_options(-fdebug-prefix-map=/mnt/${CMAKE_MATCH_1}/=${rm_drive}:/)
+    endif()
 endif()
 
 add_subdirectory(platform)

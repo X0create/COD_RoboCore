@@ -405,6 +405,8 @@ RTT 之前，或者板上还是旧程序时，程序跑起来后就会停止。
 1. WSL 中构建：在仓库根目录 `cmake --preset h723-template-debug && cmake --build --preset h723-template-debug`。
 2. Ozone 打开 `MC02_H723.jdebug`。2026-09-28 起它的 `OnProjectLoad` 已改为默认打开 COD RoboCore 的 ELF，
    并加了 `Project.AddPathSubstitute ("/mnt/d", "D:");`（ELF 里记的是 `/mnt/d/...`，不加则源码窗口找不到文件）。
+   2026-09-29 起根目录 `CMakeLists.txt` 用 `-fdebug-prefix-map` 把调试信息里的 `/mnt/<盘符>/` 直接写成 `<盘符>:/`，
+   这行映射已用不上，留着无害。
    改之前的原文件备份为 `MC02_H723.jdebug.bak-2026-09-28`；要调试 UniC 时把文件里注释掉的那行 `File.Open` 换回来。
 3. **Download & Reset → Continue**，**View → Terminal** 看 RTT。
 
@@ -433,6 +435,38 @@ RTT 控制块在运行时才写好。地址应与 ELF 中 `_SEGGER_RTT` 一致�
 
 交叉编译器由 `cmake/toolchain-arm-gcc.cmake` 在 `~/tools/arm-gnu-toolchain-*/bin` 中自动查找，CLion 不需要额外设置环境变量。
 构建目录与命令行共用（`build/host`、`build/h723-template-debug`）。
+
+### 11.1 在 CLion 里烧录和调试（J-Link，2026-09-29 烧录已验证，断点见下）
+
+原理：CLion 在 **Windows 上**启动 J-Link 的 GDB 服务器（连板子），再用 **Windows 版** `arm-none-eabi-gdb` 连
+`localhost:2331`。WSL 里的 GDB 用不了：“自定义 GDB”一栏填 `/home/...` 会被 CLion 改成 `\home\...`，
+Ubuntu 自带的 `/usr/bin/gdb` 又只认电脑程序。调试时要先关掉 Ozone（J-Link 同一时间只能被一个程序占用）。
+
+**运行 → 编辑配置… → `+` → 嵌入式 GDB 服务器**：
+
+| 字段 | 填写 |
+| --- | --- |
+| 目标 / 可执行的二进制文件 | `COD_RoboCore` |
+| 调试器 | 自定义 GDB 可执行文件：STM32CubeCLT 自带的 `…\STM32CubeCLT_1.19.0\GNU-tools-for-STM32inrm-none-eabi-gdb.exe` |
+| 上传可执行文件 | 如果已更新 |
+| 'target remote' 实参 | `localhost:2331` |
+| GDB 服务器 | `C:\Program Files\SEGGER\JLink_V980\JLinkGDBServerCL.exe` |
+| GDB 服务器实参 | `-select USB -device STM32H723VG -if SWD -speed 1000 -port 2331 -nogui -singlerun -rtos GDBServer/RTOSPlugin_FreeRTOS` |
+| 重置命令 | `monitor reset`（下载后） |
+| 执行前 | 构建 |
+
+配置保存在 `.idea/runConfigurations/MC02_J_Link.xml`（`.idea/` 不进 Git）。手写这个文件时注意：
+`CONFIG_NAME` 必须是 CLion 里的 CMake 配置全名 `h723-template-debug - h723-template-debug`
+（写错时报“未指定可执行文件”）；自定义调试器写成 `<debugger kind="GDB">路径</debugger>`；
+GDB 服务器路径是 `custom-gdb-server` 的 `executable` 属性，实参是 `PROGRAM_PARAMS`。
+
+- **RTT 日志**：CLion 不显示 RTT。调试运行时打开 `C:\Program Files\SEGGER\JLink_V980\JLinkRTTClient.exe`
+  （连 GDB 服务器的 `localhost:19021`）。
+- **断点与源码**：ELF 里的源码路径若是 `/mnt/d/...`，Windows 版 GDB 报 `No source file named D:/...`、断点打不上。
+  根目录 `CMakeLists.txt` 已在 `/mnt/<盘符>/` 下构建时加 `-fdebug-prefix-map`，把路径写成 `D:/...`。
+- 右下角 `Error during python setup: Undefined info command: "pretty-printer"` 不影响调试：CubeCLT 的 GDB 不带 Python，
+  只是没有变量美化显示。
+- 兼容版 J-Link 用 J-Link V9.80 软件可以连接和烧录（2026-09-29），没有提示升级固件。
 
 ## 12. 推送到 GitHub（已验证 2026-09-28）
 
@@ -484,4 +518,6 @@ git push -u origin main
 | 2026-09-28 | 12 | 修复 WSL interop 后，GCM 浏览器登录，`git push -u origin main` 成功（24 个提交），远程与本地 `940dbf0` 一致 |
 | 2026-09-28 | 11 | CLion 2026.2 + WSL 工具链：Rebuild 固件 81 个文件，FLASH 89904 B；All CTest 2/2 通过 |
 | 2026-09-28 | 10 | COD RoboCore `ebb48ed` 烧录运行，RTT 心跳正常，时间戳跨过 DWT 回绕连续 |
+| 2026-09-29 | 11.1 | CLion 嵌入式 GDB 服务器 + J-Link V9.80 + CubeCLT 1.19 的 GDB：兼容版 J-Link 连接、FreeRTOS 插件加载、烧录成功；RTTClient 收到启动日志 |
+| 2026-09-29 | 11.1（断点） | `-fdebug-prefix-map` 后 Windows 版 GDB 离线对 ELF 设 `app_main.c`、`tasks.c` 断点成功（未上板复测） |
 | 2026-09-27 | 4（apt 永久代理） | 写入 `95proxy` 后，不带 `-o` 的 `sudo apt update` 成功（7144 kB，2 s） |
