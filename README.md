@@ -48,13 +48,38 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 - 每个设计决定都记在 ADR 表里（`docs/ARCHITECTURE.md`），与旧模板的每处不同都写明原因和验证层级。
 - 严格区分“编译通过”“电脑测试通过”“上板验证”“台架实测”，未上板的结论不写成事实。
 
+## 已支持的功能
+
+验证状态：✅ 已在 DM-MC02 上验证　🧪 编译 + 电脑单元测试通过、还没上板　📝 规划中。每一项的上板步骤和结果见 `docs/VERIFICATION_TODO.md`。
+
+| 类别 | 功能 | 状态 | 说明 |
+| --- | --- | --- | --- |
+| 外设接口 | CAN / CAN FD（FDCAN1–3） | ✅ | 收 M3508 反馈、拔线离线与恢复已验证；FD 总线待接达妙电机 |
+| | SPI（BMI088） | ✅ | |
+| | PWM：IMU 加热 · 蜂鸣器 | ✅ · 🧪 | 加热闭环已稳在约 40 °C；蜂鸣器待听 |
+| | ADC：电池电压 | ✅ | 读数正常；分压比 11 待万用表核对 |
+| | 串口（循环 DMA） | 🧪 | 等接 DR16 / 图传 |
+| | USB 虚拟串口 | 🧪 | |
+| | 64 位微秒时钟 · RTT 日志 · 状态灯 | ✅ | 时钟跨过多次 32 位回绕仍连续 |
+| 电机 | DJI M3508 / M2006 / GM6020 | ✅ 反馈 · 🧪 控制 | 让电机转起来的验证要先把电机固定在台架上 |
+| | 达妙（MIT 模式，CAN FD） | 🧪 | |
+| 传感与遥控 | BMI088 + 四元数 EKF + 零偏在线修正 | ✅ | 热态静止航向约 0.006 °/s；冷启动待测 |
+| | DR16 遥控器 · VT13 图传链路 · 图传键鼠 | 🧪 | |
+| 通信 | 视觉 USB 帧层（0x5A） | 🧪 | 消息内容等视觉组协议 |
+| | 裁判系统 | 🧪 帧检查 · 📝 解析 | 解析等官方 V2.0.0 文档 |
+| 安全 | 安全门（全车停）、每个电机的停机动作 | 🧪 | 上板只看过“一直安全停机”；急停、遥控丢失的停机时间要台架实测 |
+| 算法 | PID · 斜坡 · 低通 · 卡尔曼 · 矩阵 | 🧪 | EKF 用到的部分已随 IMU 上板 |
+| | RLS（功率模型辨识） | 🧪 | 暂未接入 |
+| 子系统 | 云台 · 底盘（含功率控制） · 发射 · 轮腿 | 📝 | 见下方路线图 |
+| 主控 | 大疆 C 板（STM32F407） | 📝 | |
+
 ## 文档
 
 | 文档 | 内容 |
 | --- | --- |
 | `docs/ARCHITECTURE.md` | 架构设计：分层、核心机制、运行时契约、决策记录（ADR），以及**实施计划**和硬件、协议事实表 |
 | `docs/CODING_STANDARD.md` | 编码规范：命名、格式、注释、错误处理、安全相关代码，“必须 / 应该 / 可以”三级 |
-| `docs/DEV_ENVIRONMENT.md` | 开发环境搭建：WSL、工具链、Ozone 烧录调试、CLion，每步带验证状态 |
+| `docs/DEV_ENVIRONMENT.md` | 开发环境搭建：WSL、工具链、Ozone 烧录调试、CLion，每步带验证状态；推送到 GitHub 和 Gitee |
 | `docs/CHANGES_FROM_COD_H7_TEMPLATE.md` | 与 COD-H7-Template 的差异：新旧对照、原因和验证层级 |
 | `docs/VERIFICATION_TODO.md` | 待验证清单：代码已写好、需要上板或台架确认的项目，每项写明接线、操作和期望 |
 
@@ -99,7 +124,7 @@ COD_RoboCore/
 │   └── gimbal/ chassis/ …   （规划）云台、底盘、发射、轮腿
 ├── robots/                  兵种层
 │   ├── common/              启动流程 app_main、接收任务 comm_rx、控制任务、守护任务、安全门
-│   └── _template/           样板兵种：config.h（参数、接线、停机动作）+ robot.c（组装与任务）
+│   └── _template/           样板兵种：config.h（固定参数）+ robot.c（电机配置、组装、控制周期）
 ├── tests/host/              电脑侧单元测试（Unity）
 │   └── fakes/               假 CAN / SPI / PWM / 时钟 / OS
 ├── cmake/                   交叉编译工具链、板级编译选项、警告设置
@@ -111,6 +136,8 @@ COD_RoboCore/
 各层目录（platform、core、algorithm……）都有自己的 `README.md`，说明这一层放什么、不放什么。
 
 ## 运行时怎么工作
+
+![启动顺序](docs/images/startup.svg)
 
 ### 任务
 
@@ -130,31 +157,69 @@ COD_RoboCore/
 
 ![安全门状态图](docs/images/safety_gate.svg)
 
-## 开发环境
+## 快速开始
+
+**需要的工具**（安装步骤和验证记录见 `docs/DEV_ENVIRONMENT.md`）：
 
 | 工具 | 版本 |
 | --- | --- |
 | 系统 | Windows + WSL 2 + Ubuntu 24.04 |
 | 交叉编译器 | Arm GNU Toolchain 15.2.Rel1（`arm-none-eabi-gcc` 15.2.1） |
 | 构建 | CMake ≥ 3.25、Ninja |
-| 代码检查 | clang-format 18、clang-tidy 18、cppcheck 2.13 |
-| 测试 | gcc（主机）、Ruby 3.2（CMock） |
-| 调试 | SEGGER J-Link + Ozone（Windows 端，烧录与实时变量）；CLion（编辑、构建、断点） |
-| 板级配置 | STM32CubeMX |
+| 测试 | gcc + Unity（电脑侧），外设用手写的假实现替换 |
+| 代码格式 | clang-format 18（已启用）；clang-tidy、cppcheck（规划） |
+| 烧录与调试 | SEGGER J-Link + Ozone（烧录、RTT 日志、实时看变量）；CLion（编辑、构建、断点） |
+| 板级配置 | STM32CubeMX 6.18（改完按 `boards/dm_mc02_h723/REGEN_CHECKLIST.md` 核对） |
 
-电脑侧单元测试（WSL，仓库根目录）：
+**1. 电脑上跑单元测试**（WSL，仓库根目录）：
 
 ```bash
 cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset host-tests
 ```
 
-DM-MC02 固件（WSL，仓库根目录；需要 `ARM_TOOLCHAIN_BIN` 或 PATH 里有 `arm-none-eabi-gcc`）：
+**2. 编译 DM-MC02 固件**（WSL，仓库根目录；`~/tools/arm-gnu-toolchain-*` 下的编译器会被自动找到）：
 
 ```bash
 cmake --preset h723-template-debug && cmake --build --preset h723-template-debug
 ```
 
-输出 `build/h723-template-debug/COD_RoboCore.elf`。烧录、调试和 CLion 的用法见 `docs/DEV_ENVIRONMENT.md` 第 10、11 节。
+输出 `build/h723-template-debug/COD_RoboCore.elf`，编译必须 0 警告。
+
+**3. 烧录并看日志**：Ozone 打开这个 ELF → **Download & Reset** → F5 运行 → **View → Terminal** 看 RTT 日志。
+上电后约 2 s 内不要动板子（陀螺零偏标定）。看到 `startup done`、每秒一行 `alive N, mode safe` 就是跑起来了。
+
+> 目前请用 Ozone 烧录：经 J-Link GDB 服务器（CLion）烧录会显示成功但实际没写入，原因还在查，见 `docs/DEV_ENVIRONMENT.md` 11.2 节。
+
+## 新建一个兵种
+
+1. 复制 `robots/_template/` 为 `robots/<兵种名>/`。
+2. 改 `config.h`：PID 参数、解锁用哪个拨杆、IMU 安装方向、电池参数等固定参数。
+3. 改 `robot.c`：电机配置（CAN 总线、ID、停机动作）；`robot_init()` 里登记设备和子系统；`robot_control_step()` 里写每个控制周期做什么。
+4. 编译时选这个兵种：`cmake --preset h723-template-debug -DRM_ROBOT=<兵种名>`。
+
+分层规则、命名和安全相关代码的写法见 `docs/CODING_STANDARD.md`。
+
+## 注意事项
+
+- **样板固件会给电机发指令。** 未解锁时持续发零电流，解锁后按遥控转动。接电机前先把电机固定在台架上、输出轴不带负载、断电开关放在手边；只看反馈时手扶即可，让电机转起来时不行。
+- **不要随手暂停正在控制电机的程序。** 调试器暂停后 CAN 指令停发，电调怎么反应还没有实测。
+- **未上板的功能不要直接上车。** 以上表的验证状态为准，“🧪”只代表电脑测试通过。
+
+## 路线图
+
+| 阶段 | 内容 | 状态 |
+| --- | --- | --- |
+| 0 骨架 | 目录、构建、CubeMX 工程、时钟、日志、单元测试 | ✅ 完成并上板 |
+| 旧模板移植 | COD-H7-Template 的电机、遥控、IMU、图传、视觉、电池等全部按新架构重写 | 🧪 代码完成（裁判系统等文档），上板验证进行中 |
+| 1 最小完整链路 | 一台电机 + 遥控 + 安全停机，停机时间台架实测；硬件看门狗、故障记录、指令层 | 进行中 |
+| 2 C 板移植 | `platform/stm32f4`，跑同一条最小链路 | 📝 |
+| 3 设备层补全 | 电机停发后的行为实测、分类发送队列 | 📝 |
+| 4 姿态 + 云台 | 云台控制、`GimbalState` | 📝 |
+| 5 步兵整车 | 底盘（功率控制）、发射（热量、卡弹）、裁判系统、键鼠、UI、自瞄通信 | 📝 |
+| 6 参数存储 | Flash 双区保存标定值 | 📝 |
+| 7–9 | 轮腿、多板 / 哨兵、工程 | 📝 |
+
+每个阶段的清单和验收标准见 `docs/ARCHITECTURE.md` 的“实施计划”。
 
 ## 仓库约定
 

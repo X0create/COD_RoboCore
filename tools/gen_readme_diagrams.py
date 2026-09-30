@@ -110,7 +110,7 @@ def architecture():
         ("platform", "外设接口", "唯一直接操作硬件的一层", VIOLET,
          ["can", "uart", "spi", "pwm", "adc", "usb_cdc", "time", "status_led"]),
         ("boards", "板级", "CubeMX 生成代码、链接脚本", GRAY,
-         ["DM-MC02 · STM32H723", "*C 板 · STM32F407"]),
+         ["DM-MC02 · STM32H723", "*C 板 · STM32F407", "HAL", "FreeRTOS", "CMSIS", "USB Device"]),
     ]
     x0, x1, y, rh, gap = 24, 640, 74, 66, 14
     for i, (name, cn, role, color, items) in enumerate(layers):
@@ -278,8 +278,49 @@ def safety_gate():
     s.save("safety_gate.svg")
 
 
+def startup():
+    W, H = 960, 330
+    s = Svg(W, H, "上电后按什么顺序启动")
+    s.text(24, 54, "app_main 里任何一步失败都停在 halt_on_init_failure()，接上调试器就能看到停在哪。⑧ 之前安全门一直是 Init，不能解锁。", 12.5, INK2)
+
+    lanes = [
+        ("app_main", "调度器启动前，单线程", BLUE,
+         [("① 时钟", "DWT 计数器自检"), ("② 日志", "RTT 初始化"),
+          ("③ robot_init", "组装设备与子系统"), ("④ 创建任务", "全部静态分配"),
+          ("⑤ 启动调度器", "交给 FreeRTOS")]),
+        ("startup 任务", "调度器启动后运行一次", AQUA,
+         [("⑥ 打开 CAN", "按订阅配置滤波"), ("⑦ 打开串口 / USB", "登记过的才打开"),
+          ("⑧ robot_start", "允许解锁"), ("⑨ 删除自己", "“startup done”")]),
+        ("周期任务", "各自按周期运行", VIOLET,
+         [("ins", "上电静止标定约 2 s"), ("comm_rx", "有数据就解析"),
+          ("control", "1 kHz 控制"), ("daemon · heartbeat", "上下线报告 · 灯与日志")]),
+    ]
+    y, lh, lx, bx = 74, 70, 24, 196
+    bw_total = W - 24 - bx
+    for li, (name, sub_t, color, steps) in enumerate(lanes):
+        s.rect(lx, y, W - 48, lh, tint(color, 0.06), tint(color, 0.3))
+        s.rect(lx, y, 6, lh, color, color, rx=3)
+        s.text(lx + 18, y + 30, name, 14, INK, bold=True)
+        s.text(lx + 18, y + 50, sub_t, 11.5, INK2)
+        n = len(steps)
+        gap = 22
+        bw = (bw_total - 12 - gap * (n - 1)) / n
+        for i, (a, b) in enumerate(steps):
+            x = bx + i * (bw + gap)
+            s.rect(x, y + 11, bw, lh - 22, "#ffffff", tint(color, 0.5))
+            s.text(x + 12, y + 32, a, 13, INK, bold=True)
+            s.text(x + 12, y + 50, b, 11.5, INK2)
+            if i < n - 1:
+                s.line(x + bw + 2, y + lh / 2, x + bw + gap - 2, y + lh / 2)
+        if li < len(lanes) - 1:
+            s.line(lx + 60, y + lh + 1, lx + 60, y + lh + 17)
+        y += lh + 18
+    s.save("startup.svg")
+
+
 if __name__ == "__main__":
     architecture()
     runtime()
     safety_gate()
+    startup()
     print("written:", ", ".join(p.name for p in sorted(OUT.glob("*.svg"))))
