@@ -131,41 +131,41 @@ static void heat(int n, float temperature_c)
 }
 
 /*
- * UniC 参数：每 100 次算一次；kp 0.05 / °C，ki 每次 0.00025 / °C，上限 25%。
- * 低 1 °C：第一次 0.05 + 0.00025 = 0.05025；低 20 °C 截到 0.25
+ * 本板实测参数（ADR 0042）：每 1280 次算一次；kp 0.01 / °C，ki 每次 0.00128 / °C，上限 8%。
+ * 低 1 °C：第一次 0.01 + 0.00128 = 0.01128，第二次 0.01 + 0.00256；低 20 °C 截到 0.08
  */
-static void test_heater_unic_params(void)
+static void test_heater_params(void)
 {
     TEST_ASSERT_EQUAL_INT(BMI088_OK, bmi088_init(&imu));
-    heat(99, 39.0f);
+    heat(1279, 39.0f);
     TEST_ASSERT_EQUAL_UINT(0u, fake_pwm_set_count(PWM_IMU_HEATER));
     heat(1, 39.0f);
     TEST_ASSERT_EQUAL_UINT(1u, fake_pwm_set_count(PWM_IMU_HEATER));
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.05025f, fake_pwm_duty(PWM_IMU_HEATER));
-    heat(100, 39.0f);
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0505f, fake_pwm_duty(PWM_IMU_HEATER)); /* 积分在累加 */
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.01128f, fake_pwm_duty(PWM_IMU_HEATER));
+    heat(1280, 39.0f);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.01256f, fake_pwm_duty(PWM_IMU_HEATER)); /* 积分在累加 */
 
-    heat(100, 20.0f);
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.25f, fake_pwm_duty(PWM_IMU_HEATER));
+    heat(1280, 20.0f);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.08f, fake_pwm_duty(PWM_IMU_HEATER));
 }
 
-/* 长时间低 0.1 °C：占空比不超过 25%；抗积分饱和（ADR 0040）使积分只攒到“比例 + 积分 = 上限”为止，
- * 即 (0.25 − 0.005) / ki = 980，而不是积分限幅 1000 */
+/* 长时间低 0.1 °C：占空比不超过 8%；条件积分（ADR 0040）使积分只攒到“比例 + 积分 = 上限”，
+ * 即 (0.08 − 0.001) / 0.00128 ≈ 61.7，而不是积分限幅 62.5 */
 static void test_heater_integral_bounded(void)
 {
     TEST_ASSERT_EQUAL_INT(BMI088_OK, bmi088_init(&imu));
-    heat(100 * 20000, 39.9f);
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.25f, fake_pwm_duty(PWM_IMU_HEATER));
-    TEST_ASSERT_FLOAT_WITHIN(1e-1f, 980.0f, imu.heater_pid.integral);
+    heat(1280 * 2000, 39.9f);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.08f, fake_pwm_duty(PWM_IMU_HEATER));
+    TEST_ASSERT_FLOAT_WITHIN(1e-2f, 61.72f, imu.heater_pid.integral);
 }
 
-/* 冷启动预热后到达目标：积分没有攒满，过了 40 °C 占空比马上降下来（旧行为会顶在 25% 很久，造成过冲） */
+/* 冷启动预热后到达目标：积分没有攒满，过了 40 °C 占空比马上降下来 */
 static void test_heater_no_windup_after_warmup(void)
 {
     TEST_ASSERT_EQUAL_INT(BMI088_OK, bmi088_init(&imu));
-    heat(100 * 600, 25.0f); /* 冷态 60 s，比例项一直饱和 */
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.25f, fake_pwm_duty(PWM_IMU_HEATER));
-    heat(100, 40.5f); /* 刚过目标 */
+    heat(1280 * 50, 25.0f); /* 冷态约 64 s，比例项一直饱和 */
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.08f, fake_pwm_duty(PWM_IMU_HEATER));
+    heat(1280, 40.5f); /* 刚过目标 */
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, fake_pwm_duty(PWM_IMU_HEATER));
 }
 
@@ -173,7 +173,7 @@ static void test_heater_no_windup_after_warmup(void)
 static void test_heater_overtemperature_gives_zero_duty(void)
 {
     TEST_ASSERT_EQUAL_INT(BMI088_OK, bmi088_init(&imu));
-    heat(100, 45.0f);
+    heat(1280, 45.0f);
     TEST_ASSERT_EQUAL_UINT(1u, fake_pwm_set_count(PWM_IMU_HEATER));
     TEST_ASSERT_EQUAL_FLOAT(0.0f, fake_pwm_duty(PWM_IMU_HEATER));
 }
@@ -182,14 +182,14 @@ static void test_heater_overtemperature_gives_zero_duty(void)
 static void test_heater_off(void)
 {
     TEST_ASSERT_EQUAL_INT(BMI088_OK, bmi088_init(&imu));
-    heat(100 * 3000, 39.9f); /* 稳态附近 5 分钟，积分已攒起来 */
+    heat(1280 * 300, 39.9f); /* 稳态附近约 6 分钟，积分已攒起来 */
     const float integral = imu.heater_pid.integral;
     const float duty = fake_pwm_duty(PWM_IMU_HEATER);
-    TEST_ASSERT_TRUE(duty > 0.05f);
+    TEST_ASSERT_TRUE(duty > 0.03f);
     bmi088_heater_off(&imu);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, fake_pwm_duty(PWM_IMU_HEATER));
     TEST_ASSERT_EQUAL_FLOAT(integral, imu.heater_pid.integral);
-    heat(100, 39.9f);
+    heat(1280, 39.9f);
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, duty, fake_pwm_duty(PWM_IMU_HEATER)); /* 回到原来的占空比 */
 }
 
@@ -203,7 +203,7 @@ int main(void)
     RUN_TEST(test_negative_temperature_code);
     RUN_TEST(test_bad_gyro_id_invalidates_frame);
     RUN_TEST(test_gyro_offset_subtracted);
-    RUN_TEST(test_heater_unic_params);
+    RUN_TEST(test_heater_params);
     RUN_TEST(test_heater_integral_bounded);
     RUN_TEST(test_heater_no_windup_after_warmup);
     RUN_TEST(test_heater_overtemperature_gives_zero_duty);

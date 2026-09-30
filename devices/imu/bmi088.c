@@ -42,19 +42,24 @@
 #define TEMP_OFFSET_C           23.0f
 
 /*
- * ---- 加热（UniC 在同款 MC02 上实测的参数，ADR 0033）----
- * 加热片每 1% 占空比约换来 0.28 °C；旧工程 10% 上限、积分不起作用，到不了 40 °C。
- * UniC 把上限提到 25%、打开积分，实测稳态 40.000–40.125 °C、占空比约 16.4%（UniC `imu-heater-authority`）：
- * - 上限 25%；kp = 上限 / 5 °C（误差 5 °C 时比例项刚好饱和）；ki = 上限 / 100，单位 1 / (°C·s)；
- * - 每 100 ms 算一次（BMI088 温度寄存器本身更新就慢）。
- * 本模板 PID 不带 dt（ADR 0029），ki 乘以周期换成每次的增益；积分限幅取“积分项最多等于上限”。
- * UniC 用反算法抗积分饱和；本模板 2026-09-30 起用条件积分（ADR 0040），冷态预热时积分不会攒满。
+ * ---- 加热（2026-09-30 本板实测后重定，ADR 0042；此前照搬 UniC：上限 25%、kp 0.05/°C、每 100 ms 一次）----
+ * 实测（docs/data/heater_2026-09-30.csv，电池供电）：
+ * - 稳态只要约 2% 占空比；25% 时加热片附近每秒升温约 24 °C，芯片读数跟随的时间常数约 3 s；
+ * - BMI088 温度寄存器约 1.28 s 才更新一次，分辨率 0.125 °C。
+ * 所以 UniC 的参数在这块板上太猛：冷启动冲到约 46 °C，稳定后在 38–41 °C 来回摆（上板与模型一致）。
+ * 按实测拟合的三节点热模型（tools/heater_model.py）选参：
+ * - 每 1280 ms 算一次，和温度更新同步（更快只会对着旧读数反复积分）；
+ * - 上限 8%：环境 25 °C 冷启动到 39.5 °C 约 10–20 s，峰值约 40.2 °C；
+ * - kp 0.01 / °C，积分时间 10 s（ki = kp × 周期 / 10 s），加热功率 ±30% 时模型中过冲都不超过 1.4 °C。
+ * 本模板 PID 不带 dt（ADR 0029），ki 已换成每次的增益；积分限幅取“积分项最多等于上限”；条件积分见 ADR 0040。
  */
-#define HEATER_PERIOD_MS 100u
-#define HEATER_DUTY_CAP  0.25f
-#define HEATER_KI_STEP   (HEATER_DUTY_CAP / 100.0f * ((float)HEATER_PERIOD_MS / 1000.0f))
+#define HEATER_PERIOD_MS 1280u
+#define HEATER_DUTY_CAP  0.08f
+#define HEATER_KP        0.01f /* 每 °C */
+#define HEATER_TI_S      10.0f
+#define HEATER_KI_STEP   (HEATER_KP * ((float)HEATER_PERIOD_MS / 1000.0f) / HEATER_TI_S)
 #define HEATER_PID_PARAM                                                                           \
-    ((PidParam){ .kp = HEATER_DUTY_CAP / 5.0f,                                                     \
+    ((PidParam){ .kp = HEATER_KP,                                                                  \
                  .ki = HEATER_KI_STEP,                                                             \
                  .integral_limit = HEATER_DUTY_CAP / HEATER_KI_STEP,                               \
                  .output_limit = HEATER_DUTY_CAP })

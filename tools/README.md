@@ -2,7 +2,8 @@
 
 已有：
 
-- `gen_readme_diagrams.py`：生成 README 里的三张结构图（`docs/images/*.svg`）。改图改这个脚本再运行，不要手改 SVG。
+- `gen_readme_diagrams.py`：生成 README 里的结构图（`docs/images/*.svg`）。改图改这个脚本再运行，不要手改 SVG。
+- `heater_model.py`：用上板数据（`docs/data/heater_2026-09-30.csv`）拟合 IMU 加热的热模型，并在模型上比较加热参数（ADR 0042）。
 
 规划中的辅助脚本与配置，例如：
 
