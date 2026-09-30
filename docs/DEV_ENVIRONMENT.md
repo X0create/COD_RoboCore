@@ -497,7 +497,7 @@ RTT 控制块、变量地址都是旧版的内存布局，所以 CLion 的 RTT �
 - **判断板上是不是新固件**：RTT 里有没有新加的字样；或 GDB `p _SEGGER_RTT.acID` 应为 `"SEGGER RTT"`（地址取自当前 ELF）。
 - **目前做法**：烧录用 Ozone；CLion 只连接调试（Segger 配置文件的下载选“从不”）、看实时监视和 RTT。
 
-## 12. 推送到 GitHub（已验证 2026-09-28）
+## 12. 推送到 GitHub 和 Gitee（GitHub 已验证 2026-09-28，Gitee 2026-09-30）
 
 仓库：<https://github.com/X0create/COD_RoboCore>（公开）。以下设置只写在本仓库的 `.git/config`，不影响其他仓库：
 
@@ -514,6 +514,9 @@ git push -u origin main
 - 用隐私邮箱是为了公开仓库时不暴露真实邮箱；GitHub 的 Emails 设置里可以再勾选
   “Block command line pushes that expose my email”，用了真实邮箱的提交会被拒绝推送。
 - GCM 是 Windows 程序，需要 WSL 能运行 `.exe`（见常见问题中的 `Exec format error`）。
+- **Gitee 镜像**（2026-09-30）：<https://gitee.com/Xalve/COD_RoboCore>（公开），远程名 `gitee`（`git remote add gitee https://gitee.com/Xalve/COD_RoboCore.git`），
+  首次推送 `main` 全部历史成功。`main` 的上游仍是 `origin/main`。以后用 Git Bash 运行 `build/push.sh`，依次推 `origin` 和 `gitee`
+  （`build/` 不进 Git，脚本内容：先查新提交里的敏感词和作者邮箱，再普通推送，不强制）。
 
 ## 常见问题
 
