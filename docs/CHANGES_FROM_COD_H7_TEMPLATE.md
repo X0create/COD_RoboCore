@@ -9,7 +9,7 @@
 
 ## 已完成
 
-### 板级配置（`boards/dm_mc02_h723/dm_mc02.ioc`）
+### 板级配置（`06_boards/dm_mc02_h723/dm_mc02.ioc`）
 
 | 日期 | 项目 | COD-H7-Template | 本模板 | 原因 | 验证 |
 | --- | --- | --- | --- | --- | --- |
@@ -30,7 +30,7 @@
 
 | 日期 | 项目 | COD-H7-Template | 本模板 | 原因 | 验证 |
 | --- | --- | --- | --- | --- | --- |
-| 2026-09-28 | CRC8 / CRC16 | `Algorithm/CRC.c`：`Get_/Verify_/Append_CRC*_Check_Sum`，查表数组对外可见；校验函数检查空指针和长度（长度 ≤ 2 返回 false） | `core/util/crc`：`crc8_calc/append/verify`、`crc16_*`，算法和查表数组不变（表是照抄的），数组改为文件内私有；长度用 `size_t`；不再检查空指针和长度，帧长度由协议解析在收帧时检查一次 | 边界检查一次（CODING_STANDARD 第 2 节）；旧的裁判系统解析在 CRC 前不查长度，靠 CRC 函数兜底，新解析改为先查长度 | 主机测试：逐位参考实现核对两张表全部 256 项，CRC16 与 CRC-16/MCRF4XX 公布校验值 0x6F91 一致 |
+| 2026-09-28 | CRC8 / CRC16 | `Algorithm/CRC.c`：`Get_/Verify_/Append_CRC*_Check_Sum`，查表数组对外可见；校验函数检查空指针和长度（长度 ≤ 2 返回 false） | `04_core/util/crc`：`crc8_calc/append/verify`、`crc16_*`，算法和查表数组不变（表是照抄的），数组改为文件内私有；长度用 `size_t`；不再检查空指针和长度，帧长度由协议解析在收帧时检查一次 | 边界检查一次（CODING_STANDARD 第 2 节）；旧的裁判系统解析在 CRC 前不查长度，靠 CRC 函数兜底，新解析改为先查长度 | 主机测试：逐位参考实现核对两张表全部 256 项，CRC16 与 CRC-16/MCRF4XX 公布校验值 0x6F91 一致 |
 | 2026-09-28 | 时间基准 | `bsp_dwt.c`：DWT 计数 | `rm_time_now_us()`：DWT 先解锁（M7 的 LAR 软件锁），再扩展成 64 位微秒、不回绕；启动时自检计数器在走 | 全工程唯一时间源（ADR 0020）；锁住时写 DWT 会被悄悄丢弃 | 硬件：2026-09-28 跨过第一次回绕连续；扩展逻辑主机测试 |
 | 2026-09-28 | 日志 | 无统一日志；调试靠 UART7 发 VOFA | SEGGER RTT（V8.58.0）日志，E/W/I/D 四级，每行带毫秒时间戳，整行一次写入 | 不占串口，多任务打日志不串行 | 硬件：2026-09-28 RTT 输出正常 |
 | 2026-09-28 | CAN 收发 | `bsp_can.c`：每路一个全放行的掩码滤波器，收帧后在中断回调里直接解析 | `can_subscribe*()` 按精确 ID / ID 范围配置硬件范围滤波器，其余帧拒收；中断只把帧放进环形缓冲并唤醒 comm_rx 任务，订阅者回调在任务里执行；接收 FIFO 按 CubeMX 配置自动选（FDCAN2 为 FIFO1）；发送时短暂关中断，多个任务可以共用 | 掩码会多收帧（UniC `can-range-claim-not-mask`）；中断里不做业务 | 编译 + 主机测试；上板待 V30 |
@@ -40,50 +40,50 @@
 | 2026-09-28 | 状态灯 | 未使用板载 WS2812 | SPI6（PA7）驱动 WS2812：正常时绿灯每秒闪两下，第一次亮 50 ms、第二次亮 25 ms | 一眼能看出固件在跑（UniC 的指示约定，时长按用户要求） | 硬件：2026-09-28 绿灯闪烁正常（50 / 25 ms 版本待复看） |
 | 2026-09-28 | 启动流程 | `MX_FREERTOS_Init` 创建 4 个业务任务 | `MX_FREERTOS_Init` 的 USER CODE 区只调用 `app_main()`；框架按固定顺序初始化并静态创建任务；启动任务完成后删除自己 | 启动顺序集中在一处（运行时契约第 1 节） | 硬件：2026-09-28 启动顺序正确，startup 任务运行后删除自己 |
 
-### 设备与消息（`devices/`、`msgs/`、`core/`）
+### 设备与消息（`02_devices/`、`msgs/`、`04_core/`）
 
 | 日期 | 项目 | COD-H7-Template | 本模板 | 原因 | 验证 |
 | --- | --- | --- | --- | --- | --- |
-| 2026-09-28 | DR16 遥控 | `Remote_Control.c` + `bsp_uart.c`：串口中断里解析；只接受一次空闲中断正好 18 字节的数据；不检查通道范围；全局变量 `remote_ctrl` | `devices/remote/dr16`：comm_rx 任务里解析；按时间间隔分帧（空闲 > 6 ms 从帧头开始），拆段能拼、粘连能切；摇杆 364–1684、拨杆 1–3 否则整帧丢弃；发布 `RcState` 话题（`msgs/rc_state`）。字段位运算不变 | 中断里不做业务；一帧被 DMA 半满中断切开时旧代码会丢帧；非法值不进系统（附录 A.4） | 主机测试 9 项；上板待 V10–V12 |
+| 2026-09-28 | DR16 遥控 | `Remote_Control.c` + `bsp_uart.c`：串口中断里解析；只接受一次空闲中断正好 18 字节的数据；不检查通道范围；全局变量 `remote_ctrl` | `02_devices/remote/dr16`：comm_rx 任务里解析；按时间间隔分帧（空闲 > 6 ms 从帧头开始），拆段能拼、粘连能切；摇杆 364–1684、拨杆 1–3 否则整帧丢弃；发布 `RcState` 话题（`msgs/rc_state`）。字段位运算不变 | 中断里不做业务；一帧被 DMA 半满中断切开时旧代码会丢帧；非法值不进系统（附录 A.4） | 主机测试 9 项；上板待 V10–V12 |
 | 2026-09-28 | 遥控丢失判定 | `Detect_Task` 每 1 ms 把计数减 1，约 200 ms 判丢失，丢失时把遥控数据整体清零 | **仍为 200 ms**（ADR 0030，用户决定），以 `rc_state` 话题的新旧为准：`rc_state_read(…, RC_LOST_TIMEOUT_MS)` 失败即丢失；不清零数据 | 同一故障只在一处判定；读取方当场计算，不等检测任务 | 主机测试（超时边界）；上板待 V12 |
-| 2026-09-28 | DJI 电机 | `Motor.c`：全局变量 `Chassis_Motor[4]` 等，反馈存原始值（rpm、电流原始值）和 float 累加的角度；在 CAN 中断回调里对每帧依次尝试 4 个电机；没有离线检测 | `devices/motor`：统一接口 `motor_*`，**输出轴国际单位**（ADR 0031）；多圈用 int32 圈数、不做 float 累加；每个电机一个硬件滤波器，在 comm_rx 任务里解析；反馈快照在临界区拷贝；**离线 20 ms**；初始化时查反馈 ID 和控制帧槽位冲突（GM6020 1–4 号与 C6x0 5–8 号） | 《架构设计》“电机：统一接口”；冲突表现为反馈互相覆盖，上电后很难查 | 主机测试 dji_motor 10 项、motor_group 11 项；上板待 V30–V32 |
+| 2026-09-28 | DJI 电机 | `Motor.c`：全局变量 `Chassis_Motor[4]` 等，反馈存原始值（rpm、电流原始值）和 float 累加的角度；在 CAN 中断回调里对每帧依次尝试 4 个电机；没有离线检测 | `02_devices/motor`：统一接口 `motor_*`，**输出轴国际单位**（ADR 0031）；多圈用 int32 圈数、不做 float 累加；每个电机一个硬件滤波器，在 comm_rx 任务里解析；反馈快照在临界区拷贝；**离线 20 ms**；初始化时查反馈 ID 和控制帧槽位冲突（GM6020 1–4 号与 C6x0 5–8 号） | 《架构设计》“电机：统一接口”；冲突表现为反馈互相覆盖，上电后很难查 | 主机测试 dji_motor 10 项、motor_group 11 项；上板待 V30–V32 |
 | 2026-09-28 | 电机指令发送 | `CAN_Task` 每 1 ms 把 `Control_Info.SendValue` 手工拼进 0x200 帧 | `motor_group`：子系统只写槽位，control 任务周期末尾统一打包；没写的槽位和离线电机填 0；全车停改写成 `stop_action`；DJI 失能为发 0 后停止发送 | 运行时契约第 5、6 节 | 主机测试；固件第 6 步才调用 |
 | 2026-09-28 | 控制周期 | `Control_Task` 用 `osDelay(1)` 相对延时，周期随执行时间漂移 | control 任务 `rm_task_delay_until()` 绝对时刻 1 kHz，每周期调用兵种的 `robot_control_step()`；优先级低于 comm_rx | 周期不漂移；控制读到最新反馈 | 编译；上板待 V34 |
 | 2026-09-28 | 安全门 | 无：上电就按遥控通道输出，遥控丢失时靠数据清零使目标为 0（PID 仍在运行） | `safety_gate`：Init → Safe → Manual；右拨杆下 = 急停，下 → 中 / 上 = 解锁；遥控丢失、急停在同一周期全车停（发送出口改写为 `stop_action`），恢复后必须重新解锁；进入 Manual 时 300 ms 输出斜坡；全车停和电机离线时 PID 清零 | ADR 0026、0032；恢复不猛冲 | 主机测试 7 项；台架待 V33–V38 |
-| 2026-09-28 | 底盘速度环参数 | 原始单位：目标 = 通道 3 × 5 rpm（转子），kp 13、ki 0.1、积分限幅 5000、输出限幅 12000（电流原始值），`(int16_t)` 截断 | 输出轴国际单位：kp 0.873、ki 0.00672、积分限幅 27.27、输出限幅 4.395 N·m，目标 = 通道 3 × 0.02727 rad/s；换算公式写在 `app/bench/config.h`；电流原始值四舍五入 | ADR 0031；行为等价 | 主机测试：同一被控对象上与旧参数逐步比对，差 ≤ 1 个原始单位 |
-| 2026-09-28 | BMI088 | `Bmi088.c` + `bsp_spi.c` / `bsp_gpio.c`：驱动里直接翻转片选 GPIO，逐字节 `HAL_SPI_TransmitReceive`（超时 100 ms）；加速度计的 dummy 字节靠宏嵌套重复发地址偶然对上；初始化失败无限重试；陀螺 ID 不对时只是不更新 | `devices/imu/bmi088`：寄存器配置、量程、换算系数、初始化顺序不变；读写走 `spi_select / spi_transfer / spi_deselect`（按用途命名，片选在平台层，一个事务一次完成，超时 10 ms）；dummy 字节显式处理；陀螺 ID 不对整帧无效；初始化返回失败原因，由调用者重试 | 运行时契约第 1 节（共用总线仲裁）；UniC `blocking-spi-is-deliberate` | 主机测试 10 项（假 SPI 按数据手册时序模拟两颗芯片）；上板待 V5 |
+| 2026-09-28 | 底盘速度环参数 | 原始单位：目标 = 通道 3 × 5 rpm（转子），kp 13、ki 0.1、积分限幅 5000、输出限幅 12000（电流原始值），`(int16_t)` 截断 | 输出轴国际单位：kp 0.873、ki 0.00672、积分限幅 27.27、输出限幅 4.395 N·m，目标 = 通道 3 × 0.02727 rad/s；换算公式写在 `01_app/bench/config.h`；电流原始值四舍五入 | ADR 0031；行为等价 | 主机测试：同一被控对象上与旧参数逐步比对，差 ≤ 1 个原始单位 |
+| 2026-09-28 | BMI088 | `Bmi088.c` + `bsp_spi.c` / `bsp_gpio.c`：驱动里直接翻转片选 GPIO，逐字节 `HAL_SPI_TransmitReceive`（超时 100 ms）；加速度计的 dummy 字节靠宏嵌套重复发地址偶然对上；初始化失败无限重试；陀螺 ID 不对时只是不更新 | `02_devices/imu/bmi088`：寄存器配置、量程、换算系数、初始化顺序不变；读写走 `spi_select / spi_transfer / spi_deselect`（按用途命名，片选在平台层，一个事务一次完成，超时 10 ms）；dummy 字节显式处理；陀螺 ID 不对整帧无效；初始化返回失败原因，由调用者重试 | 运行时契约第 1 节（共用总线仲裁）；UniC `blocking-spi-is-deliberate` | 主机测试 10 项（假 SPI 按数据手册时序模拟两颗芯片）；上板待 V5 |
 | 2026-09-28 | IMU 加热（第一步：照搬） | `INS_Task.c`：每 5 ms 一次 PID（kp 1200、ki 20、积分限幅 0、输出限幅 2000，单位为 TIM3 比较值，周期 20000）；**输出为负时 `(uint16_t)` 转换成约 65000，超过周期即满占空比加热** | `bmi088_heater_step()`：同样参数换算成占空比（÷ 20000），每 5 次读数算一次；负输出截到 0；读不到温度时关加热 | 负数转换是 bug：温度越高加热越猛 | 主机测试（含过热时占空比为 0）；上板待 V6 |
 | 2026-09-28 | IMU 加热（第二步：改参数） | 10% 上限、积分不起作用（到不了 40 °C） | UniC 在同款 MC02 上实测的参数：上限 25%、kp = 上限 / 5 °C、ki = 上限 / 100 /(°C·s)、每 100 ms 一次；本模板 PID 不带 dt，ki 按周期换成每次增益，积分项最多等于上限；**没有 UniC 的反算抗积分饱和**，预热过冲可能更大 | ADR 0033；UniC `imu-heater-authority`（实测稳态 40.000–40.125 °C） | 主机测试；上板待 V6 |
 | 2026-09-28 | 加热 PWM 频率 | TIM3 分频 80、周期 20000，旧时钟下 100 Hz | CubeMX 配置不变，定时器时钟 275 MHz 下约 172 Hz | 加热只看占空比，频率不影响（ADR 0028 的时钟变化） | 配置 |
-| 2026-09-28 | 陀螺零偏 | 标定代码存在但关闭，用写死的三个常数 | 零偏暂为 0；`algorithm/attitude/gyro_bias`（Welford 标准差判静止、拒绝均值过大）已写好，第 8 步上电标定 | ADR 0033；UniC `imu-calibration-stillness` | 主机测试 4 项 |
-| 2026-09-28 | 四元数 EKF | `Quaternion.c` + `Kalman_Filter.c`：CMSIS-DSP 矩阵、`malloc`、函数指针替换卡尔曼步骤；卡方检验把 3×3 的 S⁻¹ 转置进 1×3 缓存（CMSIS 尺寸检查打开时不写，关闭时越界写 9 个数）；快速平方根倒数用指针强转 | `algorithm/attitude/quat_ekf`：状态、预测、雅可比、零偏增益缩放与限幅、四元数 z 分量不修正、参数全部不变；**卡方值改为 rᵀS⁻¹r**；“连续 50 次后重新接受”那一次增益取 1（旧代码取缓存残留值）；矩阵存储在结构体里；`1/sqrtf`；输出 q 归一化；欧拉角的 asin 参数截到 ±1 | 旧卡方行为不确定无法照搬（ADR 0034） | 主机测试 8 项（期望值由几何关系得出，无旧工程对照数据） |
-| 2026-09-28 | 惯性导航任务 | `INS_Task.c`：1 kHz `osDelayUntil` 轮询；陀螺用写死的零偏；姿态用欧拉角下标重映射（`IMU_ANGLE_INDEX_*`）；多圈航向用度 | `app/ins` + 样板 ins 任务：同样 1 kHz 轮询（ADR 0034）；上电静止标定零偏（2000 样本，标准差 < 0.05、均值 < 0.15 rad/s，失败重新采样）；安装旋转矩阵把芯片系转到机体系（FLU，ADR 0006）；加速度二阶低通系数不变；多圈航向改为弧度；加速度模长 < 1 m/s² 的帧丢弃；标定完成才发布 `imu_state` | ADR 0033、0034 | 主机测试 6 项（假 SPI 寄存器模型）；上板待 V7–V9 |
+| 2026-09-28 | 陀螺零偏 | 标定代码存在但关闭，用写死的三个常数 | 零偏暂为 0；`03_algorithm/attitude/gyro_bias`（Welford 标准差判静止、拒绝均值过大）已写好，第 8 步上电标定 | ADR 0033；UniC `imu-calibration-stillness` | 主机测试 4 项 |
+| 2026-09-28 | 四元数 EKF | `Quaternion.c` + `Kalman_Filter.c`：CMSIS-DSP 矩阵、`malloc`、函数指针替换卡尔曼步骤；卡方检验把 3×3 的 S⁻¹ 转置进 1×3 缓存（CMSIS 尺寸检查打开时不写，关闭时越界写 9 个数）；快速平方根倒数用指针强转 | `03_algorithm/attitude/quat_ekf`：状态、预测、雅可比、零偏增益缩放与限幅、四元数 z 分量不修正、参数全部不变；**卡方值改为 rᵀS⁻¹r**；“连续 50 次后重新接受”那一次增益取 1（旧代码取缓存残留值）；矩阵存储在结构体里；`1/sqrtf`；输出 q 归一化；欧拉角的 asin 参数截到 ±1 | 旧卡方行为不确定无法照搬（ADR 0034） | 主机测试 8 项（期望值由几何关系得出，无旧工程对照数据） |
+| 2026-09-28 | 惯性导航任务 | `INS_Task.c`：1 kHz `osDelayUntil` 轮询；陀螺用写死的零偏；姿态用欧拉角下标重映射（`IMU_ANGLE_INDEX_*`）；多圈航向用度 | `01_app/ins` + 样板 ins 任务：同样 1 kHz 轮询（ADR 0034）；上电静止标定零偏（2000 样本，标准差 < 0.05、均值 < 0.15 rad/s，失败重新采样）；安装旋转矩阵把芯片系转到机体系（FLU，ADR 0006）；加速度二阶低通系数不变；多圈航向改为弧度；加速度模长 < 1 m/s² 的帧丢弃；标定完成才发布 `imu_state` | ADR 0033、0034 | 主机测试 6 项（假 SPI 寄存器模型）；上板待 V7–V9 |
 | 2026-09-28 | EKF 的 dt | 固定 `0.001f` | 用 `rm_time_now_us()` 实测两次更新的间隔（第一次用标称 1 ms） | 任务被耽误或读失败时积分时间照实计算 | 主机测试：每 2 ms 更新时航向积分正确 |
 | 2026-09-28 | 安全门：IMU 未就绪 | 无 | `imu_state` 读不到或超过 20 ms：全车停、回到 Safe，恢复后要重新解锁 | 运行时契约第 5 节 | 主机测试 |
-| 2026-09-28 | 达妙电机 | `Motor.c`：MIT / 位置速度 / 速度三种模式；**使能、失能、设零点帧发往反馈 ID（0x11 等）**，MIT 帧发往控制 ID；浮点→整数不截断（超范围会绕回）；反馈在 CAN 中断里按 ID 依次尝试 4 个电机 | `devices/motor/dm_motor` + 统一接口：只做 MIT；**命令发往电机 CAN ID**；编码截到范围内；每台一个硬件滤波器，comm_rx 任务里解析；状态码进 `error_code`、使能状态进 `enabled`；离线 20 ms | ADR 0035；两份参考实现都把命令发往电机 CAN ID | 主机测试 dm_motor 9 项；上板待 V39–V42 |
+| 2026-09-28 | 达妙电机 | `Motor.c`：MIT / 位置速度 / 速度三种模式；**使能、失能、设零点帧发往反馈 ID（0x11 等）**，MIT 帧发往控制 ID；浮点→整数不截断（超范围会绕回）；反馈在 CAN 中断里按 ID 依次尝试 4 个电机 | `02_devices/motor/dm_motor` + 统一接口：只做 MIT；**命令发往电机 CAN ID**；编码截到范围内；每台一个硬件滤波器，comm_rx 任务里解析；状态码进 `error_code`、使能状态进 `enabled`；离线 20 ms | ADR 0035；两份参考实现都把命令发往电机 CAN ID | 主机测试 dm_motor 9 项；上板待 V39–V42 |
 | 2026-09-28 | 达妙使能与发送 | `CAN_Task`：启动时逐台发使能（`osDelay(30)` 硬等；**使能了越界的 `DM_8009_Motor[4]`**），之后每 1 ms 发全 0 MIT；**2 号连发两次、3 号从不发送** | 上电不使能；解锁时子系统请求使能，按“期望状态”与反馈对齐（命令间隔 ≥ 20 ms 等确认，报错先清错一次）；离线清除请求；没人请求却已使能则失能；电机组每台每周期一帧，全车停按 `stop_action`（阻尼 = 只给 Kd 的 MIT，失能 = 失能帧）；FD 总线发 FD 帧 | 运行时契约第 5、6 节；修掉越界与漏发 | 主机测试 motor_group 达妙 9 项 |
-| 2026-09-28 | 图传链路 | `Image_Transmission.c`：与裁判系统共用 USART1（编译开关二选一，115200）；只看缓冲区开头一帧；VT13 不查摇杆范围；0x0309 发送没加帧头和 CRC | `devices/remote/vt_link`：接 USART10（921600）；comm_rx 任务里按字节流找帧（帧头 + CRC，拆段能拼、错位能恢复）；VT13 摇杆超出 364–1684 丢弃（范围待核对）；发布 `VtRcState`、`KbmState`，暂不参与控制；0x0302 / 0x0309 暂不移植；0xA5 帧检查做成公共的 `devices/referee/ref_frame` | ADR 0036 | 主机测试 ref_frame 4 项、vt_link 7 项；上板待 V13、V14 |
-| 2026-09-28 | USB 虚拟串口 | `MiniPC.c`：`CDC_Transmit_HS(Buff, sizeof(*Buff))` 只发 1 字节；接收回调为空；`MX_USB_DEVICE_Init()` 在 CubeMX 生成的默认任务里 | `platform/usb_cdc`：接收钩子在 `usbd_cdc_if.c` 的 USER CODE 区，经字节环形缓冲交给 comm_rx；发送按实际长度、拷贝进缓冲，上一包没发完返回 false；**`MX_USB_DEVICE_Init()` 改由 `usb_cdc_start()` 调用**（框架覆盖了 CubeMX 的弱定义 startup_task，原来的调用从未执行） | ADR 0027、0037 | 主机测试 byte_ring 3 项；上板待 V15 |
-| 2026-09-28 | 视觉通信帧 | 无 | `devices/vision/vision_frame`（0x5A 帧检查与组帧）+ `vision_link`（找帧、计数）；消息字段待视觉组；样板暂时原样回发收到的字节 | ADR 0037 | 主机测试 vision 5 项 |
-| 2026-09-28 | 电池电压 | `bsp_adc.c`：ADC1 两个序位都是通道 4，只用第一个，×3.3/65535×11 换算；没有使用者 | `platform/adc`（按用途命名 `ADC_BATTERY`，两个序位取平均，DMA 缓冲区在 `.dma_buf`）+ `devices/battery`：6S 连续 1 s 低于 21.0 V 提示低电量、21.5 V 以上解除，只提示不限制动作；分压比 11 沿用，待核对 | ADR 0027、0038 | 主机测试 battery 4 项；上板待 V16、V18 |
-| 2026-09-28 | 蜂鸣器 | 只在 CubeMX 里配了 TIM12 通道 2，没有代码 | `devices/buzzer`：音符序列、不阻塞；启动音、解锁 / 上锁音、低电量每 2 s 两声；`platform/pwm` 新增 `pwm_set_frequency()` | ADR 0038 | 主机测试 buzzer 4 项；上板待 V17 |
-| 2026-09-28 | RLS 参数辨识 | `RLS.c`：CMSIS-DSP 矩阵 + `malloc`；**没有调用者**；增益向量只分配 1 个 float 却按 2 个使用（越界写堆）、遗忘因子从未赋值（为 0，1/λ 为无穷）、1×1 乘 2×2 维数不匹配 | `algorithm/power/rls`：按标准公式重写，静态存储，最多 4 个参数；暂不接入（等底盘功率控制） | 旧代码跑不起来，无法照搬（ADR 0038） | 主机测试 4 项（含功率模型用法：辨识 k1、k2） |
+| 2026-09-28 | 图传链路 | `Image_Transmission.c`：与裁判系统共用 USART1（编译开关二选一，115200）；只看缓冲区开头一帧；VT13 不查摇杆范围；0x0309 发送没加帧头和 CRC | `02_devices/remote/vt_link`：接 USART10（921600）；comm_rx 任务里按字节流找帧（帧头 + CRC，拆段能拼、错位能恢复）；VT13 摇杆超出 364–1684 丢弃（范围待核对）；发布 `VtRcState`、`KbmState`，暂不参与控制；0x0302 / 0x0309 暂不移植；0xA5 帧检查做成公共的 `02_devices/referee/ref_frame` | ADR 0036 | 主机测试 ref_frame 4 项、vt_link 7 项；上板待 V13、V14 |
+| 2026-09-28 | USB 虚拟串口 | `MiniPC.c`：`CDC_Transmit_HS(Buff, sizeof(*Buff))` 只发 1 字节；接收回调为空；`MX_USB_DEVICE_Init()` 在 CubeMX 生成的默认任务里 | `05_platform/usb_cdc`：接收钩子在 `usbd_cdc_if.c` 的 USER CODE 区，经字节环形缓冲交给 comm_rx；发送按实际长度、拷贝进缓冲，上一包没发完返回 false；**`MX_USB_DEVICE_Init()` 改由 `usb_cdc_start()` 调用**（框架覆盖了 CubeMX 的弱定义 startup_task，原来的调用从未执行） | ADR 0027、0037 | 主机测试 byte_ring 3 项；上板待 V15 |
+| 2026-09-28 | 视觉通信帧 | 无 | `02_devices/vision/vision_frame`（0x5A 帧检查与组帧）+ `vision_link`（找帧、计数）；消息字段待视觉组；样板暂时原样回发收到的字节 | ADR 0037 | 主机测试 vision 5 项 |
+| 2026-09-28 | 电池电压 | `bsp_adc.c`：ADC1 两个序位都是通道 4，只用第一个，×3.3/65535×11 换算；没有使用者 | `05_platform/adc`（按用途命名 `ADC_BATTERY`，两个序位取平均，DMA 缓冲区在 `.dma_buf`）+ `02_devices/battery`：6S 连续 1 s 低于 21.0 V 提示低电量、21.5 V 以上解除，只提示不限制动作；分压比 11 沿用，待核对 | ADR 0027、0038 | 主机测试 battery 4 项；上板待 V16、V18 |
+| 2026-09-28 | 蜂鸣器 | 只在 CubeMX 里配了 TIM12 通道 2，没有代码 | `02_devices/buzzer`：音符序列、不阻塞；启动音、解锁 / 上锁音、低电量每 2 s 两声；`05_platform/pwm` 新增 `pwm_set_frequency()` | ADR 0038 | 主机测试 buzzer 4 项；上板待 V17 |
+| 2026-09-28 | RLS 参数辨识 | `RLS.c`：CMSIS-DSP 矩阵 + `malloc`；**没有调用者**；增益向量只分配 1 个 float 却按 2 个使用（越界写堆）、遗忘因子从未赋值（为 0，1/λ 为无穷）、1×1 乘 2×2 维数不匹配 | `03_algorithm/power/rls`：按标准公式重写，静态存储，最多 4 个参数；暂不接入（等底盘功率控制） | 旧代码跑不起来，无法照搬（ADR 0038） | 主机测试 4 项（含功率模型用法：辨识 k1、k2） |
 | 2026-09-28 | 键盘状态机 | `KeyBoard_Info_Typedef`（短按 / 长按）声明了但没有使用 | **不移植** | 没有调用者；写操作手输入（command）时再做 | —— |
-| 2026-09-28 | 在线检测与话题 | 无统一机制 | `core/watchdog`（喂狗时间戳，在线与否读取时计算）、`core/msg/topic`（最新值 + 时间戳 + 唯一发布者）、daemon 任务 100 Hz 打印上线 / 离线与设备清单 | 《架构设计》核心机制第 2、3 节 | 主机测试 topic 6 项、watchdog 4 项；上板待 V4 |
+| 2026-09-28 | 在线检测与话题 | 无统一机制 | `04_core/watchdog`（喂狗时间戳，在线与否读取时计算）、`04_core/msg/topic`（最新值 + 时间戳 + 唯一发布者）、daemon 任务 100 Hz 打印上线 / 离线与设备清单 | 《架构设计》核心机制第 2、3 节 | 主机测试 topic 6 项、watchdog 4 项；上板待 V4 |
 
-### 算法（`algorithm/`）
+### 算法（`03_algorithm/`）
 
 | 日期 | 项目 | COD-H7-Template | 本模板 | 原因 | 验证 |
 | --- | --- | --- | --- | --- | --- |
-| 2026-09-28 | PID | `Controller/PID.c`：参数是 `float[7]` 数组；结构体里存函数指针；输出出现 NaN / Inf 后状态锁死，之后每次都清零并返回 0 | `algorithm/control/pid`：计算方式不变（无 dt、死区保持输出、微分一阶低通、积分按误差累加值限幅、位置式 / 增量式）；参数改为带字段名的 `PidParam`；去掉函数指针；**去掉 NaN 锁死**；增量式改名 `PID_INCREMENTAL`；`pid_reset()` 同时复位微分滤波器 | NaN 只在外部数据入口检查一次（ADR 0026）；字段名比数组下标不易填错 | 主机测试 9 项，期望值按旧公式手算 |
+| 2026-09-28 | PID | `Controller/PID.c`：参数是 `float[7]` 数组；结构体里存函数指针；输出出现 NaN / Inf 后状态锁死，之后每次都清零并返回 0 | `03_algorithm/control/pid`：计算方式不变（无 dt、死区保持输出、微分一阶低通、积分按误差累加值限幅、位置式 / 增量式）；参数改为带字段名的 `PidParam`；去掉函数指针；**去掉 NaN 锁死**；增量式改名 `PID_INCREMENTAL`；`pid_reset()` 同时复位微分滤波器 | NaN 只在外部数据入口检查一次（ADR 0026）；字段名比数组下标不易填错 | 主机测试 9 项，期望值按旧公式手算 |
 | 2026-09-30 | PID 抗积分饱和 | 位置式积分只按 `integral_limit` 限幅，输出饱和时照样累加 | 条件积分：积分只加到输出刚好等于 `output_limit`，误差与输出同向时不再多攒（ADR 0040） | IMU 加热冷态预热积分攒满导致过冲；堵转后恢复猛冲 | 主机测试：PID 2 项、加热 1 项（冷态 60 s 后过 40 °C 占空比立即为 0）；上板待 V6 冷启动 |
 | 2026-09-30 | CAN bus-off | `bsp_can.c` 不处理：FDCAN 进入 bus-off 后停在初始化状态，这路电机一直离线到重启 | `can_is_bus_off()` / `can_recover()`（Stop + Start，做法同 UniC），daemon 每 10 ms 检查、同一路至少隔 100 ms 重启一次 | 接线松动、电调掉电等偶发 bus-off 后能自己恢复；恢复前该路电机离线 = 机构停 | 编译；上板待 V44 |
 | 2026-09-30 | IMU 加热参数 | 上限 10%、积分不起作用（到不了 40 °C） | 每 1280 ms 一次、上限 8%、kp 0.01 / °C、积分时间 10 s（ADR 0042，本板实测 + 热模型） | UniC 参数（25%、kp 0.05）在本板上冲到 46 °C、稳态摆 ±1.5 °C | 主机测试（加热 5 项按新参数手算）；模型仿真；**上板 V6 通过**（稳态 40.125–40.25 °C，无过冲） |
-| 2026-09-28 | 一阶 / 二阶低通 | `LPF.c`：`Init` 不清“已初始化”标志，重新初始化后第一次输入不会填充历史 | `algorithm/filter/lpf`：公式不变；`lpf1_init` / `lpf2_init` 完整复位 | 重新初始化应等同于刚上电 | 主机测试 6 项（含旧工程 IMU 加速度滤波系数） |
-| 2026-09-28 | 卡尔曼滤波 | `Kalman_Filter.c`：矩阵运算用 CMSIS-DSP `arm_mat_*`，内存用 `malloc` 分配；EKF 通过 7 个函数指针和 5 个“跳过第 N 步”标志改写流程；测量先写进外部缓冲区，复制后把缓冲区清零；另有输出副本 | `algorithm/filter/kalman`：五步公式和顺序不变，每步是一个公开函数，EKF 自己组合调用；存储由调用者提供（`KALMAN_STORAGE_FLOATS` 宏算大小）；调用者直接写 `z`、读 `x`；新息 `y`、`S⁻¹` 留在结构体里给卡方检验用；矩阵运算用自写的 `algorithm/math/matrix`（列主元求逆） | 禁止运行时 `malloc`；函数指针和跳步标志难读（ADR 0029） | 主机测试 4 项（一维时与标量公式逐步一致、匀速模型估出速度）+ 矩阵 7 项 |
-| 2026-09-28 | 斜坡 | `Ramp.c`：`f_Ramp_Calc` | `algorithm/control/ramp`：`ramp_step`，行为不变 | —— | 主机测试 3 项 |
-| 2026-09-30 | 底盘运动学 | 无：`Control_Task.c` 只用通道 3 控制一台 M3508 的转速 | `algorithm/kinematics/`：四轮全向轮 `omni`、麦轮 `mecanum`、舵轮 `steer`，各有逆解和最小二乘正解；舵轮转角不超过 90°（超过则反转轮子） | 用户要求各种轮组都有（ADR 0043） | 主机测试 17 项（含正解 ∘ 逆解 = 恒等） |
-| 2026-09-30 | 底盘控制 | 同上：一台电机的速度环，遥控丢失时靠数据清零 | `app/chassis` + `app/infantry`：遥控 → 底盘速度 → 斜坡（合成加速度 2 m/s²）→ 逆解 → 四轮速度环（旧工程参数换算）；全车停不写指令、机构停（任一电机离线）受控减速到 0 | ADR 0043、运行时契约第 5 节 | 主机测试 9 项、编译；**未上板**（V45–V49） |
+| 2026-09-28 | 一阶 / 二阶低通 | `LPF.c`：`Init` 不清“已初始化”标志，重新初始化后第一次输入不会填充历史 | `03_algorithm/filter/lpf`：公式不变；`lpf1_init` / `lpf2_init` 完整复位 | 重新初始化应等同于刚上电 | 主机测试 6 项（含旧工程 IMU 加速度滤波系数） |
+| 2026-09-28 | 卡尔曼滤波 | `Kalman_Filter.c`：矩阵运算用 CMSIS-DSP `arm_mat_*`，内存用 `malloc` 分配；EKF 通过 7 个函数指针和 5 个“跳过第 N 步”标志改写流程；测量先写进外部缓冲区，复制后把缓冲区清零；另有输出副本 | `03_algorithm/filter/kalman`：五步公式和顺序不变，每步是一个公开函数，EKF 自己组合调用；存储由调用者提供（`KALMAN_STORAGE_FLOATS` 宏算大小）；调用者直接写 `z`、读 `x`；新息 `y`、`S⁻¹` 留在结构体里给卡方检验用；矩阵运算用自写的 `03_algorithm/math/matrix`（列主元求逆） | 禁止运行时 `malloc`；函数指针和跳步标志难读（ADR 0029） | 主机测试 4 项（一维时与标量公式逐步一致、匀速模型估出速度）+ 矩阵 7 项 |
+| 2026-09-28 | 斜坡 | `Ramp.c`：`f_Ramp_Calc` | `03_algorithm/control/ramp`：`ramp_step`，行为不变 | —— | 主机测试 3 项 |
+| 2026-09-30 | 底盘运动学 | 无：`Control_Task.c` 只用通道 3 控制一台 M3508 的转速 | `03_algorithm/kinematics/`：四轮全向轮 `omni`、麦轮 `mecanum`、舵轮 `steer`，各有逆解和最小二乘正解；舵轮转角不超过 90°（超过则反转轮子） | 用户要求各种轮组都有（ADR 0043） | 主机测试 17 项（含正解 ∘ 逆解 = 恒等） |
+| 2026-09-30 | 底盘控制 | 同上：一台电机的速度环，遥控丢失时靠数据清零 | `01_app/chassis` + `01_app/infantry`：遥控 → 底盘速度 → 斜坡（合成加速度 2 m/s²）→ 逆解 → 四轮速度环（旧工程参数换算）；全车停不写指令、机构停（任一电机离线）受控减速到 0 | ADR 0043、运行时契约第 5 节 | 主机测试 9 项、编译；**未上板**（V45–V49） |
 | 2026-09-28 | 滑动平均、`sign()` | `Ramp.c` 的 `MovingAverage_*`、`LPF.c` 的 `sign()` | **不移植** | 没有任何调用者；滑动平均用 `malloc`，且移位循环把缓冲区全部覆盖成最新值、求和漏掉最后一项 | —— |
 
 ### 工程与代码规范
@@ -95,8 +95,8 @@
 | 2026-09-27 | 编译警告 | —— | 手写代码开 `-Wall -Wextra … -Werror`，有警告即失败 | 0 警告要求由编译器保证 | 编译 |
 | 2026-09-27 | 单元测试 | 无 | Unity v2.7.0，电脑上运行 | 算法和协议解析能在电脑上测 | 主机测试 |
 | 2026-09-27 | 文件编码 | 源码注释为 GBK | **UTF-8 + LF** | GBK 在 gcc、Git、clang-format 下乱码（ADR 0002） | —— |
-| 2026-09-30 | 任务文件 | `Application/Task/` 一个任务一个文件，任务在 `freertos.c` 创建 | **同左的写法**：`app/<兵种>/control_task.c`、`ins_task.c`、`heartbeat_task.c`，任务表在 `robot.c`；对象在 `robot.h` 共享（相当于全局变量，只限兵种目录内）。`CAN_Task` 并入 control 任务第 4 步，`Detect_Task` 对应 `app/common/daemon_task.c` | 队友反映新写法函数嵌套多、找不到循环体（ADR 0044）；对照表见 `docs/CALL_FLOW.md` | 编译 0 警告 + 主机测试 34/34；上板待做 |
-| 2026-09-30 | 目录结构（第二次） | `Core / BSP / Components / Application` | **`boards / platform / core / algorithm / devices / app`**，与老模板一一对应：`Core`→`boards`、`BSP`→`platform`、`Components`→`algorithm` + `devices`、`Application`→`app`；`app/` 里机构和兵种平铺，兵种目录 `config.h`、`robot.h`、`robot.c`（对象 + 上电顺序 + 完整任务表）+ 每个任务一个 `*_task.c` | 0044 之后用户仍觉得太散（ADR 0045）；对照表见 `docs/CALL_FLOW.md` | 编译 0 警告 + 主机测试 34/34；上板待做 |
+| 2026-09-30 | 任务文件 | `Application/Task/` 一个任务一个文件，任务在 `freertos.c` 创建 | **同左的写法**：`01_app/<兵种>/control_task.c`、`ins_task.c`、`heartbeat_task.c`，任务表在 `robot.c`；对象在 `robot.h` 共享（相当于全局变量，只限兵种目录内）。`CAN_Task` 并入 control 任务第 4 步，`Detect_Task` 对应 `01_app/common/daemon_task.c` | 队友反映新写法函数嵌套多、找不到循环体（ADR 0044）；对照表见 `docs/CALL_FLOW.md` | 编译 0 警告 + 主机测试 34/34；上板待做 |
+| 2026-09-30 | 目录结构（第二次） | `Core / BSP / Components / Application` | **`boards / platform / core / algorithm / devices / app`**，与老模板一一对应：`Core`→`boards`、`BSP`→`platform`、`Components`→`algorithm` + `devices`、`Application`→`app`；`01_app/` 里机构和兵种平铺，兵种目录 `config.h`、`robot.h`、`robot.c`（对象 + 上电顺序 + 完整任务表）+ 每个任务一个 `*_task.c` | 0044 之后用户仍觉得太散（ADR 0045）；对照表见 `docs/CALL_FLOW.md` | 编译 0 警告 + 主机测试 34/34；上板待做 |
 | 2026-09-27 | 目录结构（第一次，已被上一行取代） | `BSP / Components / Application` | `platform / core / algorithm / devices / msgs / subsystems / robots / boards` | 分层单向依赖，芯片差异只在 platform（ADR 0017） | —— |
 
 ## 计划中（写到对应模块时处理）

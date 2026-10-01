@@ -1,0 +1,179 @@
+/**
+ * @file    vt_link.c
+ * @brief   图传链路，见 vt_link.h
+ */
+#include "vt_link.h"
+
+#include <string.h>
+
+#include "02_devices/referee/ref_frame.h"
+#include "04_core/util/crc.h"
+
+#define VT13_SOF0   0xA9u
+#define VT13_SOF1   0x53u
+#define CH_MIN      364
+#define CH_MAX      1684
+#define CH_OFFSET   1024
+#define CMD_KBM     0x0304u
+#define CMD_KBM_LEN 12u
+
+/* 缓冲区满时开头一定能判定（VT13 帧放得下；0xA5 帧的最大数据长度按缓冲区算），否则解析循环会原地打转 */
+_Static_assert(VT13_FRAME_LEN <= VT_LINK_BUF_LEN, "VT13 帧必须放得进缓冲区");
+
+static bool ch_valid(uint16_t raw)
+{
+    return raw >= CH_MIN && raw <= CH_MAX;
+}
+
+bool vt13_decode(const uint8_t frame[VT13_FRAME_LEN], VtRcState *out)
+{
+    const uint8_t *b = frame;
+    if (!crc16_verify(b, VT13_FRAME_LEN))
+    {
+        return false;
+    }
+    /* 位布局照旧工程 VT13_Info_Update */
+    const uint16_t ch[4] = {
+        (uint16_t)((b[2] | (b[3] << 8)) & 0x07FF),
+        (uint16_t)(((b[3] >> 3) | (b[4] << 5)) & 0x07FF),
+        (uint16_t)(((b[4] >> 6) | (b[5] << 2) | (b[6] << 10)) & 0x07FF),
+        (uint16_t)(((b[6] >> 1) | (b[7] << 7)) & 0x07FF),
+    };
+    for (int i = 0; i < 4; i++)
+    {
+        if (!ch_valid(ch[i]))
+        {
+            return false;
+        }
+        out->ch[i] = (int16_t)(ch[i] - CH_OFFSET);
+    }
+    out->mode = (VtMode)((b[7] >> 4) & 0x03u);
+    out->pause = ((b[7] >> 6) & 0x01u) != 0u;
+    out->custom_left = ((b[7] >> 7) & 0x01u) != 0u;
+    out->custom_right = (b[8] & 0x01u) != 0u;
+    out->wheel = (int16_t)((((b[8] >> 1) | (b[9] << 7)) & 0x07FF) - CH_OFFSET);
+    out->trigger = ((b[9] >> 4) & 0x01u) != 0u;
+    out->mouse_x = (int16_t)(b[10] | (b[11] << 8));
+    out->mouse_y = (int16_t)(b[12] | (b[13] << 8));
+    out->mouse_z = (int16_t)(b[14] | (b[15] << 8));
+    out->mouse_left = (uint8_t)(b[16] & 0x03u);
+    out->mouse_right = (uint8_t)((b[16] >> 2) & 0x03u);
+    out->mouse_middle = (uint8_t)((b[16] >> 4) & 0x03u);
+    out->keys = (uint16_t)(b[17] | (b[18] << 8));
+    return true;
+}
+
+bool vt_link_init(VtLink *self, VtRcStateTopic *rc_out, KbmStateTopic *kbm_out)
+{
+    *self = (VtLink){ .rc_out = rc_out, .kbm_out = kbm_out };
+    watchdog_register(&self->wd, "vt_link", VT_LINK_TIMEOUT_MS);
+    return vt_rc_state_claim(rc_out, "vt_link") && kbm_state_claim(kbm_out, "vt_link");
+}
+
+static void handle_ref_frame(VtLink *self, const RefFrame *f)
+{
+    if (f->cmd_id != CMD_KBM || f->data_len != CMD_KBM_LEN)
+    {
+        self->ignored_frames++;
+        return;
+    }
+    const uint8_t *d = f->data; /* 位布局照旧工程 remote_control_t */
+    const KbmState kbm = {
+        .mouse_x = (int16_t)(d[0] | (d[1] << 8)),
+        .mouse_y = (int16_t)(d[2] | (d[3] << 8)),
+        .mouse_z = (int16_t)(d[4] | (d[5] << 8)),
+        .mouse_left = d[6] != 0u,
+        .mouse_right = d[7] != 0u,
+        .keys = (uint16_t)(d[8] | (d[9] << 8)),
+    };
+    kbm_state_publish(self->kbm_out, &kbm);
+}
+
+typedef enum
+{
+    PARSE_NEED_MORE,
+    PARSE_BAD,
+    PARSE_CONSUMED,
+} ParseResult;
+
+/* 看缓冲区开头：是完整的合法帧就处理，返回消耗的字节数 */
+static ParseResult parse_head(VtLink *self, size_t *consumed)
+{
+    const uint8_t *b = self->buf;
+    if (b[0] == VT13_SOF0)
+    {
+        if (self->len < 2u)
+        {
+            return PARSE_NEED_MORE;
+        }
+        if (b[1] != VT13_SOF1)
+        {
+            return PARSE_BAD;
+        }
+        if (self->len < VT13_FRAME_LEN)
+        {
+            return PARSE_NEED_MORE;
+        }
+        VtRcState rc;
+        if (!vt13_decode(b, &rc))
+        {
+            return PARSE_BAD;
+        }
+        vt_rc_state_publish(self->rc_out, &rc);
+        *consumed = VT13_FRAME_LEN;
+        return PARSE_CONSUMED;
+    }
+
+    RefFrame f;
+    switch (ref_frame_check(b, self->len, VT_LINK_BUF_LEN - REF_FRAME_OVERHEAD, &f))
+    {
+        case REF_FRAME_NEED_MORE:
+            return PARSE_NEED_MORE;
+        case REF_FRAME_BAD:
+            return PARSE_BAD;
+        case REF_FRAME_OK:
+            break;
+    }
+    handle_ref_frame(self, &f);
+    *consumed = f.frame_len;
+    return PARSE_CONSUMED;
+}
+
+void vt_link_on_bytes(VtLink *self, const uint8_t *data, uint32_t len)
+{
+    uint32_t in = 0u;
+    while (in < len || self->len > 0u)
+    {
+        /* 先把能放下的字节放进缓冲区 */
+        while (in < len && self->len < VT_LINK_BUF_LEN)
+        {
+            self->buf[self->len++] = data[in++];
+        }
+        if (self->len == 0u)
+        {
+            break;
+        }
+
+        size_t consumed = 0u;
+        const ParseResult r = parse_head(self, &consumed);
+        if (r == PARSE_NEED_MORE)
+        {
+            if (in < len)
+            {
+                continue; /* 还有字节没放进来；缓冲区满时不会走到这里（见上面的 _Static_assert） */
+            }
+            break;
+        }
+        if (r == PARSE_BAD)
+        {
+            consumed = 1u; /* 丢掉开头一个字节，从下一个字节重新找帧头 */
+            self->bad_bytes++;
+        }
+        else
+        {
+            watchdog_feed(&self->wd);
+        }
+        memmove(self->buf, self->buf + consumed, self->len - consumed);
+        self->len -= (uint32_t)consumed;
+    }
+}

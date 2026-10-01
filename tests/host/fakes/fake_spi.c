@@ -1,6 +1,6 @@
 /**
  * @file    fake_spi.c
- * @brief   假 SPI + BMI088 寄存器模型，见 fake_spi.h；代替 platform/stm32h7/spi.c
+ * @brief   假 SPI + BMI088 寄存器模型，见 fake_spi.h；代替 05_platform/stm32h7/spi.c
  */
 #include "fake_spi.h"
 

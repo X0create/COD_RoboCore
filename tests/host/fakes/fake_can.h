@@ -7,7 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "platform/can.h"
+#include "05_platform/can.h"
 
 /** 清空订阅和已发帧 */
 void fake_can_reset(void);

@@ -101,15 +101,15 @@ def architecture():
     s.text(24, 54, "左侧五层只能从上往下调用；右侧模块各层都可以使用。虚线框为规划中、尚无代码。", 12.5, INK2)
 
     layers = [
-        ("app/<兵种>", "兵种", "这台车怎么组装、怎么控制", BLUE,
+        ("01_app/<兵种>", "兵种", "这台车怎么组装、怎么控制", BLUE,
          ["robot.c：对象 · 上电 · 任务表", "*_task.c", "config.h"]),
-        ("app/<机构>", "机构", "一个机构的完整逻辑", AQUA,
+        ("01_app/<机构>", "机构", "一个机构的完整逻辑", AQUA,
          ["ins 惯导", "底盘", "安全门", "*云台", "*发射", "*轮腿"]),
-        ("devices", "设备驱动", "协议字节 ⇄ 物理量", ORANGE,
+        ("02_devices", "设备驱动", "协议字节 ⇄ 物理量", ORANGE,
          ["DJI 电机", "达妙电机", "BMI088", "DR16", "VT13 图传", "视觉帧", "电池", "蜂鸣器"]),
-        ("platform", "外设接口", "唯一直接操作硬件的一层", VIOLET,
+        ("05_platform", "外设接口", "唯一直接操作硬件的一层", VIOLET,
          ["can", "uart", "spi", "pwm", "adc", "usb_cdc", "time", "status_led"]),
-        ("boards", "板级", "CubeMX 生成代码、链接脚本", GRAY,
+        ("06_boards", "板级", "CubeMX 生成代码、链接脚本", GRAY,
          ["DM-MC02 · STM32H723", "*C 板 · STM32F407", "HAL", "FreeRTOS", "CMSIS", "USB Device"]),
     ]
     x0, x1, y, rh, gap = 24, 640, 74, 66, 14
@@ -129,9 +129,9 @@ def architecture():
     rx, rw = 664, 272
     s.text(rx, 68, "各层都可以用", 13, INK2, bold=True)
     shared = [
-        ("algorithm", "纯计算，不碰硬件", ["PID", "斜坡", "低通", "卡尔曼", "四元数 EKF", "矩阵", "轮组运动学"], YELLOW, False),
-        ("core", "基础设施", ["话题与消息 imu_state · rc_state …", "设备看门狗", "RTT 日志", "任务封装"], YELLOW, False),
-        ("tests/host", "电脑上的单元测试", ["假 CAN / SPI / PWM / 时钟", "替换 platform"], MAGENTA, True),
+        ("03_algorithm", "纯计算，不碰硬件", ["PID", "斜坡", "低通", "卡尔曼", "四元数 EKF", "矩阵", "轮组运动学"], YELLOW, False),
+        ("04_core", "基础设施", ["话题与消息 imu_state · rc_state …", "设备看门狗", "RTT 日志", "任务封装"], YELLOW, False),
+        ("tests/host", "电脑上的单元测试", ["假 CAN / SPI / PWM / 时钟", "替换 05_platform"], MAGENTA, True),
     ]
     cy, ch = 78, 88
     for name, role, items, color, dashed in shared:

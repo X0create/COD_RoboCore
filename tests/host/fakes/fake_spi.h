@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "platform/spi.h"
+#include "05_platform/spi.h"
 
 /** 两颗芯片寄存器清零，芯片 ID 设为正确值，清除全部注入的故障 */
 void fake_spi_reset(void);

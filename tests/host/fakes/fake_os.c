@@ -1,11 +1,11 @@
 /**
  * @file    fake_os.c
- * @brief   电脑测试是单线程的，临界区什么都不用做；延时让假时钟前进。代替 core/os/os.c 的 FreeRTOS 实现
+ * @brief   电脑测试是单线程的，临界区什么都不用做；延时让假时钟前进。代替 04_core/os/os.c 的 FreeRTOS 实现
  */
-#include "core/os/critical.h"
-#include "core/os/delay.h"
+#include "04_core/os/critical.h"
+#include "04_core/os/delay.h"
+#include "05_platform/time.h"
 #include "fake_time.h"
-#include "platform/time.h"
 
 void rm_critical_enter(void)
 {

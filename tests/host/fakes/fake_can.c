@@ -1,6 +1,6 @@
 /**
  * @file    fake_can.c
- * @brief   假 CAN，见 fake_can.h；代替 platform/stm32h7/can.c
+ * @brief   假 CAN，见 fake_can.h；代替 05_platform/stm32h7/can.c
  */
 #include "fake_can.h"
 

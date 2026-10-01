@@ -2,7 +2,7 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| `host/` | PC 单元测试（Unity，C 语言）。子目录按被测的层命名（如 `host/platform/`）；Unity 源码在 `host/unity/`；`host/fakes/` 是临界区和时钟的假实现（`fake_time_set_us()` 设定“现在”），测话题、看门狗、设备时链接 `rm_host_fakes` |
+| `host/` | PC 单元测试（Unity，C 语言）。子目录与被测的层同名、同编号（如 `host/05_platform/`）；Unity 源码在 `host/unity/`；`host/fakes/` 是临界区和时钟的假实现（`fake_time_set_us()` 设定“现在”），测话题、看门狗、设备时链接 `rm_host_fakes` |
 | `target/` | 板上自测固件（话题并发、看门狗等） |
 | `hil/` | 硬件在环：USB-CAN 回放与故障注入脚本 |
 | `data/` | 录制的 IMU、CAN、裁判系统数据 |

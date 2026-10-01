@@ -1,6 +1,6 @@
 # 达妙 DM-MC02（STM32H723VGT6）：芯片编译选项和链接选项。
 # 必须在创建任何目标之前 include，这些选项对本仓库代码和 CubeMX 生成代码都生效。
-set(RM_BOARD_DIR ${CMAKE_SOURCE_DIR}/boards/dm_mc02_h723)
+set(RM_BOARD_DIR ${CMAKE_SOURCE_DIR}/06_boards/dm_mc02_h723)
 
 set(RM_CPU_FLAGS
     -mcpu=cortex-m7
@@ -22,7 +22,7 @@ add_link_options(${RM_CPU_FLAGS}
 # CubeMX 生成的 cmake/stm32cubemx/CMakeLists.txt 会链接这个变量里的库
 set(TOOLCHAIN_LINK_LIBRARIES m)
 
-# 平台实现目录：platform/stm32h7
+# 平台实现目录：05_platform/stm32h7
 set(RM_CHIP stm32h7)
 
 # 本仓库代码使用 HAL、CMSIS、FreeRTOS 头文件的入口。include 目录和宏取自 CubeMX 生成的 stm32cubemx 目标，

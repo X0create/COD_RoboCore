@@ -30,7 +30,7 @@ jobs:
       - name: 格式检查（clang-format 18）
         run: |
           git ls-files -- '*.c' '*.h' \
-            | grep -v -e segger_rtt -e '^boards/' -e 'tests/host/unity/' \
+            | grep -v -e segger_rtt -e '^06_boards/' -e 'tests/host/unity/' \
             | xargs clang-format-18 --dry-run --Werror
 
       - name: 电脑侧单元测试

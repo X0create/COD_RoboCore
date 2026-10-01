@@ -1,10 +1,10 @@
 /**
  * @file    fake_time.c
- * @brief   假时钟，见 fake_time.h；代替 platform/time.h 的芯片实现
+ * @brief   假时钟，见 fake_time.h；代替 05_platform/time.h 的芯片实现
  */
 #include "fake_time.h"
 
-#include "platform/time.h"
+#include "05_platform/time.h"
 
 static uint64_t fake_now_us;
 
