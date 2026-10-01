@@ -95,6 +95,7 @@
 | 2026-09-27 | 编译警告 | —— | 手写代码开 `-Wall -Wextra … -Werror`，有警告即失败 | 0 警告要求由编译器保证 | 编译 |
 | 2026-09-27 | 单元测试 | 无 | Unity v2.7.0，电脑上运行 | 算法和协议解析能在电脑上测 | 主机测试 |
 | 2026-09-27 | 文件编码 | 源码注释为 GBK | **UTF-8 + LF** | GBK 在 gcc、Git、clang-format 下乱码（ADR 0002） | —— |
+| 2026-09-30 | 任务文件 | `Application/Task/` 一个任务一个文件，任务在 `freertos.c` 创建 | **同左的写法**：`robots/<兵种>/control_task.c`、`ins_task.c`、`heartbeat_task.c`，任务表在 `robot.c`；对象在 `objects.h` 共享（相当于全局变量，只限兵种目录内）。`CAN_Task` 并入 control 任务第 4 步，`Detect_Task` 对应 `common/daemon.c` | 队友反映新写法函数嵌套多、找不到循环体（ADR 0044）；对照表见 `docs/CALL_FLOW.md` | 编译 0 警告 + 主机测试 34/34；上板待做 |
 | 2026-09-27 | 目录结构 | `BSP / Components / Application` | `platform / core / algorithm / devices / msgs / subsystems / robots / boards` | 分层单向依赖，芯片差异只在 platform（ADR 0017） | —— |
 
 ## 计划中（写到对应模块时处理）

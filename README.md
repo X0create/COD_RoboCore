@@ -124,8 +124,9 @@ COD_RoboCore/
 │   ├── ins/                 惯性导航（标定、零偏在线修正、EKF、发布姿态）
 │   └── gimbal/ chassis/ …   （规划）云台、底盘、发射、轮腿
 ├── robots/                  兵种层
-│   ├── common/              启动流程 app_main、接收任务 comm_rx、控制任务、守护任务、安全门
-│   └── _template/           样板兵种：config.h（固定参数）+ robot.c（电机配置、组装、控制周期）
+│   ├── common/              启动流程 app_main、接收任务 comm_rx、守护任务 daemon、安全门
+│   ├── _template/           样板兵种：config.h（固定参数）、robot.c（对象、初始化、任务表），一个任务一个文件
+│   └── infantry/            步兵（第一版只有底盘）
 ├── tests/host/              电脑侧单元测试（Unity）
 │   └── fakes/               假 CAN / SPI / PWM / 时钟 / OS
 ├── cmake/                   交叉编译工具链、板级编译选项、警告设置
@@ -195,8 +196,10 @@ cmake --preset h723-template-debug && cmake --build --preset h723-template-debug
 
 1. 复制 `robots/_template/` 为 `robots/<兵种名>/`。
 2. 改 `config.h`：PID 参数、解锁用哪个拨杆、IMU 安装方向、电池参数等固定参数。
-3. 改 `robot.c`：电机配置（CAN 总线、ID、停机动作）；`robot_init()` 里登记设备和子系统；`robot_control_step()` 里写每个控制周期做什么。
-4. 编译时选这个兵种：`cmake --preset h723-template-debug -DRM_ROBOT=<兵种名>`。
+3. 改 `robot.c`：电机配置（CAN 总线、ID、停机动作）、`robot_init()` 里登记设备和子系统；`objects.h` 同步声明新增的对象。
+4. 改 `control_task.c`：每个控制周期做什么（读输入 → 安全门 → 子系统 → 发送，四步写在循环里）。`heartbeat_task.c` 改打印内容。
+   各任务的调用关系见 `docs/CALL_FLOW.md`。
+5. 编译时选这个兵种：`cmake --preset h723-template-debug -DRM_ROBOT=<兵种名>`。
 
 分层规则、命名和安全相关代码的写法见 `docs/CODING_STANDARD.md`。
 

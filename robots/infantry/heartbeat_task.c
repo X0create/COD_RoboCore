@@ -1,32 +1,31 @@
 /**
- * @file    debug.c
- * @brief   步兵的心跳任务（说明见 debug.h）
- * @note    每 25 ms 一步：状态灯、电池检查、模式提示音、蜂鸣器；每 1 s 打印模式、遥控、四个轮子、底盘、IMU、电池。
+ * @file    heartbeat_task.c
+ * @brief   步兵的心跳任务：状态灯、蜂鸣器、低电量提示、每秒通过 RTT 打印一次状态
+ * @note    只读控制相关的对象（objects.h），不参与控制；打印的数值只供观察，
+ *          单个 float 读写是原子的，但不同字段可能来自不同周期。
+ *          每 25 ms 一步：状态灯、电池检查、模式提示音、蜂鸣器；每 1 s 打印模式、遥控、四个轮子、底盘、IMU、电池。
  *          浮点用整数打印（RTT 的 printf 不支持 %f）：毫弧度/秒、毫米/秒、毫牛·米。
  */
-#include "debug.h"
+#include "tasks.h"
 
 #include "config.h"
 #include "core/log/log.h"
 #include "core/os/os.h"
 #include "devices/battery/battery.h"
 #include "devices/buzzer/buzzer.h"
+#include "objects.h"
 #include "platform/adc.h"
 #include "platform/status_led.h"
 #include "platform/time.h"
 
 #define STEP_MS                25u
-#define STEPS_PER_BEAT         40u /* 40 × 25 ms = 1 s 一拍 */
-#define STACK_WORDS            256u
+#define STEPS_PER_BEAT         40u   /* 40 × 25 ms = 1 s 一拍 */
 #define LED_GREEN_LEVEL        0x20u /* WS2812 满亮度很刺眼，1/8 亮度足够看清 */
 #define LOW_BATTERY_BEEP_STEPS 80u   /* 80 × 25 ms = 2 s 响一次 */
 
-static const DebugView *view;
 static const BatteryConfig battery_config = INFANTRY_BATTERY_CONFIG;
 static Battery battery;
 static Buzzer buzzer;
-static RmTask task;
-static StackType_t stack[STACK_WORDS];
 
 /* 绿色每拍闪两下表示正常：0–50 ms 亮一次，200–225 ms 再亮一次（与样板相同，用户 2026-09-28 指定） */
 static bool led_on_at(uint32_t step)
@@ -51,9 +50,9 @@ static const char *mode_name(RobotMode mode)
 static void log_rc(void)
 {
     RcState rc;
-    if (!rc_state_read(view->rc_state, &rc, RC_LOST_TIMEOUT_MS))
+    if (!rc_state_read(&rc_state, &rc, RC_LOST_TIMEOUT_MS))
     {
-        RM_LOG_I("rc lost (bad frames %u)", (unsigned)view->dr16->bad_frames);
+        RM_LOG_I("rc lost (bad frames %u)", (unsigned)dr16.bad_frames);
         return;
     }
     RM_LOG_I("rc ch %d %d %d %d %d, sw %d %d", rc.ch[0], rc.ch[1], rc.ch[2], rc.ch[3], rc.ch[4],
@@ -62,10 +61,10 @@ static void log_rc(void)
 
 static void log_chassis(void)
 {
-    const Chassis *c = view->chassis;
+    const Chassis *c = &chassis;
     for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
     {
-        const Motor *m = &view->wheel[i];
+        const Motor *m = &wheel_motor[i];
         MotorFeedback fb;
         if (!motor_read_feedback(m, &fb))
         {
@@ -85,7 +84,7 @@ static void log_chassis(void)
 static void log_imu(void)
 {
     ImuState st;
-    if (!imu_state_read(view->imu_state, &st, IMU_STALE_MS))
+    if (!imu_state_read(&imu_state, &st, IMU_STALE_MS))
     {
         RM_LOG_I("imu not ready");
         return;
@@ -120,7 +119,7 @@ static void check_battery(uint32_t tick)
 /* 模式变化时的提示音：进入 Manual 为解锁音，离开为上锁音 */
 static void beep_on_mode_change(RobotMode *last)
 {
-    const RobotMode mode = view->gate->mode;
+    const RobotMode mode = gate.mode;
     if (mode != *last)
     {
         if (mode == ROBOT_MODE_MANUAL)
@@ -135,14 +134,15 @@ static void beep_on_mode_change(RobotMode *last)
     }
 }
 
-static void heartbeat_entry(void *arg)
+void heartbeat_task_entry(void *arg)
 {
     (void)arg;
     uint32_t beat = 0u;
     uint32_t step = 0u;
     uint32_t tick = 0u;
-    RobotMode last_mode = view->gate->mode;
+    RobotMode last_mode = gate.mode;
 
+    battery_init(&battery, &battery_config);
     if (buzzer_init(&buzzer))
     {
         buzzer_play(&buzzer,
@@ -165,7 +165,7 @@ static void heartbeat_entry(void *arg)
         if (step == 0u)
         {
             /* 每次打印都会读一次时间，同时保证 DWT 扩展计数至少每 7.8 s 更新一次（time.h 的 @pre） */
-            RM_LOG_I("alive %u, mode %s", (unsigned)beat, mode_name(view->gate->mode));
+            RM_LOG_I("alive %u, mode %s", (unsigned)beat, mode_name(gate.mode));
             log_rc();
             log_chassis();
             log_imu();
@@ -176,15 +176,5 @@ static void heartbeat_entry(void *arg)
 
         step = (step + 1u) % STEPS_PER_BEAT;
         rm_task_delay_until(&last_wake, STEP_MS);
-    }
-}
-
-void debug_create_task(uint32_t priority, const DebugView *v)
-{
-    view = v;
-    battery_init(&battery, &battery_config);
-    if (!rm_task_create(&task, "heartbeat", heartbeat_entry, NULL, priority, stack, STACK_WORDS))
-    {
-        RM_LOG_E("create heartbeat task failed");
     }
 }

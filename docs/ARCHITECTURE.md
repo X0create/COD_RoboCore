@@ -211,9 +211,9 @@ rm-template/
 ├── subsystems/
 │   ├── ins/  gimbal/  chassis/  shooter/  leg/     # 功率控制属于 chassis / leg 内部，见“功率控制”一节
 ├── robots/
-│   ├── common/                  # app_main()、模式状态机、安全门
+│   ├── common/                  # app_main()、comm_rx、daemon 任务、安全门
 │   ├── _template/               # new_robot.py 复制的样板
-│   ├── infantry/                # config.h robot.c debug.c
+│   ├── infantry/                # config.h objects.h robot.c tasks.h control_task.c ins_task.c heartbeat_task.c
 │   ├── hero/
 │   ├── wheel_leg/
 │   ├── sentry_gimbal/           # 多板机器人：每块板一个目录，共用一份 board_link_table.c
@@ -235,7 +235,7 @@ rm-template/
 
 **关键点**
 
-- **一个固件目标 = robots/ 下一个目录。** 新建兵种运行 `tools/new_robot.py <名字>`：从 `robots/_template/` 复制目录、加 CMake 预设，并打印剩余手工步骤清单（改 `config.h`、`robot.c`、`debug.c`）。
+- **一个固件目标 = robots/ 下一个目录。** 新建兵种运行 `tools/new_robot.py <名字>`：从 `robots/_template/` 复制目录、加 CMake 预设，并打印剩余手工步骤清单（改 `config.h`、`robot.c`、`objects.h`、`control_task.c`、`heartbeat_task.c`）。兵种目录一个任务一个文件，任务表在 `robot.c`（ADR 0044），调用关系见 `docs/CALL_FLOW.md`。
 - **一块板 = boards/ 下一个目录 + platform/ 下一份实现。** 资源和算力够用时，上层代码在 H723 和 F407 之间原样复用；每个目录在 config.h 里声明需要的能力（CAN 路数、CAN FD、控制频率），CMake 与板子能力比对，不支持的组合在构建时报错。
 - **多板是通用机制，不只属于哨兵**：步兵常分云台板和底盘板（24\_Wolf），平衡步兵用 MC02 底盘 + C 板云台（SPR），哨兵是双云台加底盘。每块板一个 robots/ 目录，可以是不同的主控，共用 devices/board\_link 和同一份跨板话题表。
 - **CubeMX 重新生成只会改写 boards/<板子>/ 下的文件**，但**它会悄悄删掉它认为不属于用户的代码**。UniC 在同一块板上出过这些事故：
@@ -365,7 +365,7 @@ static Watchdog yaw_motor_wd = { .name = "yaw_motor", .timeout_ms = 20, .on_offl
   - RTT 自带的格式化函数**不支持 `%f`**，而且会错位吃掉后面的参数；浮点数要先放大成整数，并在日志里写明倍率（UniC 实测）。
   - 1 kHz 的路径上不打日志：打日志本身就会造成掉周期。
   - RTT 控制块在运行时初始化，J-Link/Ozone 要在固件跑起来之后才能连上 RTT。
-- **波形**：保留 VOFA JustFloat 输出，通道定义集中在 `robots/<兵种>/debug.c`。
+- **波形**：保留 VOFA JustFloat 输出，通道定义集中在 `robots/<兵种>/heartbeat_task.c`。
 - **计时**：`rm_time_now_us()` 基于 DWT 周期计数器，所有积分、微分都用实测 dt，不再假定固定 1 ms。
   - 这是全工程**唯一**的时间来源（见硬性要求）。RTOS tick 只用于任务延时，不用于判断数据新旧。
   - DWT 计数器是 32 位的，在 H723 的 550 MHz 下约 7.8 s 回绕一次。扩展成 64 位时，必须保证每个回绕周期内至少更新一次（例如在 tick 钩子里更新）；读取时用“读两次比较”或临界区，防止读到一半被打断。
@@ -669,7 +669,7 @@ command 任务第一步把它们统一成一个 `OperatorInput`（摇杆、拨�
 | --- | --- |
 | 选兵种 | CMake 预设 `-DROBOT=infantry` 只编译 `robots/infantry/`（Keil 的做法见 ADR 0019 之后的“Keil”一节） |
 | 选主控 | `-DBOARD=dm_mc02` 选 `boards/` 和 `platform/` 的实现；上层代码不出现板子宏 |
-| 兵种差异 | 全部写进 `robots/<兵种>/config.h`（电机、ID、参数）、robot.c（组装哪些子系统）、debug.c；子系统代码对所有兵种相同，新兵种用 tools/new\_robot.py 从模板生成 |
+| 兵种差异 | 全部写进 `robots/<兵种>/config.h`（电机、ID、参数）、robot.c（组装哪些子系统、任务表）、`*_task.c`（每个任务一个文件）；子系统代码对所有兵种相同，新兵种用 tools/new\_robot.py 从模板生成 |
 | 轮腿 | 用 `leg` 子系统替换 `chassis`，读同一个 `RobotCmd` 里的 chassis 部分；平衡控制（LQR）在控制任务内运行。LQR 增益按腿长拟合成多项式，在 MATLAB 里离线生成系数表（SPR 的做法），系数表作为 `config.h` 常量，拟合脚本放在 `tools/`。离地检测、跳跃、上台阶是 `leg` 的子状态，每个都要定义自己的安全动作 |
 | 多板（任意兵种） | 每块板一个 robots/ 目录，两块板可以是不同主控；BoardLink 按表把指定话题映射到 CAN 帧（话题、帧 ID、发送周期），另一块板收到后原样发布。对子系统来说，话题来自本板还是另一块板没有区别。一个 CMake 预设可以同时构建一台车的全部板子 |
 
@@ -960,7 +960,7 @@ if (!RM_CHECK(quat_ekf_update(&self->ekf, &sample, dt_s) == ALGO_OK, ERR_EKF_DIV
 **全车停在发送出口统一执行。** 子系统照常计算；只要本周期需要全车停，发送前由出口把每个电机的指令改写成它的 `stop_action`。这样即使某个子系统漏判，也不会在全车停时发出运动指令。机构停只由子系统自己处理，出口不再检查第二遍。
 
 ```c
-// robots/common/control_task.c
+// robots/<兵种>/control_task.c 的循环体（ADR 0044：每个兵种自己写，四步直接可见）
 void control_step(void)
 {
     ControlInput input;
@@ -1346,6 +1346,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0041 | 用户 2026-09-30 授权选更优：参考 HNU_RM_SHARK_C / basic_framework 的 cmd 任务，**`OperatorInput`、`KeyTracker`、`RobotCmd` 和 command 任务与第一个真正的子系统（云台或底盘）一起做**，不先写字段；届时采用两点做法：① 模式切换要看子系统反馈（例如云台回中完成才进入陀螺仪模式、底盘在云台就绪后才跟随）；② 云台从失能进入受控时先用编码器闭环带斜坡回中，回中完成时记录 IMU 航向作零点，再切 IMU 闭环，编码器差值按最短方向算 | 现在只有样板的一台电机，`RobotCmd` 的云台 / 底盘 / 发射字段没有使用者，先写只能猜（违背“只写必要”）；解锁和急停仍只认 DR16（ADR 0032、0036） | 阶段 4、5 |
 | 0042 | 用户 2026-09-30 授权“选更优的改”：IMU 加热参数按**本板实测**重定：每 **1280 ms** 算一次（与 BMI088 温度寄存器更新同步）、上限 **8%**、kp **0.01 / °C**、积分时间 **10 s**。取代 ADR 0033 第二步的 UniC 参数（上限 25%、kp 0.05、每 100 ms） | 实测（`docs/data/heater_2026-09-30.csv`，电池供电）：稳态只需约 2% 占空比；25% 时加热片附近约 24 °C/s，芯片读数时间常数约 3 s；温度 1.28 s 才更新一次。UniC 参数在本板上冷启动冲到约 46 °C、稳定后 38–41 °C 摆动（上板与拟合模型一致）。三节点热模型（`tools/heater_model.py`，拟合误差 0.2 °C）上新参数：环境 15–35 °C、加热功率 ±30% 时峰值不超过 41.4 °C、稳态峰峰 < 0.1 °C；代价是冷启动到温慢一些（25 °C 环境约 10–20 s）。UniC 的 16% 稳态占空比可能是加热片供电电压不同。**上板复测（同日）**：9 s 到温、无过冲，稳态 40.125–40.25 °C，与模型一致 | `devices/imu/bmi088` |
 | 0043 | 用户 2026-09-30 决定：① **底盘三种轮组都做，轮腿暂不做**：一个 `subsystems/chassis` 按 `ChassisConfig.type` 选四轮全向轮 / 麦轮 / 舵轮，运动学在 `algorithm/kinematics/`（`omni`、`mecanum`、`steer`，共用 `chassis_vel.h`）；② 第一版**底盘直接读遥控**（`robot.c` 把摇杆换算成 `ChassisVel`），`OperatorInput` / `RobotCmd` / command 任务推迟到云台加入时（修订 ADR 0041“与第一个子系统一起做”的时机）；③ 新兵种目录 `robots/infantry/`、预设 `h723-infantry-debug`，样板 `_template` 保持不变。实现约定：轮号从左前起逆时针（全向轮 X 形同序）；平移斜坡按合成加速度限幅（分轴限幅会让斜向加速时方向先偏到 45°）；机构停 = 任一电机离线时目标改 0、按斜坡受控减速；全车停时斜坡起点对齐正解出的实测速度；舵轮转向电机须支持力矩指令且角度零点上电即确定（GM6020 的指令按 ADR 0031 ③ 仍待加） | 用户要求各种轮组都有；先让四个轮子转起来并上台架，指令层等有第二个子系统（云台）时再定字段，避免猜 | 阶段 5 |
+| 0044 | 用户 2026-09-30 选第 1 档（队友反映“函数嵌套太多，不如老模板直观”）：**兵种目录一个任务一个文件**，照老模板 `Application/Task/`：`robots/<兵种>/control_task.c`（循环体里直接写读输入 → 安全门 → 子系统 → 发送四步，取代 `common/control_task.c` + `robot_control_step()`）、`ins_task.c`、`heartbeat_task.c`（原步兵 `debug.c`，去掉 `DebugView` 指针结构）；`robot.c` 只放对象定义、`robot_init()`、`robot_start()` 和**任务表**（名字、优先级、栈、周期一处列全）；对象声明集中在同目录 `objects.h`，相当于老模板的全局变量（CODING_STANDARD 第 8 节的例外，只限兵种目录内）；新增 `docs/CALL_FLOW.md` 调用关系地图（含老模板结构）。comm_rx、daemon 各兵种相同，仍在 `common/`。串口回调去掉 `void *ctx` 的强制转换，直接用对象。第 2 档（去掉函数指针注册、薄包装）暂不做，等队友看过再定 | 打开一个文件就能看到一个任务的完整循环；读代码先查地图再跳转。安全门、发送出口改写、话题都保留（ADR 0026） |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 

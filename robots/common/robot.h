@@ -19,14 +19,11 @@ extern "C"
  */
 RM_NODISCARD bool robot_init(void);
 
-/** 静态创建本兵种的全部任务（startup 任务除外，它由 CubeMX 创建） */
+/** 静态创建本兵种的全部任务（startup 任务除外，它由 CubeMX 创建）。兵种的 robot.c 里有一张任务表 */
 void robot_create_tasks(void);
 
 /** startup 任务最后调用（调度器已运行、接收已打开）：设备自检之后允许解锁 */
 void robot_start(void);
-
-/** control 任务每个周期调用一次（1 kHz）：读输入 → 安全门 → 子系统 → 全车停改写 → 电机组发送 */
-void robot_control_step(void);
 
 #ifdef __cplusplus
 }
