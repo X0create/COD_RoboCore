@@ -1,6 +1,6 @@
 /**
  * @file    chassis.h
- * @brief   底盘子系统：四轮全向轮 / 麦轮 / 舵轮，由 ChassisConfig.type 选择
+ * @brief   底盘子系统：四轮全向轮 / 麦轮 / 舵轮 / 半舵半全向，由 ChassisConfig.type 选择
  * @note    control_task 每 1 ms 调用一次 chassis_step()，分三步（与 COD-H7-Template Control_Task 的写法对应）：
  *            1. 读实测：各电机的转速（舵轮还有朝向）→ chassis.measure
  *            2. 算目标：目标底盘速度过斜坡 → 逆解出各轮目标 → chassis.target
@@ -21,6 +21,7 @@
 #include "02_devices/motor/motor.h"
 #include "03_algorithm/control/pid.h"
 #include "03_algorithm/kinematics/chassis_vel.h"
+#include "03_algorithm/kinematics/half_steer.h"
 #include "03_algorithm/kinematics/mecanum.h"
 #include "03_algorithm/kinematics/omni.h"
 #include "03_algorithm/kinematics/steer.h"
@@ -31,20 +32,21 @@ extern "C"
 {
 #endif
 
-/* 三种轮组都是 4 个轮子 */
+/* 各种轮组都是 4 个轮子 */
 #define CHASSIS_WHEELS 4u
 _Static_assert(OMNI_WHEELS == CHASSIS_WHEELS && MECANUM_WHEELS == CHASSIS_WHEELS
-                   && STEER_WHEELS == CHASSIS_WHEELS,
+                   && STEER_WHEELS == CHASSIS_WHEELS && HALF_STEER_WHEELS == CHASSIS_WHEELS,
                "各运动学的轮子数与底盘一致");
 
 typedef enum
 {
-    CHASSIS_OMNI,    /* 全向轮 */
-    CHASSIS_MECANUM, /* 麦轮 */
-    CHASSIS_STEER,   /* 舵轮：每个轮子多一个转向电机 */
+    CHASSIS_OMNI,       /* 全向轮 */
+    CHASSIS_MECANUM,    /* 麦轮 */
+    CHASSIS_STEER,      /* 舵轮：每个轮子多一个转向电机 */
+    CHASSIS_HALF_STEER, /* 半舵半全向：一条对角线两个舵轮（各多一个转向电机），另一条两个全向轮 */
 } ChassisType;
 
-/** 舵轮专用参数 */
+/** 转向电机的参数：舵轮和半舵半全向共用（kinematics 只有舵轮使用；半舵半全向只读舵轮那两个轮子的项） */
 typedef struct
 {
     SteerConfig kinematics;
@@ -61,7 +63,8 @@ typedef struct
     ChassisType type;
     OmniConfig omni;          /* 只有全向轮使用 */
     MecanumConfig mecanum;    /* 只有麦轮使用 */
-    ChassisSteerConfig steer; /* 只有舵轮使用 */
+    ChassisSteerConfig steer; /* 舵轮、半舵半全向使用（转向电机零点和 PID） */
+    HalfSteerConfig half_steer; /* 只有半舵半全向使用（几何和哪条对角线是舵轮） */
     PidParam
         drive_speed_pid; /* 驱动轮速度环：rad/s → N·m；PID 不带 dt，按 1 kHz 整定（ADR 0029） */
     float max_accel_m_s2;   /* 平移加速度上限（加速、减速、机构停都按它） */
@@ -72,11 +75,11 @@ typedef struct
 typedef struct
 {
     float drive_speed_rad_s[CHASSIS_WHEELS]; /* 各驱动轮转速 */
-    float heading_rad[CHASSIS_WHEELS];       /* 舵轮：各轮朝向 */
-    float steer_speed_rad_s[CHASSIS_WHEELS]; /* 舵轮：各转向电机转速 */
+    float heading_rad[CHASSIS_WHEELS];       /* 有转向电机的轮子：各轮朝向 */
+    float steer_speed_rad_s[CHASSIS_WHEELS]; /* 有转向电机的轮子：各转向电机转速 */
     bool drive_online[CHASSIS_WHEELS];
-    bool steer_online[CHASSIS_WHEELS];
-    bool all_online;     /* 全部电机在线；有一个离线就是机构停 */
+    bool steer_online[CHASSIS_WHEELS]; /* 没有转向电机的轮子恒为 false，不参与 all_online */
+    bool all_online;                   /* 全部电机在线；有一个离线就是机构停 */
     ChassisVel velocity; /* 由各轮实测正解出的底盘速度（有电机离线时为 0） */
 } ChassisMeasure;
 
@@ -85,14 +88,14 @@ typedef struct
 {
     ChassisVel velocity;                     /* 过斜坡之后的目标底盘速度 */
     float drive_speed_rad_s[CHASSIS_WHEELS]; /* 各驱动轮目标转速 */
-    float heading_rad[CHASSIS_WHEELS];       /* 舵轮：各轮目标朝向 */
+    float heading_rad[CHASSIS_WHEELS];       /* 有转向电机的轮子：各轮目标朝向 */
 } ChassisTarget;
 
 typedef struct
 {
     const ChassisConfig *cfg;
     Motor *drive[CHASSIS_WHEELS]; /* 驱动电机 */
-    Motor *steer[CHASSIS_WHEELS]; /* 转向电机，只有舵轮使用 */
+    Motor *steer[CHASSIS_WHEELS]; /* 转向电机；没有转向电机的轮子为 NULL */
     Omni omni;                    /* 只有全向轮使用 */
     Pid drive_pid[CHASSIS_WHEELS];
     Pid steer_angle_pid[CHASSIS_WHEELS];
@@ -102,7 +105,8 @@ typedef struct
 } Chassis;
 
 /**
- * @param   steer  各轮转向电机，只有舵轮使用，其余轮组传 NULL
+ * @param   steer  各轮转向电机：舵轮 4 个都填；半舵半全向只填舵轮那两个、全向轮位置填 NULL；
+ *                 其余轮组整个传 NULL
  * @return  false：有电机不支持力矩指令（这种配置不能用在底盘上）
  * @pre     各电机已 motor_init()；cfg 在整个运行期间有效
  */

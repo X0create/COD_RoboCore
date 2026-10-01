@@ -182,7 +182,7 @@ COD_RoboCore/
 │   ├── filter/                  # lpf kalman
 │   ├── math/                    # matrix（小矩阵运算，ADR 0029）
 │   ├── attitude/                # quaternion quat_ekf gimbal_angles
-│   ├── kinematics/              # chassis_vel omni mecanum steer（leg_vmc 以后）
+│   ├── kinematics/              # chassis_vel omni mecanum steer half_steer（leg_vmc 以后）
 │   ├── power/                   # 电机功率模型、RLS 参数辨识、功率分配（纯计算）
 │   └── ballistic/
 ├── 04_core/
@@ -1327,6 +1327,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0060 | 用户 2026-10-01 确认修复“旧 CAN 帧刷新在线状态”：`watchdog_feed_data()` 增加参数 `rx_us`（数据的接收时刻），`motor_receive` 传中断里记下的 `CanFrame.stamp_us`，不再用解析时刻；DR16 传读出字节的时刻（串口没有逐字节时刻），VT 链路、ins 传当时的时刻 | comm_rx_task 被耽误时，积压的旧帧不会让离线的电机“复活” |
 | 0061 | 用户 2026-10-01：“robot 这个名字不唯一，什么都能叫 robot”，选**按内容命名**：`01_applic/robot/` → **`01_applic/config/`**（≈ 老模板 Config.h），`robot_config.h` → `params.h`（全部参数），`robot.h` → `objects.h`（车上对象的声明），`robot.c` 拆成 `objects.c`（对象定义 + `objects_init()`，原 `robot_init()`）和 `task_table.c`（任务表 `task_table[]`，原 `robot_tasks[]`）；测试 `test_robot_config` → `test_params` | 看文件名就知道里面是什么；改任务优先级只开任务表 |
 | 0062 | 用户 2026-10-01 要求检查全部命名，选 A、B 两组全改（只改名）：① `ref_frame` → `referee_frame`（`ref` 在缩写表里是 reference）；② 停机动作只叫 stop：`SafeAction`/`SAFE_ACTION_*`/`motor_apply_safe_action` → `StopAction`/`STOP_ACTION_*`/`motor_apply_stop_action`；③ 超时统一 `模块_TIMEOUT_MS`：`RC_LOST_TIMEOUT_MS` → `DR16_TIMEOUT_MS`、`IMU_STALE_MS` → `INS_TIMEOUT_MS`、`MOTOR_OFFLINE_TIMEOUT_MS` → `MOTOR_TIMEOUT_MS`；④ `RobotMode`/`ROBOT_MODE_*` → `SafetyMode`/`SAFETY_MODE_*`；⑤ `rm_` 只用于会和 C 库或 FreeRTOS 重名的模块（time、log、task、delay、critical），`rm_status_led_set` → `status_led_set`，规则写进编码规范第 4 节；⑥ `objects_init()` 声明移到 `config/objects.h`；⑦ `AppTask` → `TaskTableEntry`；⑧ `Mat`/`mat_*` → `Matrix`/`matrix_*`；⑨ `quat_to_euler` → `quat_ekf_to_euler`、`vt13_decode` → `vt_link_decode_vt13`、`CycleExtender` → `CycleExtend`；⑩ `pid_calc` → `pid_step`。不改：`04_core/os/os.h`（改名 task.h 会和 FreeRTOS 的 task.h 冲突）、CubeMX 的 `startup_task`（要在 CubeMX 界面改） | 一个概念一个词；函数前缀就是文件名 |
+| 0063 | 用户 2026-10-01 要求支持**半舵半全向对角线底盘**：新增 `03_algorithm/kinematics/half_steer`（一条对角线两个舵轮、另一条两个全向轮；`HalfSteerConfig.steer_diagonal` 选对角线；全向轮沿切向安装，同 omni.h；正解对 6 个方程取最小二乘）；单个舵轮的逆解抽成 `steer_wheel_inverse()`，舵轮和半舵共用；`ChassisType` 加 `CHASSIS_HALF_STEER`，chassis.c 里“是不是舵轮底盘”改为“这个轮子有没有转向电机”（`has_steer_motor`），全向轮位置的转向电机传 NULL；转向电机零点和 PID 仍用 `ChassisSteerConfig` | 换成半舵底盘只改 params.h 和 objects.c；轮子级判断让两种舵轮底盘共用一套代码 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 

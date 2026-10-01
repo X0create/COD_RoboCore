@@ -964,6 +964,11 @@
           <GroupName>03_algorithm/kinematics</GroupName>
           <Files>
             <File>
+              <FileName>half_steer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\03_algorithm\kinematics\half_steer.c</FilePath>
+            </File>
+            <File>
               <FileName>mecanum.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\03_algorithm\kinematics\mecanum.c</FilePath>

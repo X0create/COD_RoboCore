@@ -38,6 +38,14 @@ typedef struct
 } SteerWheel;
 
 /**
+ * @brief   单个舵轮的逆解：转向轴在底盘系 (x_m, y_m) 处的轮子 → 目标朝向和转速
+ * @param   heading_rad  这个轮子的当前朝向（可以是多圈的连续值）
+ * @note    steer_inverse() 和半舵半全向底盘（half_steer.h）都用它
+ */
+SteerWheel steer_wheel_inverse(float x_m, float y_m, float wheel_radius_m, const ChassisVel *vel,
+                               float heading_rad);
+
+/**
  * @brief   逆解：底盘速度 → 各轮目标朝向和转速
  * @param   heading_rad  各轮当前朝向（可以是多圈的连续值）
  * @pre     各尺寸 > 0

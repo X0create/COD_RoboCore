@@ -16,7 +16,7 @@
 | --- | --- |
 | `system/` | `app_main.c`（上电顺序，只有这一份）、`safety_gate.c`（全车唯一的安全门） |
 | `tasks/` | 全部任务，每个一对 `xxx_task.h/.c`（入口声明在 .h）：`ins_task.c`（1 kHz 姿态）、`control_task.c`（1 kHz 控制）、`comm_rx_task.c`（接收的完整流程：中断唤醒、打开接收、分派、bus-off 恢复）、`detect_task.c`（10 ms 上线 / 离线）、`indicator_task.c`（25 ms 灯、蜂鸣器、电池）、`log_task.c`（1 s 打印） |
-| `modules/chassis/` | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮，读实测 → 算目标 → 算输出（ADR 0043） |
+| `modules/chassis/` | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮 / 半舵半全向，读实测 → 算目标 → 算输出（ADR 0043） |
 | `modules/ins/` | 惯性导航：`ins.c`（BMI088 → 零偏标定 → EKF → 保存最新姿态，`ins_read()` 读） |
 | `modules/gimbal/`、`shooter/`、`leg/`、`arm/` | （规划）云台、发射、轮腿、机械臂（工程） |
 | `config/` | 这台车（预设 `h723-debug`）。目前：四轮全向轮底盘，遥控直接给底盘速度 |

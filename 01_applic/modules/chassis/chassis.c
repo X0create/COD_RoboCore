@@ -13,6 +13,13 @@ static void chassis_stop(Chassis *chassis);
 static void chassis_target_update(Chassis *chassis, const ChassisVel *cmd, float dt_s);
 static void chassis_output_update(Chassis *chassis, float output_scale);
 
+/* 轮 i 有没有转向电机：舵轮全部有；半舵半全向只有舵轮那条对角线有 */
+static bool has_steer_motor(const ChassisConfig *cfg, unsigned i)
+{
+    return cfg->type == CHASSIS_STEER
+           || (cfg->type == CHASSIS_HALF_STEER && half_steer_is_steer(&cfg->half_steer, i));
+}
+
 /*
  * 记下配置和电机，按轮组类型初始化运动学和 PID。
  * 底盘靠力矩控制：有电机不支持力矩指令（如 GM6020 电压模式）就在初始化时拒绝，不等解锁后才发现不动
@@ -34,7 +41,7 @@ bool chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive
         chassis->drive[i] = drive[i];
         pid_init(&chassis->drive_pid[i], PID_POSITION, &cfg->drive_speed_pid);
 
-        if (cfg->type == CHASSIS_STEER)
+        if (has_steer_motor(cfg, i))
         {
             if (!motor_supports_torque(steer[i]))
             {
@@ -79,7 +86,7 @@ static void chassis_measure_update(Chassis *chassis)
         m->drive_speed_rad_s[i] = fb.speed_rad_s;
         m->all_online = m->all_online && m->drive_online[i];
 
-        if (cfg->type == CHASSIS_STEER)
+        if (has_steer_motor(cfg, i))
         {
             m->steer_online[i] = motor_read_feedback(chassis->steer[i], &fb);
             m->heading_rad[i] = fb.angle_rad - cfg->steer.zero_rad[i];
@@ -111,6 +118,17 @@ static void chassis_measure_update(Chassis *chassis)
                                          .speed_rad_s = m->drive_speed_rad_s[i] };
             }
             steer_forward(&cfg->steer.kinematics, wheel, &m->velocity);
+            break;
+        }
+        case CHASSIS_HALF_STEER:
+        {
+            SteerWheel wheel[CHASSIS_WHEELS];
+            for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
+            {
+                wheel[i] = (SteerWheel){ .heading_rad = m->heading_rad[i],
+                                         .speed_rad_s = m->drive_speed_rad_s[i] };
+            }
+            half_steer_forward(&cfg->half_steer, wheel, &m->velocity);
             break;
         }
     }
@@ -190,6 +208,17 @@ static void chassis_target_update(Chassis *chassis, const ChassisVel *cmd, float
             }
             break;
         }
+        case CHASSIS_HALF_STEER:
+        {
+            SteerWheel wheel[CHASSIS_WHEELS];
+            half_steer_inverse(&cfg->half_steer, &t->velocity, chassis->measure.heading_rad, wheel);
+            for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
+            {
+                t->heading_rad[i] = wheel[i].heading_rad; /* 全向轮的朝向不用 */
+                t->drive_speed_rad_s[i] = wheel[i].speed_rad_s;
+            }
+            break;
+        }
     }
 }
 
@@ -226,8 +255,8 @@ static void chassis_output_update(Chassis *chassis, float output_scale)
             pid_reset(&chassis->drive_pid[i]);
         }
 
-        /* 舵轮的转向电机：角度环 → 速度环 */
-        if (cfg->type != CHASSIS_STEER)
+        /* 转向电机（舵轮）：角度环 → 速度环 */
+        if (!has_steer_motor(cfg, i))
         {
             continue;
         }

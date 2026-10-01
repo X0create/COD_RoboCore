@@ -52,6 +52,20 @@ static const ChassisConfig steer_cfg = {
     .max_alpha_rad_s2 = 4.0f,
 };
 
+static const ChassisConfig half_steer_cfg = {
+    .type = CHASSIS_HALF_STEER,
+    .steer = { .angle_pid = { .kp = 20.0f, .output_limit = 30.0f },
+               .speed_pid = { .kp = 0.1f, .output_limit = 1.0f } },
+    .half_steer = { .steer_diagonal = HALF_STEER_LF_RB,
+                    .steer_radius_m = 0.06f,
+                    .omni_radius_m = 0.076f,
+                    .half_wheelbase_m = 0.2f,
+                    .half_track_m = 0.15f },
+    .drive_speed_pid = DRIVE_PID,
+    .max_accel_m_s2 = 2.0f,
+    .max_alpha_rad_s2 = 4.0f,
+};
+
 /* 电机保存配置指针，所以配置放在静态存储里；每个测试用新的 Motor（看门狗每个实例只能登记一次） */
 static MotorConfig wheel_cfg[CHASSIS_WHEELS];
 static MotorConfig steer_motor_cfg[CHASSIS_WHEELS];
@@ -313,6 +327,31 @@ static void test_steer_turns_wheels_toward_target(void)
     }
 }
 
+/* 半舵半全向：只有舵轮（左前、右后）有转向电机，全向轮位置传 NULL；只给这两个转向电机反馈也算全部在线，
+ * 平移时两个舵轮朝向目标方向，只有它们的转向电机收到指令 */
+static void test_half_steer_turns_only_steer_wheels(void)
+{
+    add_steer_motors();
+    Motor *const half[CHASSIS_WHEELS] = { steer[0], NULL, steer[2], NULL };
+    Chassis c;
+    TEST_ASSERT_TRUE(chassis_init(&c, &half_steer_cfg, wheel, half));
+    const ChassisVel target = { .vx_m_s = 0.5f, .vy_m_s = 1.0f };
+    for (int k = 0; k < 50; k++)
+    {
+        feed_all(0.0f);
+        feed_id(5u, DJI_M2006_GEAR_RATIO, 0.0f);
+        feed_id(7u, DJI_M2006_GEAR_RATIO, 0.0f);
+        chassis_step(&c, &target, false, 1.0f, DT_S);
+    }
+    TEST_ASSERT_TRUE(c.measure.all_online);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, atan2f(1.0f, 0.5f), c.target.heading_rad[0]);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, atan2f(1.0f, 0.5f), c.target.heading_rad[2]);
+    TEST_ASSERT_TRUE(steer[0]->torque_set && steer[0]->torque_cmd_nm > 0.0f);
+    TEST_ASSERT_TRUE(steer[2]->torque_set && steer[2]->torque_cmd_nm > 0.0f);
+    TEST_ASSERT_FALSE(steer[1]->torque_set);
+    TEST_ASSERT_FALSE(steer[3]->torque_set);
+}
+
 /* 舵轮：转向电机不支持力矩指令（GM6020 目前只有反馈）时拒绝 */
 static void test_steer_rejects_motor_without_torque_command(void)
 {
@@ -373,5 +412,6 @@ int main(void)
     RUN_TEST(test_steer_turns_wheels_toward_target);
     RUN_TEST(test_steer_rejects_motor_without_torque_command);
     RUN_TEST(test_steer_motor_offline_is_mechanism_stop);
+    RUN_TEST(test_half_steer_turns_only_steer_wheels);
     return UNITY_END();
 }

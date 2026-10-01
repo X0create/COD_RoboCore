@@ -102,7 +102,7 @@ COD_RoboCore/
 │   ├── system/              通用框架：app_main.c（上电顺序）、安全门
 │   ├── tasks/               全部 6 个任务（≈ 老模板 Application/Task）：ins、control、comm_rx、detect、indicator、log
 │   ├── modules/             机构（可复用）
-│   │   ├── chassis/         底盘（全向轮 / 麦轮 / 舵轮）
+│   │   ├── chassis/         底盘（全向轮 / 麦轮 / 舵轮 / 半舵半全向）
 │   │   ├── ins/             惯性导航（标定、零偏在线修正、EKF、发布姿态）
 │   │   └── gimbal/ shooter/ leg/ arm/   （规划）云台、发射、轮腿、机械臂
 │   └── config/              这台车：params.h（参数）、objects.h / objects.c（对象 + objects_init）、task_table.c（任务表）；目前是四轮全向轮底盘
@@ -118,7 +118,7 @@ COD_RoboCore/
 │   ├── control/             PID、斜坡
 │   ├── filter/              低通、卡尔曼
 │   ├── attitude/            四元数 EKF、陀螺零偏估计
-│   ├── kinematics/          全向轮、麦轮、舵轮运动学
+│   ├── kinematics/          全向轮、麦轮、舵轮、半舵半全向运动学
 │   ├── math/                矩阵运算
 │   ├── power/               RLS（功率模型辨识）
 │   └── ballistic/           （规划）弹道解算

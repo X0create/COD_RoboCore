@@ -5,7 +5,8 @@
  *          各种超时）留在各自模块里，位置见 01_applic/README.md“参数在哪里”。
  *          标 “待量” 的尺寸按实车量好再改；标 “待核对” 的方向在台架上按 docs/VERIFICATION_TODO.md 核对。
  *          换轮组：改 chassis_config 的 .type 并填对应的尺寸（全向轮 .omni、麦轮 .mecanum、
- *          舵轮 .steer，含义见 03_algorithm/kinematics/ 下的头文件）；舵轮还要在 objects.c 里加 4 个转向电机。
+ *          舵轮 .steer，半舵半全向 .half_steer + .steer 的零点和 PID，含义见 03_algorithm/kinematics/ 下的头文件）；
+ *          舵轮还要在 objects.c 里加 4 个转向电机，半舵半全向加 2 个（全向轮位置传 NULL）。
  *          PID 不带 dt（ADR 0029），参数和 1 kHz 调用频率绑定。
  *          这里的表是 static const：只给 objects.c 和 01_applic/tasks/ 里的任务用，没用到的不占空间。
  */

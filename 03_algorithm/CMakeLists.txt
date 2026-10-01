@@ -6,6 +6,7 @@ add_library(rm_algorithm STATIC
     control/ramp.c
     filter/kalman.c
     filter/lpf.c
+    kinematics/half_steer.c
     kinematics/mecanum.c
     kinematics/omni.c
     kinematics/steer.c
