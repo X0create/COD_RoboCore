@@ -162,9 +162,9 @@ COD_RoboCore/
 │   └── warnings.cmake           # -Wall -Wextra -Werror -Wdouble-promotion 等
 ├── 01_applic/                      # 业务（≈ 老模板 Application/），机构和兵种平铺在这一层（ADR 0045）
 │   ├── system/                  # 各兵种共用：app_main（上电顺序）safety_gate indicator_task detect_task comm_rx（ADR 0050）
-│   ├── ins/  gimbal/  chassis/  shooter/  leg/     # 机构（含各自的任务，如 ins_task）；功率控制属于 chassis / leg 内部，见“功率控制”一节
+│   ├── ins/  gimbal/  chassis/  shooter/  leg/  arm/     # 机构（含各自的任务，如 ins_task）；功率控制属于 chassis / leg 内部，见“功率控制”一节
 │   ├── infantry/                # 兵种：infantry_config.h infantry_robot.h infantry_robot.c infantry_control_task.c infantry_comm_rx_task.c infantry_log_task.c
-│   ├── hero/
+│   ├── hero/  engineer/  heavy/（重装，规则未出）
 │   ├── wheel_leg/
 │   ├── sentry_gimbal/           # 多板机器人：每块板一个目录，共用一份 board_link_table.c
 │   └── sentry_chassis/          # 步兵若分云台板和底盘板，同样拆成 infantry_gimbal/ + infantry_chassis/

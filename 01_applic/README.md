@@ -7,7 +7,10 @@
 | `system/` | 各兵种共用的框架部分 | `app_main.c`（上电顺序，只有这一份）、`safety_gate.c`（全车唯一的安全门）、`indicator_task.c`（状态灯、蜂鸣器、低电量）、`detect_task.c`（设备上线 / 离线报告）、`comm_rx_common.c`（接收的公共部分：中断唤醒、打开接收、CAN bus-off 恢复） |
 | `chassis/` | 机构 | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮，读实测 → 算目标 → 算输出（ADR 0043） |
 | `ins/` | 机构 | 惯性导航：`ins.c`（BMI088 → 零偏标定 → EKF → 发布 `imu_state`）、`ins_task.c`（1 kHz 任务，各兵种共用） |
+| `gimbal/`、`shooter/`、`leg/`、`arm/` | 机构（规划） | 云台、发射、轮腿、机械臂（工程） |
 | `infantry/` | 兵种 | 步兵（预设 `h723-infantry-debug`）。第一版只有底盘：四轮全向轮，遥控直接给底盘速度 |
+| `hero/`、`engineer/`、`heavy/`、`wheel_leg/` | 兵种（规划） | 英雄、工程、重装（规则未出）、平衡步兵 |
+| `sentry_gimbal/`、`sentry_chassis/` | 兵种（规划，多板） | 哨兵的云台板和底盘板，用 `02_devices/board_link/` 交换话题 |
 
 ## 兵种目录（以 `infantry/` 为例）
 

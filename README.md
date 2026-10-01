@@ -100,8 +100,9 @@ COD_RoboCore/
 │   ├── system/              各兵种共用：app_main.c（上电顺序）、安全门、indicator（灯 / 蜂鸣器 / 电池）、detect（上线 / 离线）、comm_rx_common.c
 │   ├── chassis/             机构：底盘（全向轮 / 麦轮 / 舵轮）
 │   ├── ins/                 机构：惯性导航（标定、零偏在线修正、EKF、发布姿态）和 1 kHz 的 ins_task
-│   ├── gimbal/ shoot/ …     （规划）云台、发射、轮腿
-│   └── infantry/            兵种：步兵（第一版只有底盘）
+│   ├── gimbal/ shooter/ leg/ arm/   （规划）云台、发射、轮腿、机械臂
+│   ├── infantry/            兵种：步兵（第一版只有底盘）
+│   └── hero/ engineer/ heavy/ wheel_leg/ sentry_gimbal/ sentry_chassis/   （规划）其他兵种
 │                            每个兵种目录（文件名带兵种前缀）：<兵种>_config.h、<兵种>_robot.h、<兵种>_robot.c（对象 + robot_init + 任务表）、control / comm_rx / log 三个任务
 ├── 02_devices/              具体设备驱动（≈ 老模板 Components/Device）
 │   ├── motor/               统一电机接口、DJI、达妙、电机组发送
@@ -109,32 +110,38 @@ COD_RoboCore/
 │   ├── remote/              DR16 遥控器、VT13 图传链路
 │   ├── referee/             裁判系统帧检查（协议解析等官方文档）
 │   ├── vision/              视觉 USB 通信帧层
-│   └── battery/  buzzer/    电池电压、蜂鸣器提示音
+│   ├── battery/  buzzer/    电池电压、蜂鸣器提示音
+│   └── supercap/ actuator/ board_link/   （规划）超级电容、PWM 执行器、板间通信
 ├── 03_algorithm/            纯计算，电脑上可测（≈ 老模板 Components/Algorithm、Controller）
 │   ├── control/             PID、斜坡
 │   ├── filter/              低通、卡尔曼
 │   ├── attitude/            四元数 EKF、陀螺零偏估计
 │   ├── kinematics/          全向轮、麦轮、舵轮运动学
 │   ├── math/                矩阵运算
-│   └── power/               RLS（功率模型辨识）
+│   ├── power/               RLS（功率模型辨识）
+│   └── ballistic/           （规划）弹道解算
 ├── 04_core/                 与业务无关的基础设施
 │   ├── msg/                 带时间戳的话题，以及各条消息：imu_state、rc_state、vt_rc_state、kbm_state
 │   ├── watchdog/            设备在线判断
 │   ├── log/                 RTT 日志（含 SEGGER RTT 源码）
 │   ├── os/                  临界区、延时、静态任务创建
-│   └── util/                CRC
+│   ├── util/                CRC
+│   └── error/  param/       （规划）断言与故障记录、Flash 参数
 ├── 05_platform/             外设接口（≈ 老模板 BSP/）：一个外设一个目录，接口 + 芯片实现 + 辅助代码
 │   ├── can/                 can.h、can_stm32h7.c（FDCAN）、can_dlc、can_rx_ring
 │   ├── uart/  usb_cdc/      串口（DMA 循环接收）、USB 虚拟串口
 │   ├── time/  status_led/   DWT 时钟、WS2812 状态灯
 │   ├── spi/  pwm/  adc/
+│   ├── gpio/ flash/ iwdg/   （规划）引脚、片内 Flash、硬件看门狗
 │   └── stm32h7/             H7 各外设共用的 DMA 缓冲段（.dma_buf）；F407 以后在每个外设目录加 *_stm32f4.c
 ├── 06_boards/               每块板一个目录（CubeMX 生成代码，只改 USER CODE 区）
-│   └── dm_mc02_h723/        达妙 DM-MC02：.ioc、链接脚本 dm_mc02.ld、启动文件、REGEN_CHECKLIST.md
-├── tests/host/              电脑侧单元测试（Unity）
-│   └── fakes/               假 CAN / SPI / PWM / 时钟 / OS
+│   ├── dm_mc02_h723/        达妙 DM-MC02：.ioc、链接脚本 dm_mc02.ld / Keil 的 dm_mc02.sct、MDK-ARM/（Keil 工程）、REGEN_CHECKLIST.md
+│   └── dji_c_f407/          （规划）大疆 C 板
+├── tests/
+│   ├── host/                电脑侧单元测试（Unity）；fakes/ 是假 CAN / SPI / PWM / 时钟 / OS
+│   └── target/ hil/ data/   （规划）板上自测、硬件在环、录制数据
 ├── cmake/                   交叉编译工具链、板级编译选项、警告设置
-├── tools/                   gen_readme_diagrams.py（生成本页的图）；（规划）新建兵种、依赖检查
+├── tools/                   keil_sync.py（整理 Keil 工程）、gen_readme_diagrams.py（生成本页的图）；（规划）新建兵种、依赖检查
 ├── docs/                    架构设计与实施计划、编码规范、开发环境、与旧模板的差异、待验证清单；images/ 放本页的图
 └── CMakePresets.json        两个预设：host-tests（电脑测试）、h723-infantry-debug（步兵固件）
 ```
