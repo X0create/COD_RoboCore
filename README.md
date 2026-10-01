@@ -100,13 +100,12 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 COD_RoboCore/
 ├── 01_applic/               业务（≈ 老模板 Application/）
 │   ├── system/              通用框架：app_main.c（上电顺序）、安全门、comm_rx_common.c（接收公共部分）
-│   ├── tasks/               通用任务：ins_task、detect_task（上线 / 离线）、indicator_task（灯 / 蜂鸣器 / 电池）
+│   ├── tasks/               全部 6 个任务（≈ 老模板 Application/Task）：ins、control、comm_rx、detect、indicator、log
 │   ├── modules/             机构（可复用）
 │   │   ├── chassis/         底盘（全向轮 / 麦轮 / 舵轮）
 │   │   ├── ins/             惯性导航（标定、零偏在线修正、EKF、发布姿态）
 │   │   └── gimbal/ shooter/ leg/ arm/   （规划）云台、发射、轮腿、机械臂
-│   └── robot/               这台车：robot_config.h（参数）、robot.h / robot.c（对象 + robot_init + 任务表）、
-│                            control / comm_rx / log 三个任务；目前是四轮全向轮底盘
+│   └── robot/               这台车：robot_config.h（参数）、robot.h / robot.c（对象 + robot_init + 任务表）；目前是四轮全向轮底盘
 ├── 02_devices/              具体设备驱动（≈ 老模板 Components/Device）
 │   ├── motor/               统一电机接口、DJI、达妙、电机组发送
 │   ├── imu/                 BMI088（含恒温加热）
@@ -215,8 +214,8 @@ cmake --preset h723-debug && cmake --build --preset h723-debug
 
 1. 改 `robot_config.h`：电机表（CAN 总线、ID、方向、停机动作）、PID、尺寸、解锁拨杆、IMU 安装方向。
 2. 改 `robot.c`：`robot_init()` 里初始化设备和机构、任务表 `robot_tasks[]`；`robot.h` 同步声明新增的对象和任务。
-3. 改 `robot_control_task.c`：每个控制周期做什么（读输入 → 安全门 → 各机构 → 发送，四步写在循环里）；
-   `robot_comm_rx_task.c` 改接线，`robot_log_task.c` 改打印内容。各任务的调用关系见 `docs/CALL_FLOW.md`。
+3. 改 `01_applic/tasks/control_task.c`：每个控制周期做什么（读输入 → 安全门 → 各机构 → 发送，四步写在循环里）；
+   `tasks/comm_rx_task.c` 改接线，`tasks/log_task.c` 改打印内容。各任务的调用关系见 `docs/CALL_FLOW.md`。
 4. 需要新机构（云台、发射……）时在 `01_applic/modules/` 里加，再在第 2、3 步里接上。
 5. 加了新的 `.c` 文件：在 CMake 里加，Keil 里拖进对应分组（或运行 `python3 tools/keil_sync.py`）。
 

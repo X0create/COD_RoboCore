@@ -18,15 +18,15 @@ add_library(rm_app STATIC
     # 上电顺序、接收公共部分
     system/app_main.c
     system/comm_rx_common.c
-    # 通用任务
+    # 全部任务（≈ 老模板 Application/Task）
     tasks/ins_task.c
+    tasks/control_task.c
+    tasks/comm_rx_task.c
     tasks/detect_task.c
     tasks/indicator_task.c
-    # 这台车：对象和任务表、控制 / 接收 / 打印三个任务
+    tasks/log_task.c
+    # 这台车的对象和任务表（≈ 老模板的全局变量 + freertos.c 的任务列表）
     robot/robot.c
-    robot/robot_control_task.c
-    robot/robot_comm_rx_task.c
-    robot/robot_log_task.c
 )
 target_link_libraries(rm_app PUBLIC rm_app_logic rm_core rm_devices rm_algorithm)
 rm_target_warnings(rm_app)

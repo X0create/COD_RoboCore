@@ -5,8 +5,8 @@
  *          2. robot_init()：设备 → 机构 → 安全门
  *          3. 任务表 robot_tasks[]：6 个任务的优先级、栈、入口
  *          上电顺序（通用）在 01_applic/system/app_main.c：app_main() 调用 robot_init()，再按 robot_tasks[] 创建任务。
- *          本目录的任务：robot_control_task.c、robot_comm_rx_task.c（接线）、robot_log_task.c；ins、detect、indicator_task 通用，
- *          在 01_applic/tasks/。调用关系总图见 docs/CALL_FLOW.md。
+ *          6 个任务都在 01_applic/tasks/（control_task.c 控制、comm_rx_task.c 接线、log_task.c 打印 …），
+ *          调用关系总图见 docs/CALL_FLOW.md。
  */
 #include "robot.h"
 
@@ -101,11 +101,11 @@ static RmTask ins_task, control_task, detect_task, indicator_task,
 const AppTask robot_tasks[] = {
     /* 任务             名字              入口                  参数   优先级  栈                                          周期 */
     { &ins_task,       "ins_task",       ins_task_entry,        &ins,  6u,  ins_stack,       STACK_WORDS(ins_stack)       }, /* 1 ms（01_applic/tasks/ins_task.c） */
-    { &comm_rx_task,   "comm_rx_task",   comm_rx_task_entry,    NULL,  5u,  comm_rx_stack,   STACK_WORDS(comm_rx_stack)   }, /* 收到 CAN / 串口就运行（robot_comm_rx_task.c） */
-    { &control_task,   "control_task",   control_task_entry,    NULL,  4u,  control_stack,   STACK_WORDS(control_stack)   }, /* 1 ms（robot_control_task.c） */
+    { &comm_rx_task,   "comm_rx_task",   comm_rx_task_entry,    NULL,  5u,  comm_rx_stack,   STACK_WORDS(comm_rx_stack)   }, /* 收到 CAN / 串口就运行（comm_rx_task.c） */
+    { &control_task,   "control_task",   control_task_entry,    NULL,  4u,  control_stack,   STACK_WORDS(control_stack)   }, /* 1 ms（control_task.c） */
     { &detect_task,    "detect_task",    detect_task_entry,     NULL,  3u,  detect_stack,    STACK_WORDS(detect_stack)    }, /* 10 ms（01_applic/tasks/detect_task.c） */
     { &indicator_task, "indicator_task", indicator_task_entry,  NULL,  2u,  indicator_stack, STACK_WORDS(indicator_stack) }, /* 25 ms（01_applic/tasks/indicator_task.c） */
-    { &log_task,       "log_task",       log_task_entry,        NULL,  1u,  log_stack,       STACK_WORDS(log_stack)       }, /* 1 s（robot_log_task.c） */
+    { &log_task,       "log_task",       log_task_entry,        NULL,  1u,  log_stack,       STACK_WORDS(log_stack)       }, /* 1 s（log_task.c） */
 };
 /* clang-format on */
 const uint32_t robot_task_count = (uint32_t)(sizeof(robot_tasks) / sizeof(robot_tasks[0]));

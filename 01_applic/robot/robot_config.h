@@ -7,7 +7,7 @@
  *          换轮组：改 chassis_config 的 .type 并填对应的尺寸（全向轮 .omni、麦轮 .mecanum、
  *          舵轮 .steer，含义见 03_algorithm/kinematics/ 下的头文件）；舵轮还要在 robot.c 里加 4 个转向电机。
  *          PID 不带 dt（ADR 0029），参数和 1 kHz 调用频率绑定。
- *          这里的表是 static const：只给本目录的 robot.c、*_task.c 用，没用到的不占空间。
+ *          这里的表是 static const：只给 robot.c 和 01_applic/tasks/ 里的任务用，没用到的不占空间。
  */
 #pragma once
 

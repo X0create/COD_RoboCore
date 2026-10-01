@@ -1,12 +1,12 @@
 /**
- * @file    robot_comm_rx_task.c
+ * @file    comm_rx_task.c
  * @brief   这台车的 comm_rx_task（收到数据就运行）：打开接收，然后把收到的数据交给对应的解析器
  * @note    相当于老模板 bsp_can.c / bsp_uart.c 里的接收回调，但解析放在任务里，中断只收数据并唤醒本任务。
  *          接线一览（接线沿用 COD-H7-Template）：
  *            CAN       四个轮子电机的反馈（总线和 ID 在 robot_config.h 的 wheel_config）
  *            UART5     DR16 遥控接收机 → dr16 → 发布 rc_state
  */
-#include "robot.h"
+#include "01_applic/robot/robot.h"
 
 #include "01_applic/system/comm_rx_common.h"
 #include "05_platform/can/can.h"

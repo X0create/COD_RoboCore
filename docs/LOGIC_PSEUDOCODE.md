@@ -72,7 +72,7 @@ CAN 接收中断（收到一帧）                                → 05_platfor
     打开每一路 CAN 的接收
     打开 UART5（DR16）的 DMA 接收
 
-永远循环：                                              → 01_applic/robot/robot_comm_rx_task.c:comm_rx_task_entry
+永远循环：                                              → 01_applic/tasks/comm_rx_task.c:comm_rx_task_entry
     等待中断叫醒（最多等 10 ms，防止漏掉通知）
 
     对每一路 CAN：
@@ -128,7 +128,7 @@ CAN 接收中断（收到一帧）                                → 05_platfor
 ## 5. control_task：控制周期（每 1 ms）
 
 ```
-永远循环（每 1 ms）：                                   → 01_applic/robot/robot_control_task.c:control_task_entry
+永远循环（每 1 ms）：                                   → 01_applic/tasks/control_task.c:control_task_entry
     now = 当前时刻
 
     【第 1 步 读输入】
@@ -237,7 +237,7 @@ indicator_task（每 25 ms）：                              → 01_applic/task
         读安全门模式：刚进入 Manual → 解锁音；刚离开 Manual → 上锁音
         推进蜂鸣器的音符
 
-log_task（每 1 s）：                                      → 01_applic/robot/robot_log_task.c
+log_task（每 1 s）：                                      → 01_applic/tasks/log_task.c
     打印：心跳计数和模式、遥控、4 个轮子（转速 / 目标 / 力矩 / 温度）、底盘目标、IMU 姿态和温度、电池电压
 ```
 

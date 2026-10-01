@@ -36,15 +36,15 @@ extern MotorGroup motors;                 /* 全部电机，control_task 最后�
 extern Chassis chassis;
 extern Ins ins;
 
-/* ---------------- 本目录的任务入口（ins、detect、indicator 通用，在 01_applic/tasks/） ---------------- */
+/* ---------------- 任务入口（文件都在 01_applic/tasks/；ins、detect、indicator 的声明在各自的 .h） ---------------- */
 
-/** robot_comm_rx_task.c：收到数据就运行，打开接收，然后把 CAN、串口 的数据交给对应解析器（接线写在这个文件里） */
+/** comm_rx_task.c：收到数据就运行，打开接收，然后把 CAN、串口 的数据交给对应解析器（接线写在这个文件里） */
 void comm_rx_task_entry(void *arg);
 
-/** robot_control_task.c：1 kHz，读输入 → 安全门 → 底盘 → 发送 */
+/** control_task.c：1 kHz，读输入 → 安全门 → 底盘 → 发送 */
 void control_task_entry(void *arg);
 
-/** robot_log_task.c：每 1 s 通过 RTT 打印一次这台车的状态 */
+/** log_task.c：每 1 s 通过 RTT 打印一次这台车的状态 */
 void log_task_entry(void *arg);
 
 #ifdef __cplusplus

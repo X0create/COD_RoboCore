@@ -2,7 +2,7 @@
  * @file    comm_rx_common.h
  * @brief   接收的公共部分：中断唤醒 comm_rx_task、打开各路接收（《架构设计》任务划分）
  * @note    中断只收数据并唤醒任务，解析都在 comm_rx_task 里做。“哪路 CAN、哪个串口交给哪个设备”不在这里，
- *          写在01_applic/robot/robot_comm_rx_task.c 里，打开接收和读取都在那一个文件中。
+ *          写在01_applic/tasks/comm_rx_task.c 里，打开接收和读取都在那一个文件中。
  */
 #pragma once
 

@@ -760,21 +760,6 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\01_applic\robot\robot.c</FilePath>
             </File>
-            <File>
-              <FileName>robot_comm_rx_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\robot\robot_comm_rx_task.c</FilePath>
-            </File>
-            <File>
-              <FileName>robot_control_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\robot\robot_control_task.c</FilePath>
-            </File>
-            <File>
-              <FileName>robot_log_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\robot\robot_log_task.c</FilePath>
-            </File>
           </Files>
         </Group>
         <Group>
@@ -801,6 +786,16 @@
           <GroupName>01_applic/tasks</GroupName>
           <Files>
             <File>
+              <FileName>comm_rx_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\01_applic\tasks\comm_rx_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>control_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\01_applic\tasks\control_task.c</FilePath>
+            </File>
+            <File>
               <FileName>detect_task.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\01_applic\tasks\detect_task.c</FilePath>
@@ -814,6 +809,11 @@
               <FileName>ins_task.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\01_applic\tasks\ins_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>log_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\01_applic\tasks\log_task.c</FilePath>
             </File>
           </Files>
         </Group>

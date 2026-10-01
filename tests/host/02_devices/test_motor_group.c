@@ -16,7 +16,7 @@ static Motor pool[64];
 static unsigned pool_used;
 static MotorGroup group;
 
-/* 相当于robot_comm_rx_task.c：把收到的一帧依次交给组里的每个电机（motor_receive），有电机认领就返回 true */
+/* 相当于comm_rx_task.c：把收到的一帧依次交给组里的每个电机（motor_receive），有电机认领就返回 true */
 static bool deliver(CanBusId bus, uint32_t id, const uint8_t *data, uint8_t len)
 {
     CanFrame frame = { .id = id, .len = len };

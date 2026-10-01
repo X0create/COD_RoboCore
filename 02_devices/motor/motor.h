@@ -192,7 +192,7 @@ bool motor_supports_torque(const Motor *m);
 /**
  * @brief   把一帧 CAN 交给这个电机：是它的反馈（总线和反馈 ID 都对上）就解码、存下、喂看门狗
  * @return  true：这帧是它的（长度不对的也算，丢弃不喂狗），调用方不用再交给别的电机；false：不是它的
- * @pre     只在 comm_rx_task 里调用（robot_comm_rx_task.c）
+ * @pre     只在 comm_rx_task 里调用（comm_rx_task.c）
  */
 bool motor_receive(Motor *m, CanBusId bus, const CanFrame *frame);
 

@@ -111,10 +111,10 @@ void gimbal_step(Gimbal *self, ...)
 - **必须**：头文件使用 `#pragma once`，并且能**单独编译**，即自己 include 所需的全部头文件。
 - **必须**：头文件带 `extern "C"` 保护，方便可选的 C++ 模块调用。
 - **应该**：一个模块对应一对 `xxx.c` / `xxx.h`，文件名与模块名一致，全部小写加下划线。
-- **必须**：任务文件只放两处：通用的在 `01_applic/tasks/`，这台车特有的在 `01_applic/robot/`（ADR 0055）。
+- **必须**：任务文件都放在 `01_applic/tasks/`（ADR 0057）。
   任务只写“什么时候跑、按什么顺序调用谁”，计算放进 `modules/` 等其他文件。
 - **必须**：任务的文件、入口函数、任务名都以 `_task` 结尾：`detect_task.c`、`detect_task_entry`、任务名 `"detect_task"`；
-  不是任务的文件不要以 `_task` 结尾（例：接收的公共函数叫 `comm_rx_common.c`，任务本身是 `robot_comm_rx_task.c`）。
+  不是任务的文件不要以 `_task` 结尾（例：接收的公共函数叫 `comm_rx_common.c`，任务本身是 `comm_rx_task.c`）。
 - **应该**按以下顺序 include，组与组之间空一行：
   1. 本模块自己的头文件；
   2. C 标准库；
@@ -286,7 +286,7 @@ float out = sin(angle_rad) * 0.5;
 - **必须**：不调用 `malloc` / `free` / `calloc` / `realloc`。所有对象静态分配，或由调用方提供存储。
 - **必须**：全局变量一律加 `static`，其他文件通过函数访问；全局变量只写常量初值，硬件相关的初始化放在显式的 `xxx_init()` 里。
   **例外**（ADR 0044）：`01_applic/robot/` 的对象（话题、设备、子系统、安全门）定义在 `robot.c`、声明在同目录 `robot.h`，
-  供本目录一个任务一个文件的 `*_task.c` 直接使用；其他层不得 include `robot.h`。
+  供 `01_applic/tasks/` 里的任务直接使用；其他层不得 include `robot.h`。
 - **必须**：不写递归，不用变长数组（VLA）；较大的缓冲区（几百字节以上）不放在栈上。
 - **必须**：DMA 缓冲区用 `RM_DMA_BUF` 声明，BDMA 缓冲区用 `RM_BDMA_BUF` 声明（ADR 0021）。
 - **必须**：`volatile` 只用于硬件寄存器和中断里置位的简单标志，**不能**当作任务之间的同步手段。跨任务共享的数据走话题或临界区。
