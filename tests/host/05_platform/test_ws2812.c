@@ -2,7 +2,7 @@
  * @file    test_ws2812.c
  * @brief   ws2812_encode 的单元测试：颜色顺序 GRB、每位的编码、MSB 先发
  */
-#include "ws2812.h"
+#include "05_platform/status_led/ws2812.h"
 
 #include "unity.h"
 

@@ -2,7 +2,7 @@
  * @file    test_byte_ring.c
  * @brief   byte_ring 的单元测试：先进先出、写满丢弃并计数、回绕、分次取出
  */
-#include "byte_ring.h"
+#include "05_platform/usb_cdc/byte_ring.h"
 
 #include "unity.h"
 

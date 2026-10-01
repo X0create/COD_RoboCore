@@ -102,9 +102,9 @@ def architecture():
 
     layers = [
         ("01_app/<兵种>", "兵种", "这台车怎么组装、怎么控制", BLUE,
-         ["robot.c：对象 · 上电 · 任务表", "*_task.c", "config.h"]),
-        ("01_app/<机构>", "机构", "一个机构的完整逻辑", AQUA,
-         ["ins 惯导", "底盘", "安全门", "*云台", "*发射", "*轮腿"]),
+         ["robot.c：对象 · 任务表", "control · comm_rx · log", "config.h"]),
+        ("01_app 共用", "system + 机构", "各兵种共用的框架和机构", AQUA,
+         ["system：上电 · 安全门 · 指示 · 检测", "ins", "底盘", "*云台", "*发射"]),
         ("02_devices", "设备驱动", "协议字节 ⇄ 物理量", ORANGE,
          ["DJI 电机", "达妙电机", "BMI088", "DR16", "VT13 图传", "视觉帧", "电池", "蜂鸣器"]),
         ("05_platform", "外设接口", "唯一直接操作硬件的一层", VIOLET,
@@ -230,10 +230,11 @@ def runtime():
     # 6. 低优先级任务
     ay = 368
     s.text(24, ay - 8, "低优先级任务：只读话题，不参与控制", 12, INK2, bold=True)
-    aux = [("detect", "100 Hz · 优先级 2", "报告设备上线 / 离线", 24),
-           ("heartbeat", "40 Hz · 优先级 1", "状态灯 · 蜂鸣器 · 电池 · 每秒日志", 300)]
+    aux = [("detect", "100 Hz · 优先级 3", "报告设备上线 / 离线", 24),
+           ("indicator", "40 Hz · 优先级 2", "状态灯 · 蜂鸣器 · 低电量", 330),
+           ("log", "1 Hz · 优先级 1", "每秒打印本兵种状态", 636)]
     for name, meta, role, x in aux:
-        s.rect(x, ay, 260, 58, tint(VIOLET, 0.07), tint(VIOLET, 0.35))
+        s.rect(x, ay, 290, 58, tint(VIOLET, 0.07), tint(VIOLET, 0.35))
         s.rect(x, ay, 5, 58, VIOLET, VIOLET, rx=2)
         s.text(x + 16, ay + 24, name, 14, INK, bold=True)
         s.text(x + 16 + text_w(name, 14) + 8, ay + 24, meta, 12, INK2)
@@ -280,7 +281,7 @@ def safety_gate():
 def startup():
     W, H = 960, 330
     s = Svg(W, H, "上电后按什么顺序启动")
-    s.text(24, 54, "前两行都在兵种的 robot.c 里。任何一步失败都停在 halt_on_init_failure()，调试器能看到停在哪。⑧ 之前安全门一直是 Init，不能解锁。", 12.5, INK2)
+    s.text(24, 54, "前两行在 01_app/system/app_main.c，各兵种相同。任何一步失败都停在 halt_on_init_failure()。⑥ 之前安全门一直是 Init，不能解锁。", 12.5, INK2)
 
     lanes = [
         ("app_main", "调度器启动前，单线程", BLUE,
@@ -288,11 +289,10 @@ def startup():
           ("③ 初始化对象", "组装设备和机构"), ("④ 创建任务", "按任务表静态创建"),
           ("⑤ 启动调度器", "交给 FreeRTOS")]),
         ("startup 任务", "调度器启动后运行一次", AQUA,
-         [("⑥ comm_rx_start", "打开 CAN / 串口 / USB"), ("⑦ ADC · 蜂鸣器", "启动音"),
-          ("⑧ 系统就绪", "允许解锁"), ("⑨ 删除自己", "“startup done”")]),
+         [("⑥ 系统就绪", "允许解锁"), ("⑦ 删除自己", "“startup done”")]),
         ("周期任务", "各自按周期运行", VIOLET,
-         [("ins", "上电静止标定约 2 s"), ("comm_rx", "有数据就解析"),
-          ("control", "1 kHz 控制"), ("detect · heartbeat", "上下线报告 · 灯与日志")]),
+         [("ins", "上电静止标定约 2 s"), ("comm_rx", "先打开 CAN / 串口"),
+          ("control", "1 kHz 控制"), ("indicator 等", "先打开 ADC、蜂鸣器")]),
     ]
     y, lh, lx, bx = 74, 70, 24, 196
     bw_total = W - 24 - bx

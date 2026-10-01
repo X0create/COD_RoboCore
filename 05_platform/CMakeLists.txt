@@ -1,27 +1,29 @@
-# 与芯片无关、各平台实现共用的纯计算；电脑测试和固件都链接它
+# 一个外设一个目录：接口 <外设>.h、芯片实现 <外设>_<芯片>.c、与芯片无关的辅助代码都在里面
+
+# 与芯片无关的辅助代码（纯计算），只给本层的芯片实现用；电脑测试和固件都链接它
 add_library(rm_platform_common STATIC
-    common/byte_ring.c
-    common/can_dlc.c
-    common/can_rx_ring.c
-    common/cycle_extend.c
-    common/dma_ring.c
-    common/ws2812.c
+    can/can_dlc.c
+    can/can_rx_ring.c
+    status_led/ws2812.c
+    time/cycle_extend.c
+    uart/dma_ring.c
+    usb_cdc/byte_ring.c
 )
-# common/ 里的模块会用到接口头文件里的类型（如 CanFrame）；接口头文件在 05_platform/ 下，以 "05_platform/can.h" 的形式 include
-target_include_directories(rm_platform_common PUBLIC common ${PROJECT_SOURCE_DIR})
+# 以 "05_platform/can/can.h" 的形式 include
+target_include_directories(rm_platform_common PUBLIC ${PROJECT_SOURCE_DIR})
 rm_target_warnings(rm_platform_common)
 
-# 当前主控的平台实现：同名函数，CMake 只编译这一份（ADR 0017）
+# 当前主控的芯片实现：每个外设一份 <外设>_${RM_CHIP}.c，同名函数，CMake 只编译这一份（ADR 0017）
 if(RM_CHIP)
     add_library(rm_platform STATIC
-        ${RM_CHIP}/adc.c
-        ${RM_CHIP}/can.c
-        ${RM_CHIP}/pwm.c
-        ${RM_CHIP}/spi.c
-        ${RM_CHIP}/status_led.c
-        ${RM_CHIP}/time.c
-        ${RM_CHIP}/uart.c
-        ${RM_CHIP}/usb_cdc.c
+        adc/adc_${RM_CHIP}.c
+        can/can_${RM_CHIP}.c
+        pwm/pwm_${RM_CHIP}.c
+        spi/spi_${RM_CHIP}.c
+        status_led/status_led_${RM_CHIP}.c
+        time/time_${RM_CHIP}.c
+        uart/uart_${RM_CHIP}.c
+        usb_cdc/usb_cdc_${RM_CHIP}.c
     )
     target_include_directories(rm_platform PUBLIC ${PROJECT_SOURCE_DIR})
     target_link_libraries(rm_platform

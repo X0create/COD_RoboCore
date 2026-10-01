@@ -88,7 +88,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 
 目录前的编号就是从上到下的层次（照 COD_UniCFramework 的写法），依赖只能从编号小的指向编号大的：
 `01_app` → `02_devices` → `05_platform`；`03_algorithm`、`04_core` 可被各层使用，`03_algorithm` 是纯计算。
-代码里 include 也带编号，如 `#include "05_platform/can.h"`。标“（规划）”的目录还没有代码。和老模板 COD-H7-Template 的对应：
+代码里 include 也带编号，如 `#include "05_platform/can/can.h"`。标“（规划）”的目录还没有代码。和老模板 COD-H7-Template 的对应：
 `Core/` → `06_boards/`，`BSP/` → `05_platform/`，`Components/Algorithm、Controller` → `03_algorithm/`，
 `Components/Device` → `02_devices/`，`Application/` → `01_app/`（详见 `docs/CALL_FLOW.md`）。
 
@@ -97,13 +97,13 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 ```text
 COD_RoboCore/
 ├── 01_app/                  业务（≈ 老模板 Application/）：机构 + 兵种
-│   ├── common/              各兵种共用：comm_rx.c（接收公共部分）、detect_task.c（上线 / 离线）、安全门
+│   ├── system/              各兵种共用：app_main.c（上电顺序）、安全门、indicator（灯 / 蜂鸣器 / 电池）、detect（上线 / 离线）、comm_rx.c
 │   ├── chassis/             机构：底盘（全向轮 / 麦轮 / 舵轮）
-│   ├── ins/                 机构：惯性导航（标定、零偏在线修正、EKF、发布姿态）
+│   ├── ins/                 机构：惯性导航（标定、零偏在线修正、EKF、发布姿态）和 1 kHz 的 ins 任务
 │   ├── gimbal/ shoot/ …     （规划）云台、发射、轮腿
 │   ├── infantry/            兵种：步兵（第一版只有底盘）
 │   └── bench/               台架验证固件：一台 M3508、一台达妙、DR16、图传、USB 视觉链路
-│                            每个兵种目录：config.h、robot.h、robot.c（对象 + 上电顺序 + 任务表）、每个任务一个 *_task.c
+│                            每个兵种目录：config.h、robot.h、robot.c（对象 + robot_init + 任务表）、control / comm_rx / log 三个任务
 ├── 02_devices/              具体设备驱动（≈ 老模板 Components/Device）
 │   ├── motor/               统一电机接口、DJI、达妙、电机组发送
 │   ├── imu/                 BMI088（含恒温加热）
@@ -124,11 +124,12 @@ COD_RoboCore/
 │   ├── log/                 RTT 日志（含 SEGGER RTT 源码）
 │   ├── os/                  临界区、延时、静态任务创建
 │   └── util/                CRC
-├── 05_platform/             外设接口（≈ 老模板 BSP/）：每种芯片一份实现，链接时选择
-│   ├── can.h uart.h …       can、uart、spi、pwm、adc、usb_cdc、time、status_led 的接口（只有声明）
-│   ├── common/              与芯片无关的纯逻辑：环形缓冲、CAN 长度码、64 位计数扩展、WS2812 编码
-│   ├── stm32h7/             H723 实现（FDCAN、循环 DMA 串口、DWT 时钟、.dma_buf 等）
-│   └── stm32f4/             （规划）C 板实现
+├── 05_platform/             外设接口（≈ 老模板 BSP/）：一个外设一个目录，接口 + 芯片实现 + 辅助代码
+│   ├── can/                 can.h、can_stm32h7.c（FDCAN）、can_dlc、can_rx_ring
+│   ├── uart/  usb_cdc/      串口（DMA 循环接收）、USB 虚拟串口
+│   ├── time/  status_led/   DWT 时钟、WS2812 状态灯
+│   ├── spi/  pwm/  adc/
+│   └── stm32h7/             H7 各外设共用的 DMA 缓冲段（.dma_buf）；F407 以后在每个外设目录加 *_stm32f4.c
 ├── 06_boards/               每块板一个目录（CubeMX 生成代码，只改 USER CODE 区）
 │   └── dm_mc02_h723/        达妙 DM-MC02：.ioc、链接脚本 dm_mc02.ld、启动文件、REGEN_CHECKLIST.md
 ├── tests/host/              电脑侧单元测试（Unity）
@@ -149,11 +150,12 @@ COD_RoboCore/
 
 | 任务 | 周期 | 优先级 | 做什么 |
 | --- | --- | --- | --- |
-| `ins` | 1 kHz | 5（最高） | 读 BMI088，零偏标定与在线修正，四元数 EKF 算姿态，IMU 恒温加热，发布 `imu_state` |
-| `comm_rx` | 有数据就运行 | 4 | 中断收到 CAN 帧 / 串口字节 / USB 数据后被唤醒，交给对应设备解析，发布遥控、电机反馈等 |
-| `control` | 1 kHz | 3 | 读输入 → 安全门 → 各子系统计算 → 全车停改写 → 发电机指令（下图 ①–⑤） |
-| `detect` | 100 Hz | 2 | 报告设备上线 / 离线（只报告，不参与安全判断） |
-| `heartbeat` | 40 Hz | 1 | 状态灯、蜂鸣器、电池电压检查，每秒打印一次 RTT 日志 |
+| `ins` | 1 kHz | 6（最高） | 读 BMI088，零偏标定与在线修正，四元数 EKF 算姿态，IMU 恒温加热，发布 `imu_state` |
+| `comm_rx` | 有数据就运行 | 5 | 中断收到 CAN 帧 / 串口字节 / USB 数据后被唤醒，交给对应设备解析；CAN bus-off 恢复 |
+| `control` | 1 kHz | 4 | 读输入 → 安全门 → 各机构计算 → 全车停改写 → 发电机指令（下图 ①–⑤） |
+| `detect` | 100 Hz | 3 | 报告设备上线 / 离线（只报告，不参与安全判断） |
+| `indicator` | 40 Hz | 2 | 状态灯、蜂鸣器、低电量检查 |
+| `log` | 1 Hz | 1 | 通过 RTT 打印本兵种的状态 |
 
 中断只收数据并唤醒 `comm_rx`，所有协议解析都在任务里做；1 kHz 的任务里不打日志。
 
@@ -200,8 +202,8 @@ cmake --preset h723-bench-debug && cmake --build --preset h723-bench-debug
 
 1. 复制 `01_app/infantry/` 为 `01_app/<兵种名>/`，在 `CMakePresets.json` 里照 `h723-infantry-debug` 加一个预设。
 2. 改 `config.h`：PID 参数、解锁用哪个拨杆、IMU 安装方向、电池参数等固定参数。
-3. 改 `robot.c`：电机配置（CAN 总线、ID、停机动作）、`init_objects()` 里登记设备和子系统、任务表；`robot.h` 同步声明新增的对象和任务。
-4. 改 `control_task.c`：每个控制周期做什么（读输入 → 安全门 → 子系统 → 发送，四步写在循环里）。`heartbeat_task.c` 改打印内容。
+3. 改 `robot.c`：`robot_init()` 里初始化设备和机构、任务表 `robot_tasks[]`；`robot.h` 同步声明新增的对象和任务。电机 ID、总线等参数改 `config.h`。
+4. 改 `control_task.c`：每个控制周期做什么（读输入 → 安全门 → 子系统 → 发送，四步写在循环里）。`log_task.c` 改打印内容。
    各任务的调用关系见 `docs/CALL_FLOW.md`。
 5. 编译时选这个兵种：`cmake --preset h723-<兵种名>-debug`。
 
@@ -220,7 +222,7 @@ cmake --preset h723-bench-debug && cmake --build --preset h723-bench-debug
 | 0 骨架 | 目录、构建、CubeMX 工程、时钟、日志、单元测试 | ✅ 完成并上板 |
 | 旧模板移植 | COD-H7-Template 的电机、遥控、IMU、图传、视觉、电池等全部按新架构重写 | 🧪 代码完成（裁判系统等文档），上板验证进行中 |
 | 1 最小完整链路 | 一台电机 + 遥控 + 安全停机，停机时间台架实测；硬件看门狗、故障记录、指令层 | 进行中 |
-| 2 C 板移植 | `05_platform/stm32f4`，跑同一条最小链路 | 📝 |
+| 2 C 板移植 | 每个外设目录加 `*_stm32f4.c`，跑同一条最小链路 | 📝 |
 | 3 设备层补全 | 电机停发后的行为实测、分类发送队列 | 📝 |
 | 4 姿态 + 云台 | 云台控制、`GimbalState` | 📝 |
 | 5 步兵整车 | 底盘（功率控制）、发射（热量、卡弹）、裁判系统、键鼠、UI、自瞄通信 | 📝 |

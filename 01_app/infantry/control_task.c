@@ -9,7 +9,7 @@
 #include "robot.h"
 
 #include "04_core/os/os.h"
-#include "05_platform/time.h"
+#include "05_platform/time/time.h"
 #include "config.h"
 
 #define CONTROL_PERIOD_MS 1u
@@ -40,13 +40,13 @@ void control_task_entry(void *arg)
 
         /* 2. 安全门：急停、遥控丢失、未解锁、IMU 未就绪 → 全车停（stop_all） */
         const SafetyDecision gate_out =
-            safety_gate_update(&gate, rc_online ? &rc : NULL, imu_ready, now_us);
+            safety_gate_update(&safety_gate, rc_online ? &rc : NULL, imu_ready, now_us);
 
         /* 3. 底盘：chassis_step 里依次 读电机实测 → 算目标（斜坡、逆解）→ 算输出（每轮速度环），见 chassis.c。
          *    能动时遥控一定在线（安全门保证），rc 有效；全车停时底盘不读目标、只清积分 */
         const ChassisVel cmd = gate_out.stop_all ? (ChassisVel){ 0 } : chassis_cmd_from_rc(&rc);
-        chassis_step(&chassis, &cmd, gate_out.stop_all, safety_gate_output_scale(&gate, now_us),
-                     CONTROL_DT_S);
+        chassis_step(&chassis, &cmd, gate_out.stop_all,
+                     safety_gate_output_scale(&safety_gate, now_us), CONTROL_DT_S);
 
         /* 4. 发送（老模板的 CAN_Task）：全车停时把每个电机改写成它的停机动作，即使上面漏判也不会发出运动指令；
          *    然后把所有电机的指令打包成 CAN 帧发出去，见 motor_group.c */

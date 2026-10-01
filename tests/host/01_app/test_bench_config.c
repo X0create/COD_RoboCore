@@ -41,8 +41,8 @@ static void test_si_pid_matches_old_raw_pid(void)
 
         const float out_old = pid_calc(&old_pid, (float)ch * 5.0f, rpm_old);
         const float out_si =
-            pid_calc(&si_pid, (float)ch * BENCH_SPEED_PER_CH, rpm_si / BENCH_RPM_PER_RAD_S);
-        const float out_si_raw = out_si * BENCH_RAW_PER_NM;
+            pid_calc(&si_pid, (float)ch * BENCH_SPEED_PER_CH, rpm_si / DJI_M3508_RPM_PER_RAD_S);
+        const float out_si_raw = out_si * DJI_M3508_RAW_PER_NM;
 
         TEST_ASSERT_FLOAT_WITHIN(1.0f, out_old, out_si_raw); /* 1 个原始单位 ≈ 量程的 0.006% */
         saturated = saturated || out_old >= 12000.0f;

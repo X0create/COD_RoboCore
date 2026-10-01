@@ -5,13 +5,13 @@
  */
 #include "03_algorithm/kinematics/omni.h"
 
-#include "unity.h"
+#include "03_algorithm/math/math_const.h"
 
-#define PI_F 3.14159265359f
+#include "unity.h"
 
 static const OmniConfig x_layout = { .wheel_radius_m = 0.08f,
                                      .center_dist_m = 0.25f,
-                                     .first_wheel_rad = PI_F / 4.0f };
+                                     .first_wheel_rad = RM_PI / 4.0f };
 static const OmniConfig plus_layout = { .wheel_radius_m = 0.06f,
                                         .center_dist_m = 0.3f,
                                         .first_wheel_rad = 0.0f };

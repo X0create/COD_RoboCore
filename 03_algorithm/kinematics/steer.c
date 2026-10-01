@@ -3,11 +3,9 @@
  * @brief   四轮舵轮底盘运动学（约定见 steer.h）
  */
 #include "steer.h"
+#include "03_algorithm/math/math_const.h"
 
 #include <math.h>
-
-#define PI_F    3.14159265359f
-#define HALF_PI 1.57079632679f
 
 /* 转向轴位置的符号：左前、左后、右后、右前 */
 static const float SIGN_X[STEER_WHEELS] = { 1.0f, -1.0f, -1.0f, 1.0f };
@@ -16,12 +14,12 @@ static const float SIGN_Y[STEER_WHEELS] = { 1.0f, 1.0f, -1.0f, -1.0f };
 /* 把角度差换到 (−π, π] */
 static float wrap_pi(float a)
 {
-    a = fmodf(a + PI_F, 2.0f * PI_F);
+    a = fmodf(a + RM_PI, 2.0f * RM_PI);
     if (a <= 0.0f)
     {
-        a += 2.0f * PI_F;
+        a += 2.0f * RM_PI;
     }
-    return a - PI_F;
+    return a - RM_PI;
 }
 
 void steer_inverse(const SteerConfig *cfg, const ChassisVel *vel,
@@ -42,14 +40,14 @@ void steer_inverse(const SteerConfig *cfg, const ChassisVel *vel,
 
         float delta = wrap_pi(atan2f(vy, vx) - heading_rad[i]);
         float speed_rad_s = speed_m_s / cfg->wheel_radius_m;
-        if (delta > HALF_PI)
+        if (delta > RM_HALF_PI)
         {
-            delta -= PI_F;
+            delta -= RM_PI;
             speed_rad_s = -speed_rad_s;
         }
-        else if (delta < -HALF_PI)
+        else if (delta < -RM_HALF_PI)
         {
-            delta += PI_F;
+            delta += RM_PI;
             speed_rad_s = -speed_rad_s;
         }
         out[i] = (SteerWheel){ .heading_rad = heading_rad[i] + delta, .speed_rad_s = speed_rad_s };

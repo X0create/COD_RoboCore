@@ -4,13 +4,13 @@
  * @note    矩阵按行存储：6×6 的第 r 行第 c 列是下标 r * 6 + c；H 是 3×6。下标写法与旧代码一一对应，方便对照。
  */
 #include "quat_ekf.h"
+#include "03_algorithm/math/math_const.h"
 
 #include <math.h>
 
 #define N 6u
 #define M 3u
 
-#define HALF_PI_F        1.5707963f
 #define GYRO_STILL_RAD_S 0.3f  /* 卡方“重新接受”的条件：陀螺近乎静止 */
 #define GRAVITY_BAND     0.5f  /* 且加速度模长在重力 ±0.5 m/s² 内 */
 #define CHI_REACCEPT     50u   /* 连续这么多次新息偏大才重新接受 */
@@ -237,7 +237,7 @@ void quat_ekf_update(QuatEkf *ekf, const float gyro_rad_s[3], const float accel_
             const float angle = acosf(fabsf(h[r - 4u]));
             for (uint32_t c = 0u; c < M; c++)
             {
-                k[r * M + c] *= angle / HALF_PI_F;
+                k[r * M + c] *= angle / RM_HALF_PI;
             }
         }
 

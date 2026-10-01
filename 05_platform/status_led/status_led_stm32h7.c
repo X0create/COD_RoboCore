@@ -4,11 +4,11 @@
  * @note    依赖 CubeMX 中 SPI6 的三项设置，任一项不对灯就会乱色或不亮，而且没有任何报错：
  *          内核时钟 HSE 24 MHz、分频 4（= 6 MHz）、Data Size 8 bit（REGEN_CHECKLIST 核对）。
  */
-#include "05_platform/status_led.h"
+#include "05_platform/status_led/status_led.h"
 
 #include "ws2812.h"
 
-#include "spi.h"
+#include <spi.h>
 
 /* 124 字节在 6 MHz 下约 165 µs；超时只用来防止外设卡死，不用来控制节奏 */
 #define SEND_TIMEOUT_MS 2u

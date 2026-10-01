@@ -1,7 +1,7 @@
 /**
  * @file    config.h
  * @brief   步兵的全部可调参数（第一版：四轮全向轮底盘，遥控直接给底盘速度）
- * @note    本兵种的参数都在这里，robot.c 只用这里的配置表创建对象。和兵种无关的参数（EKF、IMU 加热、
+ * @note    本兵种的参数都在这里，robot.c 只用这里的配置表创建对象。和兵种无关的参数（电池阈值、EKF、IMU 加热、
  *          各种超时）留在各自模块里，位置见 01_app/README.md“参数在哪里”。
  *          标 “待量” 的尺寸按实车量好再改；标 “待核对” 的方向在台架上按 docs/VERIFICATION_TODO.md 核对。
  *          换轮组：改 chassis_config 的 .type 并填对应的尺寸（全向轮 .omni、麦轮 .mecanum、
@@ -15,22 +15,15 @@
 
 #include "01_app/chassis/chassis.h"
 #include "01_app/ins/ins.h"
-#include "02_devices/battery/battery.h"
 #include "02_devices/motor/motor.h"
-
-#define INFANTRY_PI 3.14159265359f
-
-/* 单位换算（旧工程按电调原始单位整定，本模板用输出轴国际单位，ADR 0031） */
-#define INFANTRY_RPM_PER_RAD_S                                                                     \
-    (DJI_M3508_GEAR_RATIO * 60.0f / (2.0f * INFANTRY_PI)) /* 1 rad/s 输出轴 = 转子 rpm */
-#define INFANTRY_RAW_PER_NM (16384.0f / (20.0f * 0.3f)) /* 1 N·m 输出轴 = C620 电流原始值 */
+#include "03_algorithm/math/math_const.h"
 
 /* ------------------------------------------------------------------ */
 /* 驱动轮电机：一行一个轮子，按实车接线改                                */
 /* ------------------------------------------------------------------ */
 
 /*
- * 顺序 = 底盘的轮 0–3（左前、左后、右后、右前，omni.h），全部在 FDCAN1（经典 CAN）；改总线时同步改 comm_rx_task.c 里读哪路 CAN。
+ * 顺序 = 底盘的轮 0–3（左前、左后、右后、右前，omni.h），全部在 FDCAN1（经典 CAN）。
  * direction：使电机正转 = 这个轮子推动底盘逆时针转（omni.h）；四个电机轴都朝外对称安装时四个值相同，正负待核对（V46）。
  * 停机动作：零力矩（DJI 电调只支持零力矩 / 失能，ADR 0031）。
  */
@@ -72,19 +65,17 @@ static const MotorConfig wheel_config[CHASSIS_WHEELS] = {
 /*
  * X 形四轮全向轮。轮半径、中心距待量；加速度先取保守值，台架整定。
  * 速度环沿用旧工程（COD-H7-Template Control_Task.c）的底盘参数，换算到国际单位：
- * kp 13、ki 0.1、积分限幅 5000 rpm、输出限幅 12000 电流原始值（换算方法与 01_app/bench/config.h 相同）
+ * kp 13、ki 0.1、积分限幅 5000 rpm、输出限幅 12000 电流原始值（换算常数在 02_devices/motor/motor.h）
  */
 static const ChassisConfig chassis_config = {
     .type = CHASSIS_OMNI,
-    .omni = { .wheel_radius_m = 0.076f,
-              .center_dist_m = 0.25f,
-              .first_wheel_rad = INFANTRY_PI / 4.0f },
+    .omni = { .wheel_radius_m = 0.076f, .center_dist_m = 0.25f, .first_wheel_rad = RM_PI / 4.0f },
     .max_accel_m_s2 = 2.0f,
     .max_alpha_rad_s2 = 4.0f,
-    .drive_speed_pid = { .kp = 13.0f * INFANTRY_RPM_PER_RAD_S / INFANTRY_RAW_PER_NM,
-                         .ki = 0.1f * INFANTRY_RPM_PER_RAD_S / INFANTRY_RAW_PER_NM,
-                         .integral_limit = 5000.0f / INFANTRY_RPM_PER_RAD_S,
-                         .output_limit = 12000.0f / INFANTRY_RAW_PER_NM },
+    .drive_speed_pid = { .kp = 13.0f * DJI_M3508_RPM_PER_RAD_S / DJI_M3508_RAW_PER_NM,
+                         .ki = 0.1f * DJI_M3508_RPM_PER_RAD_S / DJI_M3508_RAW_PER_NM,
+                         .integral_limit = 5000.0f / DJI_M3508_RPM_PER_RAD_S,
+                         .output_limit = 12000.0f / DJI_M3508_RAW_PER_NM },
 };
 
 /* ------------------------------------------------------------------ */
@@ -104,13 +95,8 @@ static const float max_wz_rad_s = 2.0f;
 static const uint8_t arm_switch = 1u;
 
 /* ------------------------------------------------------------------ */
-/* 电池、IMU                                                           */
+/* IMU                                                           */
 /* ------------------------------------------------------------------ */
-
-/* 电池（6S）：连续 1 s 低于 21.0 V 提示低电量，回到 21.5 V 以上解除（ADR 0038）；分压比 11 取自旧工程 bsp_adc.c，待核对（V16） */
-static const BatteryConfig battery_config = {
-    .divider = 11.0f, .low_v = 21.0f, .recover_v = 21.5f, .hold_ms = 1000u
-};
 
 /*
  * IMU 安装旋转：机体系向量 = R × 芯片系向量（按行存储，ADR 0006）。

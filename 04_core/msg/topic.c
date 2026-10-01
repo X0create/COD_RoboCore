@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "04_core/os/critical.h"
-#include "05_platform/time.h"
+#include "05_platform/time/time.h"
 
 bool topic_claim(Topic *topic, const char *owner)
 {

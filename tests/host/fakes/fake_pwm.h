@@ -6,7 +6,7 @@
 
 #include <stdbool.h>
 
-#include "05_platform/pwm.h"
+#include "05_platform/pwm/pwm.h"
 
 void fake_pwm_reset(void);
 bool fake_pwm_started(PwmChannel ch);

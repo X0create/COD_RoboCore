@@ -47,6 +47,12 @@ typedef struct
     bool entered_manual; /* 本周期刚进入 Manual：子系统清积分、目标对齐当前状态 */
 } SafetyDecision;
 
+/**
+ * 全车唯一的安全门（定义在 safety_gate.c）：control 任务每周期更新，indicator、log 任务只读 mode 来提示和打印。
+ * 函数仍以指针为参数，电脑测试可以另建实例
+ */
+extern SafetyGate safety_gate;
+
 /** @param arm_switch  RcState.sw 的下标，0 或 1 */
 void safety_gate_init(SafetyGate *gate, uint8_t arm_switch);
 
@@ -60,6 +66,9 @@ void safety_gate_set_system_ready(SafetyGate *gate);
  */
 SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, bool imu_ready,
                                   uint64_t now_us);
+
+/** 模式的名字（"init" / "safe" / "manual"），用于日志 */
+const char *safety_gate_mode_name(RobotMode mode);
 
 /** 输出限幅的比例：进入 Manual 后 SAFETY_RAMP_MS 内从 0 升到 1，其余时间为 1 */
 float safety_gate_output_scale(const SafetyGate *gate, uint64_t now_us);

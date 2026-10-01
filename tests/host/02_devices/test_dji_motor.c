@@ -4,9 +4,9 @@
  */
 #include "02_devices/motor/dji_motor.h"
 
-#include "unity.h"
+#include "03_algorithm/math/math_const.h"
 
-#define PI_F 3.14159265f
+#include "unity.h"
 
 void setUp(void)
 {
@@ -131,7 +131,7 @@ static void test_direction_flips_signs(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-4f, -3.0f, fb.torque_nm);
     frame_of(d, 2048, 0, 0, 0); /* 转子正转 1/4 圈 */
     dji_decode_feedback(&c, &st, d, &fb);
-    TEST_ASSERT_FLOAT_WITHIN(1e-5f, -(PI_F / 2.0f) / DJI_M3508_GEAR_RATIO, fb.angle_rad);
+    TEST_ASSERT_FLOAT_WITHIN(1e-5f, -(RM_PI / 2.0f) / DJI_M3508_GEAR_RATIO, fb.angle_rad);
 }
 
 /* 过零：8100 → 200 算正转过一圈，200 → 8000 算反转回来 */
@@ -148,12 +148,12 @@ static void test_multi_turn(void)
         dji_decode_feedback(&c, &st, d, &fb);
     }
     TEST_ASSERT_EQUAL_INT32(1, st.turns);
-    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 2.0f * PI_F * (1.0f - 800.0f / 8192.0f), fb.angle_rad);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 2.0f * RM_PI * (1.0f - 800.0f / 8192.0f), fb.angle_rad);
 
     frame_of(d, 8000, 0, 0, 0);
     dji_decode_feedback(&c, &st, d, &fb);
     TEST_ASSERT_EQUAL_INT32(0, st.turns);
-    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 2.0f * PI_F * 7000.0f / 8192.0f, fb.angle_rad);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 2.0f * RM_PI * 7000.0f / 8192.0f, fb.angle_rad);
 }
 
 /* GM6020 直驱：角度直接是编码器位置；单圈角在 [-π, π) */
@@ -165,13 +165,13 @@ static void test_gm6020_absolute_angle(void)
     uint8_t d[8];
     frame_of(d, 2048, 0, 0, 30);
     dji_decode_feedback(&c, &st, d, &fb);
-    TEST_ASSERT_FLOAT_WITHIN(1e-5f, PI_F / 2.0f, fb.angle_rad);
+    TEST_ASSERT_FLOAT_WITHIN(1e-5f, RM_PI / 2.0f, fb.angle_rad);
     frame_of(d, 6144, 0, 0, 30);
     dji_decode_feedback(&c, &st, d, &fb);
-    TEST_ASSERT_FLOAT_WITHIN(1e-5f, -PI_F / 2.0f, fb.single_angle_rad);
+    TEST_ASSERT_FLOAT_WITHIN(1e-5f, -RM_PI / 2.0f, fb.single_angle_rad);
     frame_of(d, 4096, 0, 0, 30);
     dji_decode_feedback(&c, &st, d, &fb);
-    TEST_ASSERT_FLOAT_WITHIN(1e-5f, -PI_F, fb.single_angle_rad);
+    TEST_ASSERT_FLOAT_WITHIN(1e-5f, -RM_PI, fb.single_angle_rad);
 }
 
 static void test_m2006_has_no_temperature(void)

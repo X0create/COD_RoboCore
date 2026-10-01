@@ -4,7 +4,7 @@
  */
 #include "os.h"
 
-#include "05_platform/time.h"
+#include "05_platform/time/time.h"
 #include "critical.h"
 #include "delay.h"
 

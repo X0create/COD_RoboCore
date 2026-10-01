@@ -31,7 +31,7 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-/* COD RoboCore：接收钩子，由平台层实现（05_platform/stm32h7/usb_cdc.c，REGEN_CHECKLIST 第 11 条） */
+/* COD RoboCore：接收钩子，由平台层实现（05_platform/usb_cdc/usb_cdc_stm32h7.c，REGEN_CHECKLIST 第 11 条） */
 void usb_cdc_rx_isr(const uint8_t *data, uint32_t len);
 
 /* USER CODE END PV */

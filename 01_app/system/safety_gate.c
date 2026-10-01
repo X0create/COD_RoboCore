@@ -6,6 +6,8 @@
 
 #include <stddef.h>
 
+SafetyGate safety_gate;
+
 void safety_gate_init(SafetyGate *gate, uint8_t arm_switch)
 {
     *gate = (SafetyGate){ .arm_switch = arm_switch, .mode = ROBOT_MODE_INIT };
@@ -74,4 +76,18 @@ float safety_gate_output_scale(const SafetyGate *gate, uint64_t now_us)
         return 1.0f;
     }
     return (float)elapsed_us / (float)ramp_us;
+}
+
+const char *safety_gate_mode_name(RobotMode mode)
+{
+    switch (mode)
+    {
+        case ROBOT_MODE_INIT:
+            return "init";
+        case ROBOT_MODE_SAFE:
+            return "safe";
+        case ROBOT_MODE_MANUAL:
+            return "manual";
+    }
+    return "?";
 }

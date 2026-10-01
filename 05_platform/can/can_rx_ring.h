@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "05_platform/can.h"
+#include "05_platform/can/can.h"
 
 #ifdef __cplusplus
 extern "C"

@@ -1,6 +1,6 @@
 /**
  * @file    fake_pwm.c
- * @brief   假 PWM，见 fake_pwm.h；代替 05_platform/stm32h7/pwm.c
+ * @brief   假 PWM，见 fake_pwm.h；代替 05_platform/pwm/pwm_stm32h7.c
  */
 #include "fake_pwm.h"
 

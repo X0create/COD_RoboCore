@@ -7,11 +7,8 @@
 #include "04_core/log/log.h"
 #include "04_core/os/os.h"
 #include "04_core/watchdog/watchdog.h"
-#include "05_platform/can.h"
-#include "05_platform/time.h"
 
-#define DETECT_PERIOD_MS      10u
-#define CAN_RECOVER_PERIOD_US 100000u /* 同一路 bus-off 恢复至少间隔 100 ms */
+#define DETECT_PERIOD_MS 10u
 
 static void log_device(const Watchdog *wd, void *ctx)
 {
@@ -32,22 +29,6 @@ static void log_change(const Watchdog *wd, bool online, void *ctx)
     }
 }
 
-/* bus-off 后 FDCAN 不会自己回到总线，这路上的电机全部离线（机构停）。这里负责把它拉回来 */
-static void recover_bus_off(uint64_t now_us)
-{
-    static uint64_t last_try_us[CAN_BUS_COUNT];
-    for (int bus = 0; bus < (int)CAN_BUS_COUNT; bus++)
-    {
-        if (!can_is_bus_off((CanBusId)bus) || now_us - last_try_us[bus] < CAN_RECOVER_PERIOD_US)
-        {
-            continue;
-        }
-        last_try_us[bus] = now_us;
-        RM_LOG_W("can%d bus-off, restarting", bus + 1);
-        can_recover((CanBusId)bus);
-    }
-}
-
 void detect_task_entry(void *arg)
 {
     (void)arg;
@@ -58,7 +39,6 @@ void detect_task_entry(void *arg)
     for (;;)
     {
         watchdog_poll(log_change, NULL);
-        recover_bus_off(rm_time_now_us());
         rm_task_delay_until(&last_wake, DETECT_PERIOD_MS);
     }
 }

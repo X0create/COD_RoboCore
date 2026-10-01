@@ -2,7 +2,7 @@
  * @file    test_dma_ring.c
  * @brief   dma_ring_take 的单元测试：无数据、连续一段、跨过末尾、长度受限
  */
-#include "dma_ring.h"
+#include "05_platform/uart/dma_ring.h"
 
 #include "unity.h"
 

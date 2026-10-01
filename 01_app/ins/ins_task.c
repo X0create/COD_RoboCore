@@ -1,10 +1,10 @@
 /**
  * @file    ins_task.c
- * @brief   步兵的 ins 任务（1 kHz）：BMI088 → 零偏标定 → EKF → 加热 → 发布 imu_state
- * @note    相当于老模板的 INS_Task.c；一个周期的具体步骤在 01_app/ins/ins.c 的 ins_step()。
- *          标定完成前不发布 imu_state，安全门据此全车停。
+ * @brief   ins 任务，见 ins_task.h
  */
-#include "robot.h"
+#include "ins_task.h"
+
+#include "ins.h"
 
 #include "04_core/log/log.h"
 #include "04_core/os/delay.h"
@@ -41,9 +41,9 @@ static void log_ins_event(InsEvent ev, bool *failing)
 
 void ins_task_entry(void *arg)
 {
-    (void)arg;
+    Ins *ins = arg;
     Bmi088Status status;
-    while ((status = ins_start(&ins)) != BMI088_OK)
+    while ((status = ins_start(ins)) != BMI088_OK)
     {
         RM_LOG_E("bmi088 init failed (%d), retry", (int)status);
         rm_delay_ms(INS_RETRY_MS);
@@ -54,7 +54,7 @@ void ins_task_entry(void *arg)
     RmTaskPeriod last_wake = rm_task_period_start();
     for (;;)
     {
-        const InsEvent ev = ins_step(&ins); /* 读 BMI088 → 加热 → 标定或更新姿态 → 发布 imu_state */
+        const InsEvent ev = ins_step(ins); /* 读 BMI088 → 加热 → 标定或更新姿态 → 发布 imu_state */
         log_ins_event(ev, &failing);
         rm_task_delay_until(&last_wake, INS_PERIOD_MS);
     }

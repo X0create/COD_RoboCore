@@ -2,7 +2,7 @@
  * @file    test_can_dlc.c
  * @brief   can_dlc 的单元测试：经典帧长度、FD 长度、非法长度
  */
-#include "can_dlc.h"
+#include "05_platform/can/can_dlc.h"
 
 #include "unity.h"
 

@@ -3,17 +3,16 @@
  * @brief   四轮全向轮底盘运动学（公式见 omni.h）
  */
 #include "omni.h"
+#include "03_algorithm/math/math_const.h"
 
 #include <math.h>
-
-#define HALF_PI 1.57079632679f
 
 void omni_init(Omni *omni, const OmniConfig *cfg)
 {
     omni->cfg = *cfg;
     for (unsigned i = 0u; i < OMNI_WHEELS; i++)
     {
-        const float theta = cfg->first_wheel_rad + (float)i * HALF_PI;
+        const float theta = cfg->first_wheel_rad + (float)i * RM_HALF_PI;
         omni->sin_theta[i] = sinf(theta);
         omni->cos_theta[i] = cosf(theta);
     }

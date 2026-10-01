@@ -18,8 +18,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "03_algorithm/math/math_const.h"
+
 #include "04_core/watchdog/watchdog.h"
-#include "05_platform/can.h"
+#include "05_platform/can/can.h"
 #include "05_platform/compiler.h"
 
 #ifdef __cplusplus
@@ -33,6 +35,19 @@ extern "C"
 /* 常用减速比（转子 : 输出轴），给 MotorConfig.gear_ratio 用；拆掉减速箱时填 1 */
 #define DJI_M3508_GEAR_RATIO (3591.0f / 187.0f)
 #define DJI_M2006_GEAR_RATIO 36.0f
+
+/*
+ * M3508 + C620 的换算常数（附录 A.2），全仓库只在这里定义：dji_motor.c 编解码、兵种 config.h 把旧工程的 PID
+ * 换算到国际单位都用这里。C620 电流原始值 ±16384 对应 ±20 A；原装减速箱输出轴 0.3 N·m/A
+ */
+#define DJI_C620_RAW_MAX   16384
+#define DJI_C620_MAX_A     20.0f
+#define DJI_M3508_NM_PER_A 0.3f
+#define DJI_M3508_RAW_PER_NM                                                                       \
+    ((float)DJI_C620_RAW_MAX                                                                       \
+     / (DJI_C620_MAX_A * DJI_M3508_NM_PER_A)) /* 输出轴 1 N·m 的电流原始值 */
+#define DJI_M3508_RPM_PER_RAD_S                                                                    \
+    (DJI_M3508_GEAR_RATIO * 60.0f / RM_TWO_PI) /* 输出轴 1 rad/s 的转子 rpm */
 
 typedef enum
 {

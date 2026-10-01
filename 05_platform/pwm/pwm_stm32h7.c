@@ -1,14 +1,14 @@
 /**
  * @file    pwm.c
- * @brief   PWM 的 STM32H7 实现，见 05_platform/pwm.h
+ * @brief   PWM 的 STM32H7 实现，见 05_platform/pwm/pwm.h
  * @note    定时器的初始分频和周期由 CubeMX 配置：
  *          - TIM3 通道 4（PB1，加热片）：275 MHz / 80 / 20001 ≈ 172 Hz（旧工程时钟下为 100 Hz；加热只看占空比）；
  *          - TIM12 通道 2（PB15，蜂鸣器）：频率由 pwm_set_frequency() 设置。
  *          两个定时器都挂在 APB1 上。
  */
-#include "05_platform/pwm.h"
+#include "05_platform/pwm/pwm.h"
 
-#include "tim.h"
+#include <tim.h>
 
 typedef struct
 {

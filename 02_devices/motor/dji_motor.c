@@ -5,11 +5,10 @@
  */
 #include "dji_motor.h"
 
-#define TWO_PI         6.28318530718f
 #define ENCODER_COUNTS 8192
 #define ENCODER_HALF   4096
-#define RPM_TO_RAD_S   (TWO_PI / 60.0f)
-#define RAD_PER_COUNT  (TWO_PI / (float)ENCODER_COUNTS)
+#define RPM_TO_RAD_S   (RM_TWO_PI / 60.0f)
+#define RAD_PER_COUNT  (RM_TWO_PI / (float)ENCODER_COUNTS)
 
 /*
  * 每种型号一行常数。力矩常数折算到转子（输出轴常数 ÷ 原装减速比），这样拆掉减速箱时只改 gear_ratio。
@@ -26,7 +25,8 @@ typedef struct
 } DjiTypeParams;
 
 static const DjiTypeParams type_params[] = {
-    [MOTOR_M3508] = { 20.0f / 16384.0f, 16384, 0.3f / DJI_M3508_GEAR_RATIO, true },
+    [MOTOR_M3508] = { DJI_C620_MAX_A / (float)DJI_C620_RAW_MAX, DJI_C620_RAW_MAX,
+                      DJI_M3508_NM_PER_A / DJI_M3508_GEAR_RATIO, true },
     [MOTOR_M2006] = { 10.0f / 10000.0f, 10000, 0.18f / DJI_M2006_GEAR_RATIO, false },
     [MOTOR_GM6020] = { 3.0f / 16384.0f, 0, 0.741f, true },
 };
@@ -110,7 +110,7 @@ void dji_decode_feedback(const MotorConfig *cfg, DjiMotorState *state, const uin
 
     /* 圈数和圈内计数分开换算成 float，不做累加，长时间运行不丢精度 */
     const float rotor_rad =
-        (float)state->turns * TWO_PI
+        (float)state->turns * RM_TWO_PI
         + (float)((int32_t)encoder - (int32_t)state->zero_encoder) * RAD_PER_COUNT;
     const int32_t signed_count =
         (encoder >= ENCODER_HALF) ? (int32_t)encoder - ENCODER_COUNTS : encoder;

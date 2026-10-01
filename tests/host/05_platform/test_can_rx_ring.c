@@ -2,7 +2,7 @@
  * @file    test_can_rx_ring.c
  * @brief   can_rx_ring 的单元测试：先进先出、满了丢新帧并计数、回绕
  */
-#include "can_rx_ring.h"
+#include "05_platform/can/can_rx_ring.h"
 
 #include "unity.h"
 

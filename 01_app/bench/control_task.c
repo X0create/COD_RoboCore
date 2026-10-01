@@ -13,7 +13,7 @@
 
 #include "03_algorithm/control/pid.h"
 #include "04_core/os/os.h"
-#include "05_platform/time.h"
+#include "05_platform/time/time.h"
 #include "config.h"
 
 #define CONTROL_PERIOD_MS 1u
@@ -40,7 +40,7 @@ void control_task_entry(void *arg)
 
         /* 2. 安全门：急停、遥控丢失、未解锁、IMU 未就绪 → 全车停（stop_all） */
         const SafetyDecision gate_out =
-            safety_gate_update(&gate, rc_online ? &rc : NULL, imu_ready, now_us);
+            safety_gate_update(&safety_gate, rc_online ? &rc : NULL, imu_ready, now_us);
 
         /* 3. 速度环（老模板 Control_Task 的 Target → PID）。全车停或电机离线（机构停）时清积分，不写指令：
          *    没写指令的电机发零力矩，恢复时从零开始，不会因积分猛冲 */
@@ -52,7 +52,7 @@ void control_task_entry(void *arg)
         {
             const float target_rad_s = (float)rc.ch[3] * BENCH_SPEED_PER_CH;
             const float limit =
-                speed_pid.param.output_limit * safety_gate_output_scale(&gate, now_us);
+                speed_pid.param.output_limit * safety_gate_output_scale(&safety_gate, now_us);
             float torque_nm = pid_calc(&speed_pid, target_rad_s, fb.speed_rad_s);
             torque_nm = (torque_nm > limit) ? limit : ((torque_nm < -limit) ? -limit : torque_nm);
             motor_set_torque(&chassis_motor, torque_nm);

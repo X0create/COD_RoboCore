@@ -4,7 +4,7 @@
  */
 #include "buzzer.h"
 
-#include "05_platform/pwm.h"
+#include "05_platform/pwm/pwm.h"
 
 #define DUTY_ON 0.5f
 

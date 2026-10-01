@@ -3,11 +3,9 @@
  * @brief   惯性导航子系统，见 ins.h
  */
 #include "ins.h"
+#include "03_algorithm/math/math_const.h"
 
-#include "05_platform/time.h"
-
-#define TWO_PI_F 6.28318530718f
-#define PI_F     3.14159265359f
+#include "05_platform/time/time.h"
 
 /* 旧工程 INS_Task.c 的参数 */
 #define EKF_Q_QUAT  10.0f
@@ -69,7 +67,7 @@ InsEvent ins_step(Ins *ins)
     /* 4. 更新姿态：机体系 → 航向零偏在线修正 → 加速度低通 → EKF → 欧拉角、多圈航向 */
     const ImuState st = update_attitude(ins, &s, rm_time_now_us());
 
-    /* 5. 发布给 control、heartbeat */
+    /* 5. 发布给 control、log */
     imu_state_publish(ins->out, &st);
     return INS_EVENT_NONE;
 }
@@ -170,18 +168,18 @@ static ImuState update_attitude(Ins *ins, const Bmi088Sample *s, uint64_t now_us
     if (ins->have_yaw)
     {
         const float d = st.yaw_rad - ins->last_yaw_rad;
-        if (d < -PI_F)
+        if (d < -RM_PI)
         {
             ins->yaw_turns++;
         }
-        else if (d > PI_F)
+        else if (d > RM_PI)
         {
             ins->yaw_turns--;
         }
     }
     ins->have_yaw = true;
     ins->last_yaw_rad = st.yaw_rad;
-    st.yaw_total_rad = st.yaw_rad + (float)ins->yaw_turns * TWO_PI_F;
+    st.yaw_total_rad = st.yaw_rad + (float)ins->yaw_turns * RM_TWO_PI;
     st.temperature_c = s->temperature_c;
     return st;
 }

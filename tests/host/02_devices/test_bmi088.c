@@ -5,7 +5,7 @@
  */
 #include "02_devices/imu/bmi088.h"
 
-#include "05_platform/time.h"
+#include "05_platform/time/time.h"
 #include "fake_pwm.h"
 #include "fake_spi.h"
 #include "fake_time.h"

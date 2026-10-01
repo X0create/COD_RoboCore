@@ -7,7 +7,7 @@
 #include <stddef.h>
 
 #include "04_core/os/critical.h"
-#include "05_platform/time.h"
+#include "05_platform/time/time.h"
 #include "dji_motor.h"
 #include "dm_motor.h"
 

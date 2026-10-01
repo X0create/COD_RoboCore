@@ -7,7 +7,7 @@
 #pragma once
 
 #include "04_core/os/os.h"
-#include "05_platform/uart.h"
+#include "05_platform/uart/uart.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -25,6 +25,9 @@ void comm_rx_start_uart(UartPort port);
 
 /** 初始化 USB 设备并打开虚拟串口接收 @pre 在 comm_rx 任务里调用 */
 void comm_rx_start_usb(void);
+
+/** CAN 总线 bus-off 时重新启动控制器（同一路至少间隔 100 ms）；bus-off 期间这路电机全部离线 = 机构停 */
+void comm_rx_recover_bus_off(void);
 
 /** 等待中断通知“有新数据”；最多等 10 ms，防止某次通知丢失后数据积压 */
 void comm_rx_wait(void);

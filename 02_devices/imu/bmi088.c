@@ -4,9 +4,11 @@
  */
 #include "bmi088.h"
 
+#include "03_algorithm/math/math_const.h"
+
 #include "04_core/os/delay.h"
-#include "05_platform/pwm.h"
-#include "05_platform/spi.h"
+#include "05_platform/pwm/pwm.h"
+#include "05_platform/spi/spi.h"
 
 /* ---- 寄存器（BMI088 数据手册；取值同 COD-H7-Template Bmi088_Reg.h） ---- */
 #define ACC_CHIP_ID         0x00u
@@ -37,7 +39,7 @@
 
 /* ---- 换算系数（同旧工程） ---- */
 #define ACCEL_6G_M_S2_PER_LSB   (6.0f * 9.8f / 32768.0f)
-#define GYRO_2000_RAD_S_PER_LSB (2000.0f / 32768.0f * 3.14159265358979f / 180.0f)
+#define GYRO_2000_RAD_S_PER_LSB (2000.0f / 32768.0f * RM_PI / 180.0f)
 #define TEMP_C_PER_LSB          0.125f
 #define TEMP_OFFSET_C           23.0f
 

@@ -2,7 +2,7 @@
  * @file    test_safety_gate.c
  * @brief   安全门的单元测试：启动前不能解锁、必须先拨下再拨上、急停、遥控丢失、IMU 未就绪、重新解锁、输出斜坡
  */
-#include "01_app/common/safety_gate.h"
+#include "01_app/system/safety_gate.h"
 
 #include "unity.h"
 

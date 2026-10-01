@@ -12,7 +12,7 @@
 | # | 验证什么 | 前提 | 操作 | 期望 | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | V1 | 第二次 DWT 回绕 | 只接 J-Link | 跑过 16 s，看 RTT 时间戳 | 在约 7.8 s、15.6 s 处都连续，不跳变不倒退 | 通过（2026-09-30，CLion + RTTClient：`alive N` 恒在 N×1000+12 ms，64–84 s 连续，其间跨过第 9、10 次回绕） |
-| V2 | FreeRTOS 任务窗口 | 同上 | 跑起来后 Halt，打开 View → FreeRTOS | 有 `imu`、`comm_rx`、`control`、`detect`、`heartbeat`、`IDLE`、`Tmr Svc`，没有 `startup`；Stack Info 显示总大小（不再是 N/A） | 通过（2026-09-30，CLion GDB `info threads`：IDLE、heartbeat、comm_rx、control、ins、detect、Tmr Svc，无 startup；IMU 任务名是 `ins` 不是 `imu`。栈总大小是 Ozone 的显示项，CLion 下未看） |
+| V2 | FreeRTOS 任务窗口 | 同上 | 跑起来后 Halt，打开 View → FreeRTOS | 有 `ins`、`comm_rx`、`control`、`detect`、`indicator`、`log`、`IDLE`、`Tmr Svc`，没有 `startup`（2026-10-01 起 6 个任务，ADR 0050；下面的通过记录是改之前的 5 个任务）；Stack Info 显示总大小（不再是 N/A） | 通过（2026-09-30，CLion GDB `info threads`：IDLE、heartbeat、comm_rx、control、ins、detect、Tmr Svc，无 startup；IMU 任务名是 `ins` 不是 `imu`。栈总大小是 Ozone 的显示项，CLion 下未看） |
 | V3 | 状态灯新节奏 | 同上 | 目测 | 绿灯每秒闪两下：先亮 50 ms，间隔约 150 ms 再亮 25 ms | 通过（2026-09-30，目测每秒闪两下） |
 | V4 | 设备清单 | 同上 | 上电看 RTT 开头 | `devices:` 下列出 `dr16 (timeout 200 ms)` | 通过（2026-09-30，列出 dm8009_1、m3508_1、vt_link、vision_link、dr16 (timeout 200 ms)） |
 | V5 | BMI088 读数与引脚 | 只接 J-Link，板子水平放稳 | 上电看 RTT | 出现 `bmi088 ready`（否则打印失败原因，说明片选 PC0 / PC3 或 SPI2 的推断有误）；`accel` 约 `0 0 9800` mm/s²（翻转板子 Z 变 -9800）；`gyro` 各轴只有几 mrad/s（零偏未标定）；转动板子时对应轴变化 | 通过（2026-09-30，`5863059`）：`bmi088 ready`；平放时 accel 约 `-60 5 9750` mm/s²（x 的 -60 与 pitch 6 mrad 一致，是放得不平），173 s 内 `read failures 0`；gyro 单次采样在 ±25 mrad/s 内跳（1 kHz 原始噪声），均值约 0 |

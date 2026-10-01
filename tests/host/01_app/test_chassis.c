@@ -6,6 +6,8 @@
  */
 #include "01_app/chassis/chassis.h"
 
+#include "03_algorithm/math/math_const.h"
+
 #include <math.h>
 #include <string.h>
 
@@ -14,7 +16,6 @@
 #include "fake_time.h"
 #include "unity.h"
 
-#define PI_F 3.14159265359f
 #define DT_S 0.001f
 
 #define DRIVE_PID                                                                                  \
@@ -24,7 +25,7 @@
 
 static const ChassisConfig cfg = {
     .type = CHASSIS_OMNI,
-    .omni = { .wheel_radius_m = 0.08f, .center_dist_m = 0.25f, .first_wheel_rad = PI_F / 4.0f },
+    .omni = { .wheel_radius_m = 0.08f, .center_dist_m = 0.25f, .first_wheel_rad = RM_PI / 4.0f },
     .drive_speed_pid = DRIVE_PID,
     .max_accel_m_s2 = 2.0f,
     .max_alpha_rad_s2 = 4.0f,
@@ -121,7 +122,7 @@ static void add_steer_motors(void)
 /* 送一帧反馈：电调 ID 为 id、输出轴转速 speed_rad_s（换算成转子 rpm 填进帧里） */
 static void feed_id(unsigned id, float gear, float speed_rad_s)
 {
-    const float rpm = speed_rad_s * gear * 60.0f / (2.0f * PI_F);
+    const float rpm = speed_rad_s * gear * 60.0f / (2.0f * RM_PI);
     const int16_t raw = (int16_t)lroundf(rpm);
     const uint8_t d[8] = { 0, 0, (uint8_t)((uint16_t)raw >> 8), (uint8_t)raw, 0, 0, 0, 0 };
     TEST_ASSERT_TRUE(deliver(CAN_BUS_1, 0x200u + id, d, 8));

@@ -1,16 +1,16 @@
 /**
  * @file    uart.c
- * @brief   STM32H7 串口接收：HAL 的 ReceiveToIdle + 循环 DMA，见 05_platform/uart.h
+ * @brief   STM32H7 串口接收：HAL 的 ReceiveToIdle + 循环 DMA，见 05_platform/uart/uart.h
  * @note    - 接收 DMA 必须在 CubeMX 里配置成循环模式（DMA_CIRCULAR），uart_rx_start() 会检查；
  *          - 写位置直接读 DMA 剩余计数得到，中断里不保存位置，任务与中断之间没有需要加锁的共享数据；
  *          - 串口号到 CubeMX 句柄的对应关系目前写在本文件；以后有第二块 H7 板时移到 06_boards/<板子>/board.c。
  */
-#include "05_platform/uart.h"
+#include "05_platform/uart/uart.h"
 
-#include "dma_buf.h"
+#include "05_platform/stm32h7/dma_buf.h"
 #include "dma_ring.h"
 
-#include "usart.h"
+#include <usart.h>
 
 #define RX_BUF_SIZE 256u
 

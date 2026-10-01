@@ -5,11 +5,11 @@
  */
 #include "03_algorithm/kinematics/steer.h"
 
+#include "03_algorithm/math/math_const.h"
+
 #include <math.h>
 
 #include "unity.h"
-
-#define PI_F 3.14159265359f
 
 static const SteerConfig cfg = { .wheel_radius_m = 0.06f,
                                  .half_wheelbase_m = 0.2f,
@@ -30,7 +30,7 @@ static void test_translation_all_wheels_same(void)
     steer_inverse(&cfg, &(ChassisVel){ .vx_m_s = 0.3f, .vy_m_s = 0.3f }, zero_heading, w);
     for (unsigned i = 0u; i < STEER_WHEELS; i++)
     {
-        TEST_ASSERT_FLOAT_WITHIN(1e-5f, PI_F / 4.0f, w[i].heading_rad);
+        TEST_ASSERT_FLOAT_WITHIN(1e-5f, RM_PI / 4.0f, w[i].heading_rad);
         TEST_ASSERT_FLOAT_WITHIN(1e-4f, sqrtf(0.18f) / 0.06f, w[i].speed_rad_s);
     }
 }
@@ -41,17 +41,17 @@ static void test_rotation_tangential_and_flipped(void)
     SteerWheel w[STEER_WHEELS];
     steer_inverse(&cfg, &(ChassisVel){ .wz_rad_s = 1.0f }, zero_heading, w);
     const float speed = sqrtf(0.08f) / 0.06f;
-    TEST_ASSERT_FLOAT_WITHIN(1e-5f, -PI_F / 4.0f, w[0].heading_rad);
+    TEST_ASSERT_FLOAT_WITHIN(1e-5f, -RM_PI / 4.0f, w[0].heading_rad);
     TEST_ASSERT_FLOAT_WITHIN(1e-4f, -speed, w[0].speed_rad_s);
     /* 右前轮 (0.2, −0.2)：速度方向 45°，不用翻转 */
-    TEST_ASSERT_FLOAT_WITHIN(1e-5f, PI_F / 4.0f, w[3].heading_rad);
+    TEST_ASSERT_FLOAT_WITHIN(1e-5f, RM_PI / 4.0f, w[3].heading_rad);
     TEST_ASSERT_FLOAT_WITHIN(1e-4f, speed, w[3].speed_rad_s);
 }
 
 /* 当前朝向 170°，要去 −170°：只转 20°，结果是连续的 190°，不绕一大圈 */
 static void test_target_heading_is_continuous_across_pi(void)
 {
-    const float deg = PI_F / 180.0f;
+    const float deg = RM_PI / 180.0f;
     const float heading[STEER_WHEELS] = { 170.0f * deg, 170.0f * deg, 170.0f * deg, 170.0f * deg };
     const ChassisVel v = { .vx_m_s = cosf(-170.0f * deg), .vy_m_s = sinf(-170.0f * deg) };
     SteerWheel w[STEER_WHEELS];
@@ -63,10 +63,10 @@ static void test_target_heading_is_continuous_across_pi(void)
 /* 多圈的当前朝向（转过两圈）也按最近的方向算 */
 static void test_multi_turn_heading(void)
 {
-    const float heading[STEER_WHEELS] = { 4.0f * PI_F, 4.0f * PI_F, 4.0f * PI_F, 4.0f * PI_F };
+    const float heading[STEER_WHEELS] = { 4.0f * RM_PI, 4.0f * RM_PI, 4.0f * RM_PI, 4.0f * RM_PI };
     SteerWheel w[STEER_WHEELS];
     steer_inverse(&cfg, &(ChassisVel){ .vy_m_s = 1.0f }, heading, w);
-    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 4.0f * PI_F + PI_F / 2.0f, w[0].heading_rad);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 4.0f * RM_PI + RM_PI / 2.0f, w[0].heading_rad);
 }
 
 static void test_zero_speed_keeps_heading(void)

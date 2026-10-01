@@ -1,32 +1,20 @@
 /**
- * @file    heartbeat_task.c
- * @brief   台架验证固件的心跳任务：状态灯、蜂鸣器（启动音、解锁 / 上锁音、低电量每 2 s 两声）、电池检查、
- *          每秒通过 RTT 打印模式、遥控、电机反馈、图传、USB、IMU 和电池
- * @note    只读控制相关的对象（robot.h），不参与控制；打印的数值只供观察。
- *          上线 / 离线的变化由 detect 任务打印。浮点用整数打印（RTT 的 printf 不支持 %f）。
+ * @file    log_task.c
+ * @brief   台架验证固件的 log 任务（1 s）：通过 RTT 打印模式、遥控、电机反馈、图传、USB、IMU 和电池
+ * @note    只读对象（robot.h），不参与控制；打印的数值只供观察。
+ *          状态灯、蜂鸣器、低电量提示在 01_app/system/indicator_task.c；上线 / 离线的变化由 detect 任务打印。
+ *          浮点用整数打印（RTT 的 printf 不支持 %f）。
  */
 #include "robot.h"
 
+#include "01_app/system/indicator_task.h"
+
 #include "04_core/log/log.h"
 #include "04_core/os/os.h"
-#include "05_platform/adc.h"
-#include "05_platform/status_led.h"
-#include "05_platform/time.h"
-#include "05_platform/usb_cdc.h"
 
-#define HEARTBEAT_STEP_MS      25u
-#define HEARTBEAT_STEPS        40u   /* 40 × 25 ms = 1 s 一拍 */
-#define LED_GREEN_LEVEL        0x20u /* WS2812 满亮度很刺眼，1/8 亮度足够看清 */
-#define LOW_BATTERY_BEEP_STEPS 80u   /* 80 × 25 ms = 2 s 响一次 */
+#include "05_platform/usb_cdc/usb_cdc.h"
 
-/*
- * 绿色每拍闪两下表示正常：0–50 ms 亮一次，200–225 ms 再亮一次，其余时间灭。
- * 两次亮的时长不同（50 ms、25 ms，用户 2026-09-28 指定），一长一短容易和其他闪烁码区分。
- */
-static bool led_on_at(uint32_t step)
-{
-    return step < 2u || step == 8u;
-}
+#define LOG_PERIOD_MS 1000u
 
 static void log_rc(void)
 {
@@ -118,93 +106,24 @@ static void log_imu(void)
              (unsigned)ins.read_failures);
 }
 
-static const char *mode_name(RobotMode mode)
-{
-    switch (mode)
-    {
-        case ROBOT_MODE_INIT:
-            return "init";
-        case ROBOT_MODE_SAFE:
-            return "safe";
-        case ROBOT_MODE_MANUAL:
-            return "manual";
-    }
-    return "?";
-}
-
-/* 电池：低电量期间每 2 s 响一次；状态变化时打印一次 */
-static void check_battery(uint32_t tick)
-{
-    const bool was_low = battery.low;
-    const bool low = battery_update(&battery, adc_read_volts(ADC_BATTERY), rm_time_now_us());
-    if (low != was_low)
-    {
-        if (low)
-        {
-            RM_LOG_W("battery low: %d mV", (int)(battery.voltage_v * 1000.0f));
-        }
-        else
-        {
-            RM_LOG_I("battery ok: %d mV", (int)(battery.voltage_v * 1000.0f));
-        }
-    }
-    if (low && tick % LOW_BATTERY_BEEP_STEPS == 0u)
-    {
-        buzzer_play(&buzzer, BUZZER_LOW_BATTERY);
-    }
-}
-
-/* 模式变化时的提示音：进入 Manual 为解锁音，离开为上锁音 */
-static void beep_on_mode_change(RobotMode *last)
-{
-    const RobotMode mode = gate.mode;
-    if (mode != *last)
-    {
-        if (mode == ROBOT_MODE_MANUAL)
-        {
-            buzzer_play(&buzzer, BUZZER_ARM);
-        }
-        else if (*last == ROBOT_MODE_MANUAL)
-        {
-            buzzer_play(&buzzer, BUZZER_DISARM);
-        }
-        *last = mode;
-    }
-}
-
-void heartbeat_task_entry(void *arg)
+void log_task_entry(void *arg)
 {
     (void)arg;
     uint32_t beat = 0u;
-    uint32_t step = 0u;
-    uint32_t tick = 0u;
-    RobotMode last_mode = gate.mode;
-
     RmTaskPeriod last_wake = rm_task_period_start();
     for (;;)
     {
-        rm_status_led_set(0u, led_on_at(step) ? LED_GREEN_LEVEL : 0u, 0u);
-        check_battery(tick);
-        beep_on_mode_change(&last_mode);
-        buzzer_step(&buzzer, HEARTBEAT_STEP_MS);
-        tick++;
-
-        if (step == 0u)
-        {
-            /* 每次打印都会读一次时间，同时保证 DWT 扩展计数至少每 7.8 s 更新一次（time.h 的 @pre） */
-            RM_LOG_I("alive %u, mode %s", (unsigned)beat, mode_name(gate.mode));
-            log_rc();
-            log_motor();
-            log_joint();
-            log_vt_link();
-            log_usb();
-            log_imu();
-            RM_LOG_I("battery %d mV%s", (int)(battery.voltage_v * 1000.0f),
-                     battery.low ? " (low)" : "");
-            beat++;
-        }
-
-        step = (step + 1u) % HEARTBEAT_STEPS;
-        rm_task_delay_until(&last_wake, HEARTBEAT_STEP_MS);
+        /* 每次打印都会读一次时间，同时保证 DWT 扩展计数至少每 7.8 s 更新一次（time.h 的 @pre） */
+        RM_LOG_I("alive %u, mode %s", (unsigned)beat, safety_gate_mode_name(safety_gate.mode));
+        log_rc();
+        log_motor();
+        log_joint();
+        log_vt_link();
+        log_usb();
+        log_imu();
+        RM_LOG_I("battery %d mV%s", (int)(indicator_battery_v() * 1000.0f),
+                 indicator_battery_low() ? " (low)" : "");
+        beat++;
+        rm_task_delay_until(&last_wake, LOG_PERIOD_MS);
     }
 }
