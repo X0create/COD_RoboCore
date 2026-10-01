@@ -15,6 +15,6 @@
 | `buzzer/` | 蜂鸣器提示音，与状态灯闪烁码对应 |
 | `board_link/` | 板间 CAN 通信 |
 
-- 电机驱动只负责输出指令和解析反馈，PID 等闭环放在 app 的机构目录（如 `01_app/chassis`）。
+- 电机驱动只负责输出指令和解析反馈，PID 等闭环放在 app 的机构目录（如 `01_applic/chassis`）。
 - **可以** include：platform 接口、algorithm、core（含 `04_core/msg` 的消息）。
 - **禁止** include：HAL、具体芯片头文件。

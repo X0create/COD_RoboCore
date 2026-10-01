@@ -6,10 +6,10 @@
  *          - 设备层不做任何闭环（ADR 0016）。
  *
  *          一个电机怎么用（和老模板 SendValue → CAN_Task 的顺序相同）：
- *            收：comm_rx 任务  can_read() 取一帧 → motor_receive(&电机, 总线, &帧)，是它的反馈就解码、存下、喂狗
- *            读：control 任务  motor_read_feedback()，在临界区里拷贝完整快照（带在线判断）
- *            写：control 任务  motor_set_torque() / motor_apply_safe_action()  —— 只记下本周期的指令，还没有发送
- *            发：control 任务  周期末尾 motor_group_send()：确定最终指令（停机动作 > 没写指令 > 离线 > 力矩）
+ *            收：comm_rx_task  can_read() 取一帧 → motor_receive(&电机, 总线, &帧)，是它的反馈就解码、存下、喂狗
+ *            读：control_task  motor_read_feedback()，在临界区里拷贝完整快照（带在线判断）
+ *            写：control_task  motor_set_torque() / motor_apply_safe_action()  —— 只记下本周期的指令，还没有发送
+ *            发：control_task  周期末尾 motor_group_send()：确定最终指令（停机动作 > 没写指令 > 离线 > 力矩）
  *                              → 编码 → 发送 → 清空本周期指令（motor_group.c）
  *          品牌：DJI（M3508 / M2006 / GM6020）、达妙（MIT 模式，ADR 0035）。
  */
@@ -37,7 +37,7 @@ extern "C"
 #define DJI_M2006_GEAR_RATIO 36.0f
 
 /*
- * M3508 + C620 的换算常数（附录 A.2），全仓库只在这里定义：dji_motor.c 编解码、兵种 config.h 把旧工程的 PID
+ * M3508 + C620 的换算常数（附录 A.2），全仓库只在这里定义：dji_motor.c 编解码、兵种 <兵种>_config.h 把旧工程的 PID
  * 换算到国际单位都用这里。C620 电流原始值 ±16384 对应 ±20 A；原装减速箱输出轴 0.3 N·m/A
  */
 #define DJI_C620_RAW_MAX   16384
@@ -78,7 +78,7 @@ typedef struct
     float damp_kd;      /* 阻尼停机时的 Kd，N·m·s/rad（0–5） */
 } DmConfig;
 
-/** 本车固定参数：写成 robot.c 里的 const 对象，运行中不变 */
+/** 本车固定参数：写成兵种 <兵种>_config.h 里的 const 配置表，运行中不变 */
 typedef struct
 {
     const char *name; /* 日志和设备清单里的名字 */
@@ -129,9 +129,9 @@ typedef struct
 typedef struct
 {
     bool
-        want_enabled; /* 期望使能：motor_request_enable / disable 设置，离线时清除（control 任务） */
-    bool clear_requested; /* 这次使能请求还没发过清错（control 任务） */
-    uint64_t last_cmd_us; /* 上次发使能 / 失能 / 清错命令的时刻（control 任务） */
+        want_enabled; /* 期望使能：motor_request_enable / disable 设置，离线时清除（control_task） */
+    bool clear_requested; /* 这次使能请求还没发过清错（control_task） */
+    uint64_t last_cmd_us; /* 上次发使能 / 失能 / 清错命令的时刻（control_task） */
     bool cmd_sent;        /* 发过命令，last_cmd_us 有效 */
 } DmMotorState;
 
@@ -157,14 +157,14 @@ typedef struct Motor
 {
     const MotorConfig *cfg;
     Watchdog wd;
-    MotorFeedback fb; /* comm_rx 任务写，临界区保护 */
+    MotorFeedback fb; /* comm_rx_task 写，临界区保护 */
     union
     {
-        DjiMotorState dji; /* 只在 comm_rx 任务里用 */
-        DmMotorState dm;   /* 只在 control 任务里用 */
+        DjiMotorState dji; /* 只在 comm_rx_task 里用 */
+        DmMotorState dm;   /* 只在 control_task 里用 */
     } brand;
 
-    /* 本周期的指令槽位：只在 control 任务里读写，motor_group_send() 发送后清空 */
+    /* 本周期的指令槽位：只在 control_task 里读写，motor_group_send() 发送后清空 */
     float torque_cmd_nm;
     bool torque_set;
     SafeAction safe_action;
@@ -192,7 +192,7 @@ bool motor_supports_torque(const Motor *m);
 /**
  * @brief   把一帧 CAN 交给这个电机：是它的反馈（总线和反馈 ID 都对上）就解码、存下、喂看门狗
  * @return  true：这帧是它的（长度不对的也算，丢弃不喂狗），调用方不用再交给别的电机；false：不是它的
- * @pre     只在 comm_rx 任务里调用（兵种的 comm_rx_task.c）
+ * @pre     只在 comm_rx_task 里调用（兵种的 comm_rx_task.c）
  */
 bool motor_receive(Motor *m, CanBusId bus, const CanFrame *frame);
 
@@ -205,11 +205,11 @@ RM_NODISCARD bool motor_read_feedback(const Motor *m, MotorFeedback *out);
 /**
  * @brief   记下本周期的力矩指令（输出轴 N·m）——只记下，周期末尾 motor_group_send() 才编码发送；超出电调量程时截到量程
  * @note    本周期没调用的电机发零力矩；电机离线或有停机动作时，这个指令不会发出（motor_group.c 的 final_output()）
- * @pre     motor_supports_torque(m)；只在 control 任务里调用
+ * @pre     motor_supports_torque(m)；只在 control_task 里调用
  */
 void motor_set_torque(Motor *m, float torque_nm);
 
-/** 记下本周期的停机动作，优先于 motor_set_torque()；motor_group_send() 时才发出。只在 control 任务里调用 */
+/** 记下本周期的停机动作，优先于 motor_set_torque()；motor_group_send() 时才发出。只在 control_task 里调用 */
 void motor_apply_safe_action(Motor *m, SafeAction action);
 
 /**

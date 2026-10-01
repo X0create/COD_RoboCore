@@ -78,7 +78,7 @@ bool can_is_bus_off(CanBusId bus);
 
 /**
  * @brief   从 bus-off 恢复：重新启动控制器，滤波器和接收中断的配置保留
- * @pre     can_start() 成功过；由 comm_rx 任务调用（01_app/system/comm_rx.c 的 comm_rx_recover_bus_off），同一路两次调用至少间隔 100 ms（《架构设计》“发送队列满了怎么办”）
+ * @pre     can_start() 成功过；由 comm_rx_task 调用（01_applic/system/comm_rx_common.c 的 comm_rx_recover_bus_off），同一路两次调用至少间隔 100 ms（《架构设计》“发送队列满了怎么办”）
  * @note    恢复期间 can_send() 返回 false（丢帧），和发送队列满的处理相同
  */
 void can_recover(CanBusId bus);

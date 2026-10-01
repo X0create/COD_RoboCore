@@ -64,7 +64,7 @@ const osThreadAttr_t startup_attributes = {
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-void app_main(void); /* 框架入口，定义在 01_app/system/app_main.c */
+void app_main(void); /* 框架入口，定义在 01_applic/system/app_main.c */
 
 /* USER CODE END FunctionPrototypes */
 

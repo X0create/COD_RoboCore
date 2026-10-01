@@ -101,9 +101,9 @@ def architecture():
     s.text(24, 54, "左侧五层只能从上往下调用；右侧模块各层都可以使用。虚线框为规划中、尚无代码。", 12.5, INK2)
 
     layers = [
-        ("01_app/<兵种>", "兵种", "这台车怎么组装、怎么控制", BLUE,
+        ("01_applic/<兵种>", "兵种", "这台车怎么组装、怎么控制", BLUE,
          ["robot.c：对象 · 任务表", "control · comm_rx · log", "config.h"]),
-        ("01_app 共用", "system + 机构", "各兵种共用的框架和机构", AQUA,
+        ("01_applic 共用", "system + 机构", "各兵种共用的框架和机构", AQUA,
          ["system：上电 · 安全门 · 指示 · 检测", "ins", "底盘", "*云台", "*发射"]),
         ("02_devices", "设备驱动", "协议字节 ⇄ 物理量", ORANGE,
          ["DJI 电机", "达妙电机", "BMI088", "DR16", "VT13 图传", "视觉帧", "电池", "蜂鸣器"]),
@@ -177,8 +177,8 @@ def runtime():
     s.text(tx, top - 8, "接收与解算任务", 12, INK2, bold=True)
     s.rect(tx, iy0, tw, iy1 - iy0, tint(BLUE, 0.08), tint(BLUE, 0.4))
     s.rect(tx, iy0, 6, iy1 - iy0, BLUE, BLUE, rx=3)
-    s.text(tx + 18, iy0 + 26, "comm_rx", 14, INK, bold=True)
-    s.text(tx + 18 + text_w("comm_rx", 14) + 8, iy0 + 26, "优先级 4", 12, INK2)
+    s.text(tx + 18, iy0 + 26, "comm_rx_task", 14, INK, bold=True)
+    s.text(tx + 18 + text_w("comm_rx_task", 14) + 8, iy0 + 26, "优先级 5", 12, INK2)
     for k, t in enumerate(["有数据才运行", "交给对应设备解析", "校验通过才算在线", "发布遥控、电机反馈"]):
         s.text(tx + 18, iy0 + 52 + k * 22, t, 12, INK2)
     s.line(ix + iw, (iy0 + iy1) / 2, tx - 2, (iy0 + iy1) / 2)
@@ -187,8 +187,8 @@ def runtime():
     insh = hh + 8 + 40
     s.rect(tx, insy, tw, insh, tint(BLUE, 0.08), tint(BLUE, 0.4))
     s.rect(tx, insy, 6, insh, BLUE, BLUE, rx=3)
-    s.text(tx + 18, insy + 24, "ins", 14, INK, bold=True)
-    s.text(tx + 18 + text_w("ins", 14) + 8, insy + 24, "1 kHz · 优先级 5", 12, INK2)
+    s.text(tx + 18, insy + 24, "ins_task", 14, INK, bold=True)
+    s.text(tx + 18 + text_w("ins_task", 14) + 8, insy + 24, "优先级 6", 12, INK2)
     for k, t in enumerate(["零偏标定 / 在线修正", "四元数 EKF · 恒温加热"]):
         s.text(tx + 18, insy + 48 + k * 22, t, 12, INK2)
     s.line(hx + hwid, ys[3] + hh / 2, tx - 2, ys[3] + hh / 2)
@@ -206,9 +206,9 @@ def runtime():
     s.line(tx + tw, pys[1] + 24, px - 2, pys[1] + 24)
     s.line(tx + tw, pys[2] + 24, px - 2, pys[2] + 24)
 
-    # 5. control 任务
+    # 5. control_task
     cx, cw = 712, 224
-    s.text(cx, top - 8, "control 任务 · 1 kHz · 优先级 3", 12, INK2, bold=True)
+    s.text(cx, top - 8, "control_task · 1 kHz · 优先级 4", 12, INK2, bold=True)
     steps = [("① 读话题快照", "过期的当作没有", BLUE), ("② 安全门", "判断能不能动", ORANGE),
              ("③ 子系统计算", "PID 等", BLUE), ("④ 全车停改写", "换成各电机的停机动作", ORANGE),
              ("⑤ 电机组打包", "经 CAN 发给电机", BLUE)]
@@ -230,9 +230,9 @@ def runtime():
     # 6. 低优先级任务
     ay = 368
     s.text(24, ay - 8, "低优先级任务：只读话题，不参与控制", 12, INK2, bold=True)
-    aux = [("detect", "100 Hz · 优先级 3", "报告设备上线 / 离线", 24),
-           ("indicator", "40 Hz · 优先级 2", "状态灯 · 蜂鸣器 · 低电量", 330),
-           ("log", "1 Hz · 优先级 1", "每秒打印本兵种状态", 636)]
+    aux = [("detect_task", "100 Hz · 优先级 3", "报告设备上线 / 离线", 24),
+           ("indicator_task", "40 Hz · 优先级 2", "状态灯 · 蜂鸣器 · 低电量", 330),
+           ("log_task", "1 Hz · 优先级 1", "每秒打印本兵种状态", 636)]
     for name, meta, role, x in aux:
         s.rect(x, ay, 290, 58, tint(VIOLET, 0.07), tint(VIOLET, 0.35))
         s.rect(x, ay, 5, 58, VIOLET, VIOLET, rx=2)
@@ -281,18 +281,18 @@ def safety_gate():
 def startup():
     W, H = 960, 330
     s = Svg(W, H, "上电后按什么顺序启动")
-    s.text(24, 54, "前两行在 01_app/system/app_main.c，各兵种相同。任何一步失败都停在 halt_on_init_failure()。⑥ 之前安全门一直是 Init，不能解锁。", 12.5, INK2)
+    s.text(24, 54, "前两行在 01_applic/system/app_main.c，各兵种相同。任何一步失败都停在 halt_on_init_failure()。⑥ 之前安全门一直是 Init，不能解锁。", 12.5, INK2)
 
     lanes = [
         ("app_main", "调度器启动前，单线程", BLUE,
          [("① 时钟", "DWT 计数器自检"), ("② 日志", "RTT 初始化"),
           ("③ 初始化对象", "组装设备和机构"), ("④ 创建任务", "按任务表静态创建"),
           ("⑤ 启动调度器", "交给 FreeRTOS")]),
-        ("startup 任务", "调度器启动后运行一次", AQUA,
+        ("startup_task", "调度器启动后运行一次", AQUA,
          [("⑥ 系统就绪", "允许解锁"), ("⑦ 删除自己", "“startup done”")]),
         ("周期任务", "各自按周期运行", VIOLET,
-         [("ins", "上电静止标定约 2 s"), ("comm_rx", "先打开 CAN / 串口"),
-          ("control", "1 kHz 控制"), ("indicator 等", "先打开 ADC、蜂鸣器")]),
+         [("ins_task", "上电静止标定约 2 s"), ("comm_rx_task", "先打开 CAN / 串口"),
+          ("control_task", "1 kHz 控制"), ("indicator_task 等", "先打开 ADC、蜂鸣器")]),
     ]
     y, lh, lx, bx = 74, 70, 24, 196
     bw_total = W - 24 - bx

@@ -34,7 +34,7 @@ typedef struct
 /** @pre 初始化阶段调用 */
 void vision_link_init(VisionLink *self);
 
-/** 喂入从 USB 读到的一段字节（comm_rx 任务里调用） */
+/** 喂入从 USB 读到的一段字节（comm_rx_task 里调用） */
 void vision_link_on_bytes(VisionLink *self, const uint8_t *data, uint32_t len);
 
 #ifdef __cplusplus

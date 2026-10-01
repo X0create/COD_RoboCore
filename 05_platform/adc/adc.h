@@ -23,7 +23,7 @@ typedef enum
 /**
  * @brief   校准并开始连续采样
  * @return  false：校准或启动失败
- * @pre     调度器已启动（在 startup 任务里调用）；只调用一次
+ * @pre     调度器已启动（在 startup_task 里调用）；只调用一次
  */
 RM_NODISCARD bool adc_start(void);
 

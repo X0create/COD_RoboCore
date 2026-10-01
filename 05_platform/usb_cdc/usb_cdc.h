@@ -22,7 +22,7 @@ typedef void (*UsbCdcRxNotify)(void *ctx);
 /**
  * @brief   初始化 USB 设备（开始枚举）并打开接收
  * @return  false：初始化失败
- * @pre     调度器已启动（在 startup 任务里调用）；只调用一次
+ * @pre     调度器已启动（在 startup_task 里调用）；只调用一次
  */
 RM_NODISCARD bool usb_cdc_start(UsbCdcRxNotify notify, void *ctx);
 

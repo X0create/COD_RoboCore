@@ -3,7 +3,7 @@
  * @brief   STM32H7 FDCAN 收发，见 05_platform/can/can.h
  * @note    - 接收全部标准数据帧，不用硬件滤波（同 COD-H7-Template `bsp_can.c` 的全放行，ADR 0049）；
  *          - 接收用哪个 FIFO 按 CubeMX 配置自动选：FDCAN1/3 用 FIFO0，FDCAN2 用 FIFO1（COD-H7-Template 的配置）；
- *          - 中断把帧放进软件环形缓冲，comm_rx 任务用 can_read() 取出后按 ID 交给对应设备。
+ *          - 中断把帧放进软件环形缓冲，comm_rx_task 用 can_read() 取出后按 ID 交给对应设备。
  */
 #include "05_platform/can/can.h"
 
@@ -18,7 +18,7 @@
 
 typedef struct
 {
-    CanRxRing ring; /* 中断写、comm_rx 任务读 */
+    CanRxRing ring; /* 中断写、comm_rx_task 读 */
     CanRxNotify notify;
     void *notify_ctx;
     bool started;
@@ -121,7 +121,7 @@ void can_recover(CanBusId bus)
     FDCAN_HandleTypeDef *h = handles[bus];
     if (HAL_FDCAN_Stop(h) == HAL_OK)
     {
-        (void)HAL_FDCAN_Start(h); /* 失败时仍是 bus-off，comm_rx 任务 100 ms 后再试 */
+        (void)HAL_FDCAN_Start(h); /* 失败时仍是 bus-off，comm_rx_task 100 ms 后再试 */
     }
 }
 

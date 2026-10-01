@@ -30,7 +30,7 @@ add_subdirectory(05_platform)
 add_subdirectory(04_core)           # 电脑侧只有 rm_core_common，其余只用于固件（见 04_core/CMakeLists.txt）
 add_subdirectory(03_algorithm)
 add_subdirectory(02_devices)
-add_subdirectory(01_app)           # 电脑侧只有 rm_app_logic（安全门、底盘、ins），其余只用于固件
+add_subdirectory(01_applic)           # 电脑侧只有 rm_app_logic（安全门、底盘、ins），其余只用于固件
 
 if(RM_BOARD)
     # 固件目标。CubeMX 生成的 CMakeLists 把 main.c 等源文件加到名为 ${CMAKE_PROJECT_NAME} 的目标上，

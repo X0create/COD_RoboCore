@@ -2,7 +2,7 @@
  * @file    dr16.h
  * @brief   DR16 遥控接收机（DBUS）：分帧、校验、解析，发布 RcState
  * @note    移植自 COD-H7-Template `Components/Device/Src/Remote_Control.c`，字段解析的位运算不变。与旧工程的差异：
- *          - 在 comm_rx 任务里解析，不在串口中断里（运行时契约第 2 节）；
+ *          - 在 comm_rx_task 里解析，不在串口中断里（运行时契约第 2 节）；
  *          - 按时间间隔分帧：距上次收到数据超过 DR16_FRAME_GAP_US 就从新帧开始，
  *            一帧被 DMA 半满中断切成几段也能拼起来（旧工程只接受一次空闲中断正好 18 字节）；
  *          - 摇杆 0–3 必须在 364–1684、两个拨杆必须是 1–3，否则整帧丢弃、不发布、不喂狗（附录 A.4）；
@@ -45,7 +45,7 @@ typedef struct
 RM_NODISCARD bool dr16_init(Dr16 *self, RcStateTopic *out);
 
 /**
- * @brief   喂入从串口读到的一段字节（comm_rx 任务里调用）
+ * @brief   喂入从串口读到的一段字节（comm_rx_task 里调用）
  * @param   now_us  读到这段字节的时刻（rm_time_now_us()），用来按时间间隔分帧
  */
 void dr16_on_bytes(Dr16 *self, const uint8_t *data, uint32_t len, uint64_t now_us);
