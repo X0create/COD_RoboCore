@@ -159,7 +159,7 @@ static void send_dm_frame(MotorGroup *group, Motor *m, uint64_t now_us)
     }
 }
 
-void motor_group_flush(MotorGroup *group)
+void motor_group_send(MotorGroup *group)
 {
     /* 1. 确定指令：每个电机本周期最终发什么（停机动作 > 没写指令 > 离线 > 力矩，见 final_output） */
     for (Motor *m = group->head; m != NULL; m = m->next)

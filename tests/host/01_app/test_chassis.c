@@ -7,6 +7,7 @@
 #include "01_app/chassis/chassis.h"
 
 #include <math.h>
+#include <string.h>
 
 #include "02_devices/motor/motor_group.h"
 #include "fake_can.h"
@@ -55,6 +56,21 @@ static MotorConfig steer_motor_cfg[CHASSIS_WHEELS];
 static Motor pool[128];
 static unsigned pool_used;
 static MotorGroup group;
+
+/* 相当于兵种 comm_rx_task.c：把收到的一帧依次交给组里的每个电机（motor_receive），有电机认领就返回 true */
+static bool deliver(CanBusId bus, uint32_t id, const uint8_t *data, uint8_t len)
+{
+    CanFrame frame = { .id = id, .len = len };
+    memcpy(frame.data, data, len);
+    for (Motor *m = group.head; m != NULL; m = m->next)
+    {
+        if (motor_receive(m, bus, &frame))
+        {
+            return true;
+        }
+    }
+    return false;
+}
 static Motor *wheel[CHASSIS_WHEELS];
 static Motor *steer[CHASSIS_WHEELS];
 static Chassis chassis;
@@ -108,7 +124,7 @@ static void feed_id(unsigned id, float gear, float speed_rad_s)
     const float rpm = speed_rad_s * gear * 60.0f / (2.0f * PI_F);
     const int16_t raw = (int16_t)lroundf(rpm);
     const uint8_t d[8] = { 0, 0, (uint8_t)((uint16_t)raw >> 8), (uint8_t)raw, 0, 0, 0, 0 };
-    TEST_ASSERT_TRUE(fake_can_deliver(CAN_BUS_1, 0x200u + id, d, 8));
+    TEST_ASSERT_TRUE(deliver(CAN_BUS_1, 0x200u + id, d, 8));
 }
 
 static void feed(unsigned i, float speed_rad_s)
@@ -226,7 +242,7 @@ static void test_wheel_offline_decelerates_under_control(void)
     {
         feed_all(0.0f);
         chassis_step(&chassis, &target, false, 1.0f, DT_S);
-        motor_group_flush(&group);
+        motor_group_send(&group);
         fake_time_advance_ms(1u);
     }
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, 1.0f, chassis.target.velocity.vx_m_s);
@@ -322,7 +338,7 @@ static void test_steer_motor_offline_is_mechanism_stop(void)
         feed_all(0.0f);
         feed_steer_all();
         chassis_step(&c, &target, false, 1.0f, DT_S);
-        motor_group_flush(&group);
+        motor_group_send(&group);
         fake_time_advance_ms(1u);
     }
     for (int k = 0; k <= (int)MOTOR_OFFLINE_TIMEOUT_MS; k++)

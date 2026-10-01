@@ -21,7 +21,7 @@ endif()
 file(GLOB rm_robot_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${RM_ROBOT}/*.c)
 add_library(rm_app STATIC
     common/comm_rx.c
-    common/daemon_task.c
+    common/detect_task.c
     ${rm_robot_sources}
 )
 target_link_libraries(rm_app PUBLIC rm_app_logic rm_core rm_devices rm_algorithm)

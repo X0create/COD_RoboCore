@@ -51,11 +51,3 @@ void comm_rx_wait(void)
 {
     (void)rm_task_wait_notify(COMM_RX_IDLE_MS);
 }
-
-void comm_rx_can_all(void)
-{
-    for (int bus = 0; bus < (int)CAN_BUS_COUNT; bus++)
-    {
-        (void)can_dispatch((CanBusId)bus);
-    }
-}

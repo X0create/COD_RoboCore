@@ -297,7 +297,7 @@ Motor *yaw_motor = malloc(sizeof(Motor));
 | 可能因外部条件失败，调用方**必须**处理 | `bool` + `RM_NODISCARD` | `xxx_init()`、`can_send()`、`robot_cmd_read()`（数据过期返回 false） |
 | 纯计算，可能失败 | 结果通过输出参数返回，函数返回状态枚举（如 `AlgoStatus`） | `quat_ekf_update()`（发散） |
 | 纯计算，不会失败 | 直接返回结果 | `angle_wrap_pi()`、`rpm_to_rad_s()` |
-| 按接口约定不会失败 | `void`，并把前提写进 `@pre` | `motor_set_torque()`、`motor_group_flush_all()` |
+| 按接口约定不会失败 | `void`，并把前提写进 `@pre` | `motor_set_torque()`、`motor_group_send_all()` |
 
 **不要**为了“看起来安全”给按约定不会失败的函数加上 `bool` 返回值。调用方会被迫写一堆永远不会走到的分支。
 

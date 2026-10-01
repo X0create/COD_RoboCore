@@ -18,13 +18,20 @@ static bool is_dm(const MotorConfig *cfg)
     return cfg->type == MOTOR_DM;
 }
 
-/* 反馈帧回调，在 comm_rx 任务里执行 */
-static void on_feedback(const CanFrame *frame, void *ctx)
+static uint32_t feedback_id(const MotorConfig *cfg)
 {
-    Motor *m = ctx;
+    return is_dm(cfg) ? cfg->dm.master_id : dji_feedback_id(cfg);
+}
+
+bool motor_receive(Motor *m, CanBusId bus, const CanFrame *frame)
+{
+    if (bus != m->cfg->can_bus || frame->id != feedback_id(m->cfg))
+    {
+        return false; /* 不是这个电机的反馈 */
+    }
     if (frame->len != 8u)
     {
-        return; /* 不是合法的反馈帧：丢弃、不喂狗 */
+        return true; /* 是它的 ID 但长度不对：丢弃、不喂狗 */
     }
 
     MotorFeedback fb;
@@ -43,11 +50,7 @@ static void on_feedback(const CanFrame *frame, void *ctx)
     m->fb = fb;
     rm_critical_exit();
     watchdog_feed(&m->wd);
-}
-
-static uint32_t feedback_id(const MotorConfig *cfg)
-{
-    return is_dm(cfg) ? cfg->dm.master_id : dji_feedback_id(cfg);
+    return true;
 }
 
 /* 这个电机在总线上占用的 ID：DJI 为反馈 ID 和控制帧 ID，达妙为 CAN ID 和 Master ID */
@@ -116,10 +119,6 @@ bool motor_init(Motor *m, const MotorConfig *cfg, MotorGroup *group, const Motor
     }
 
     *m = (Motor){ .cfg = cfg };
-    if (!can_subscribe(cfg->can_bus, feedback_id(cfg), on_feedback, m))
-    {
-        return false;
-    }
     watchdog_register(&m->wd, cfg->name, MOTOR_OFFLINE_TIMEOUT_MS);
     m->next = group->head;
     group->head = m;

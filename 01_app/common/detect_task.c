@@ -1,8 +1,8 @@
 /**
- * @file    daemon_task.c
- * @brief   daemon 任务，见 daemon_task.h
+ * @file    detect_task.c
+ * @brief   detect 任务，见 detect_task.h
  */
-#include "daemon_task.h"
+#include "detect_task.h"
 
 #include "04_core/log/log.h"
 #include "04_core/os/os.h"
@@ -10,7 +10,7 @@
 #include "05_platform/can.h"
 #include "05_platform/time.h"
 
-#define DAEMON_PERIOD_MS      10u
+#define DETECT_PERIOD_MS      10u
 #define CAN_RECOVER_PERIOD_US 100000u /* 同一路 bus-off 恢复至少间隔 100 ms */
 
 static void log_device(const Watchdog *wd, void *ctx)
@@ -48,7 +48,7 @@ static void recover_bus_off(uint64_t now_us)
     }
 }
 
-void daemon_task_entry(void *arg)
+void detect_task_entry(void *arg)
 {
     (void)arg;
     RM_LOG_I("devices:");
@@ -59,6 +59,6 @@ void daemon_task_entry(void *arg)
     {
         watchdog_poll(log_change, NULL);
         recover_bus_off(rm_time_now_us());
-        rm_task_delay_until(&last_wake, DAEMON_PERIOD_MS);
+        rm_task_delay_until(&last_wake, DETECT_PERIOD_MS);
     }
 }

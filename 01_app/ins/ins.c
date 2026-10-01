@@ -40,6 +40,44 @@ Bmi088Status ins_start(Ins *ins)
     return bmi088_init(&ins->imu);
 }
 
+/* ins_step 的各步骤，定义在本文件后面 */
+static bool read_sample(Ins *ins, Bmi088Sample *s);
+static InsEvent calibrate_gyro(Ins *ins, const Bmi088Sample *s);
+static ImuState update_attitude(Ins *ins, const Bmi088Sample *s, uint64_t now_us);
+
+/* 每 1 ms 一次的完整流程（相当于老模板 INS_Task 的循环体），各步骤的细节在下面 */
+InsEvent ins_step(Ins *ins)
+{
+    /* 1. 读 BMI088；坏帧时关加热、不发布 */
+    Bmi088Sample s;
+    if (!read_sample(ins, &s))
+    {
+        ins->read_failures++;
+        bmi088_heater_off(&ins->imu);
+        return INS_EVENT_READ_FAILED;
+    }
+
+    /* 2. 恒温加热：芯片温度 → 加热 PID（每 1280 ms 算一次，ADR 0042，见 bmi088.c） */
+    bmi088_heater_step(&ins->imu, s.temperature_c);
+
+    /* 3. 上电先标定陀螺零偏；标定完成前不发布，安全门据此全车停 */
+    if (ins->phase == INS_PHASE_CALIBRATING)
+    {
+        return calibrate_gyro(ins, &s);
+    }
+
+    /* 4. 更新姿态：机体系 → 航向零偏在线修正 → 加速度低通 → EKF → 欧拉角、多圈航向 */
+    const ImuState st = update_attitude(ins, &s, rm_time_now_us());
+
+    /* 5. 发布给 control、heartbeat */
+    imu_state_publish(ins->out, &st);
+    return INS_EVENT_NONE;
+}
+
+/* ================================================================== */
+/* 以下是各步骤的细节                                                    */
+/* ================================================================== */
+
 static void rotate(const float r[9], const float in[3], float out[3])
 {
     for (int i = 0; i < 3; i++)
@@ -48,7 +86,7 @@ static void rotate(const float r[9], const float in[3], float out[3])
     }
 }
 
-/* 上电标定阶段每次调用：攒满 INS_CALIB_SAMPLES 个陀螺样本，静止才把均值作为零偏，否则返回拒绝原因并重新采样 */
+/* 第 3 步（上电标定阶段）：攒满 INS_CALIB_SAMPLES 个陀螺样本，静止才把均值作为零偏，否则返回拒绝原因并重新采样 */
 static InsEvent calibrate_gyro(Ins *ins, const Bmi088Sample *s)
 {
     gyro_bias_add(&ins->calib, s->gyro_rad_s);
@@ -102,8 +140,8 @@ static void track_yaw_bias(Ins *ins, const float gyro_body[3])
     bmi088_set_gyro_offset(&ins->imu, offset);
 }
 
-/* 标定完成后每次调用：转到机体系 → 航向零偏在线修正 → 加速度低通 → EKF → 欧拉角、多圈航向 → 发布 imu_state */
-static void update_attitude(Ins *ins, const Bmi088Sample *s, uint64_t now_us)
+/* 第 4 步：转到机体系 → 航向零偏在线修正 → 加速度低通 → EKF → 欧拉角、多圈航向 */
+static ImuState update_attitude(Ins *ins, const Bmi088Sample *s, uint64_t now_us)
 {
     ImuState st;
     float accel_body[3];
@@ -145,29 +183,17 @@ static void update_attitude(Ins *ins, const Bmi088Sample *s, uint64_t now_us)
     ins->last_yaw_rad = st.yaw_rad;
     st.yaw_total_rad = st.yaw_rad + (float)ins->yaw_turns * TWO_PI_F;
     st.temperature_c = s->temperature_c;
-
-    imu_state_publish(ins->out, &st);
+    return st;
 }
 
-InsEvent ins_step(Ins *ins)
+/* 第 1 步：读一次 BMI088。读失败，或加速度模长接近 0（全零会让 EKF 除零后永久变成 NaN）都算坏帧 */
+static bool read_sample(Ins *ins, Bmi088Sample *s)
 {
-    Bmi088Sample s;
-    const bool ok = bmi088_read(&ins->imu, &s);
-    const float a2 = ok ? s.accel_m_s2[0] * s.accel_m_s2[0] + s.accel_m_s2[1] * s.accel_m_s2[1]
-                              + s.accel_m_s2[2] * s.accel_m_s2[2]
-                        : 0.0f;
-    if (!ok || a2 < ACCEL_MIN_M_S2 * ACCEL_MIN_M_S2)
+    if (!bmi088_read(&ins->imu, s))
     {
-        ins->read_failures++;
-        bmi088_heater_off(&ins->imu);
-        return INS_EVENT_READ_FAILED;
+        return false;
     }
-
-    bmi088_heater_step(&ins->imu, s.temperature_c);
-    if (ins->phase == INS_PHASE_CALIBRATING)
-    {
-        return calibrate_gyro(ins, &s);
-    }
-    update_attitude(ins, &s, rm_time_now_us());
-    return INS_EVENT_NONE;
+    const float a2 = s->accel_m_s2[0] * s->accel_m_s2[0] + s->accel_m_s2[1] * s->accel_m_s2[1]
+                     + s->accel_m_s2[2] * s->accel_m_s2[2];
+    return a2 >= ACCEL_MIN_M_S2 * ACCEL_MIN_M_S2;
 }

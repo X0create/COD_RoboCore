@@ -4,7 +4,7 @@
  * @note    control 任务每个周期：
  *            1. 子系统调用 motor_set_torque() / motor_apply_safe_action()，只写槽位；
  *            2. 需要全车停时调用 motor_group_apply_stop_all()，每个电机改写成它的 stop_action；
- *            3. 周期末尾调用一次 motor_group_flush()：确定最终指令 → 编码 → 发送 → 清空本周期指令。
+ *            3. 周期末尾调用一次 motor_group_send()：确定最终指令 → 编码 → 发送 → 清空本周期指令。
  *          本周期没写的槽位和离线电机的槽位填零力矩，不“保持上一帧”。
  *          达妙电机每台每周期一帧：需要时是使能 / 失能 / 清错命令，否则是 MIT 帧；FD 总线上发 FD 帧。
  *          全部函数只在 control 任务里调用（motor_init 除外，它在初始化阶段）。
@@ -39,7 +39,7 @@ void motor_group_apply_stop_all(MotorGroup *group);
  * @brief   发送本周期全部电机的指令：1. 确定每个电机最终发什么（停机动作 > 没写指令 > 离线 > 力矩）
  *          → 2. 编码（DJI 四台共用一帧，达妙每台一帧，含使能命令）→ 3. 入 CAN 发送队列 → 4. 清空本周期指令
  */
-void motor_group_flush(MotorGroup *group);
+void motor_group_send(MotorGroup *group);
 
 #ifdef __cplusplus
 }

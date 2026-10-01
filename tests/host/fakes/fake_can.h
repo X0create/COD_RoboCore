@@ -1,6 +1,6 @@
 /**
  * @file    fake_can.h
- * @brief   电脑测试用的假 CAN：记录订阅和发出的帧，测试可以把反馈帧“送达”订阅者
+ * @brief   电脑测试用的假 CAN：记录发出的帧（收帧由测试直接调用 motor_receive()）
  */
 #pragma once
 
@@ -9,11 +9,8 @@
 
 #include "05_platform/can.h"
 
-/** 清空订阅和已发帧 */
+/** 清空已发帧和设置 */
 void fake_can_reset(void);
-
-/** 按订阅把一帧交给回调（相当于硬件收到 + comm_rx 分发）；没有订阅者时返回 false */
-bool fake_can_deliver(CanBusId bus, uint32_t id, const uint8_t *data, uint8_t len);
 
 /** 发出的帧数与第 i 帧 */
 uint32_t fake_can_sent_count(void);

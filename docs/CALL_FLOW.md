@@ -49,7 +49,7 @@ COD-H7-Template/
 | `Application/Task/INS_Task.c` | `01_app/<兵种>/ins_task.c` + `01_app/ins/ins.c` | |
 | `Application/Task/Control_Task.c` | `01_app/<兵种>/control_task.c` + `01_app/chassis/chassis.c` | |
 | `Application/Task/CAN_Task.c` | `control_task.c` 第 4 步 → `02_devices/motor/motor_group.c` | 发送与控制同一周期，不再单独一个任务 |
-| `Application/Task/Detect_Task.c` | `01_app/common/daemon_task.c` | 只报告上线 / 离线；是否停车由读数据的地方按时间戳当场判断 |
+| `Application/Task/Detect_Task.c` | `01_app/common/detect_task.c` | 只报告上线 / 离线；是否停车由读数据的地方按时间戳当场判断 |
 | `Core/Src/freertos.c` 的任务列表 | `01_app/<兵种>/robot.c` 第 3 节“任务表” | 5 个任务的优先级、栈都在这一处 |
 | 全局变量 `remote_ctrl`、`Chassis_Motor[]` … | `01_app/<兵种>/robot.h`（定义在 `robot.c` 第 1 节） | 只在兵种目录内共享 |
 | `Config.h` | `01_app/<兵种>/config.h` | |
@@ -67,7 +67,7 @@ COD-H7-Template/
 └── heartbeat_task.c   25 ms：状态灯、蜂鸣器、电池、每秒 RTT 打印
 01_app/common/（各兵种相同）
 ├── comm_rx.c          接收的公共部分：中断唤醒任务、分发 CAN、打开接收
-├── daemon_task.c      daemon 任务：上线 / 离线报告、CAN bus-off 恢复 ← Detect_Task
+├── detect_task.c      detect 任务：上线 / 离线报告、CAN bus-off 恢复 ← Detect_Task
 └── safety_gate.c      安全门：急停、遥控丢失、未解锁、IMU 未就绪 → 全车停
 01_app/chassis/chassis.c  底盘：读实测 → 算目标 → 算输出
 01_app/ins/ins.c          惯性导航：读 BMI088 → 标定 → EKF → 发布 imu_state
@@ -106,7 +106,7 @@ for (;;)
 │     └─ chassis_output_update()                每轮速度环 pid_calc → motor_set_torque
 └─ 4. 发送
    ├─ （全车停）motor_group_apply_stop_all()    02_devices/motor/motor_group.c   每个电机改写成它的停机动作
-   └─ motor_group_flush(&motors)                02_devices/motor/motor_group.c
+   └─ motor_group_send(&motors)                02_devices/motor/motor_group.c
       ├─ 1. 确定指令：final_output()             每个电机最终发什么：停机动作 > 没写指令 > 离线 > 力矩
       ├─ 2. 编码 → 3. 发送：send_dji_frame()    四台电调共用一帧（0x200 / 0x1FF）→ can_send
       │                     send_dm_frame()     达妙每台一帧：先对齐使能（清错 / 使能 / 失能命令），否则 MIT 帧
@@ -114,7 +114,7 @@ for (;;)
 ```
 
 和老模板一一对应：`chassis_measure_update` ↔ `Control_Measure_Update`，`chassis_target_update` ↔ `Control_Target_Update`，
-`chassis_output_update` ↔ `Control_Info_Update`，`motor_group_flush` ↔ `CAN_Task` 里拆字节发送。
+`chassis_output_update` ↔ `Control_Info_Update`，`motor_group_send` ↔ `CAN_Task` 里拆字节发送。
 
 ### ins 任务（1 kHz）：`01_app/infantry/ins_task.c:ins_task_entry`
 
@@ -139,13 +139,12 @@ comm_rx 任务：
 ├─ comm_rx_start_can()、comm_rx_start_uart(UART_5)   任务开头打开接收（接线就写在这个文件里）
 └─ for (;;)
    ├─ comm_rx_wait()                            等中断通知，最多 10 ms
-   ├─ comm_rx_can_all() → can_dispatch(每路)    05_platform/stm32h7/can.c    按 CAN ID 找订阅者
-   │  └─ ⚡函数指针 → on_feedback()              02_devices/motor/motor.c     解码（dji_decode_feedback / dm_decode_feedback）→ 存反馈、喂狗
-   │     （订阅在 motor_init() 里：每个电机订阅自己的反馈 ID，ID 冲突在初始化时报错）
+   ├─ can_read(CAN_BUS_1) 取一帧                05_platform/stm32h7/can.c
+   │  └─ motor_receive(&wheel_motor[i], …)      02_devices/motor/motor.c     总线和反馈 ID 对上就解码（dji / dm_decode_feedback）→ 存反馈、喂狗
    └─ uart_read(UART_5) → dr16_on_bytes()       02_devices/remote/dr16.c     凑满 18 字节 → dr16_decode → rc_state_publish
 ```
 
-### daemon 任务（10 ms）：`01_app/common/daemon_task.c:daemon_task_entry`
+### detect 任务（10 ms）：`01_app/common/detect_task.c:detect_task_entry`
 
 上电打印设备清单；之后 `watchdog_poll()` 打印上线 / 离线变化，`recover_bus_off()` 把 bus-off 的 CAN 拉回总线。只报告，不决定停车。
 
@@ -159,6 +158,6 @@ comm_rx 任务：
 | --- | --- | --- | --- |
 | 遥控 `rc_state` | comm_rx（dr16） | control、heartbeat | 话题：整份拷贝，带时间戳判断新旧 |
 | 姿态 `imu_state` | ins | control、heartbeat | 话题 |
-| 电机反馈 `wheel_motor[i].fb` | comm_rx（on_feedback） | control（`motor_read_feedback`） | 临界区拷贝，按时间戳判在线 |
-| 电机指令 | control（`motor_set_torque`） | control（`motor_group_flush`） | 同一任务内 |
+| 电机反馈 `wheel_motor[i].fb` | comm_rx（`motor_receive`） | control（`motor_read_feedback`） | 临界区拷贝，按时间戳判在线 |
+| 电机指令 | control（`motor_set_torque`） | control（`motor_group_send`） | 同一任务内 |
 | 安全门 `gate.mode`、底盘目标 | control | heartbeat（只打印） | 直接读，只供观察 |

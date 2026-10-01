@@ -3,10 +3,14 @@
  * @brief   电机统一接口（《架构设计》“电机：统一接口 + 各品牌实现”）
  * @note    - 单位全部是输出轴上的国际单位：rad、rad/s、N·m（ADR 0031）；
  *          - 品牌分支只出现在 02_devices/motor/ 内部，子系统只调用 motor_*()；
- *          - 反馈由 comm_rx 任务写、control 任务读，motor_read_feedback() 在临界区里拷贝完整快照；
- *          - motor_set_torque() / motor_apply_safe_action() 只记下本周期的指令；离线、停机动作、达妙使能
- *            都在 control 任务周期末尾的 motor_group_flush() 里统一处理并发送（motor_group.c 的 final_output()）；
  *          - 设备层不做任何闭环（ADR 0016）。
+ *
+ *          一个电机怎么用（和老模板 SendValue → CAN_Task 的顺序相同）：
+ *            收：comm_rx 任务  can_read() 取一帧 → motor_receive(&电机, 总线, &帧)，是它的反馈就解码、存下、喂狗
+ *            读：control 任务  motor_read_feedback()，在临界区里拷贝完整快照（带在线判断）
+ *            写：control 任务  motor_set_torque() / motor_apply_safe_action()  —— 只记下本周期的指令，还没有发送
+ *            发：control 任务  周期末尾 motor_group_send()：确定最终指令（停机动作 > 没写指令 > 离线 > 力矩）
+ *                              → 编码 → 发送 → 清空本周期指令（motor_group.c）
  *          品牌：DJI（M3508 / M2006 / GM6020）、达妙（MIT 模式，ADR 0035）。
  */
 #pragma once
@@ -118,7 +122,7 @@ typedef struct
 
 typedef struct MotorGroup MotorGroup;
 
-/** 本周期一个电机最终发什么：motor_group_flush() 第 1 步由 final_output() 算出，第 2 步按它编码 */
+/** 本周期一个电机最终发什么：motor_group_send() 第 1 步由 final_output() 算出，第 2 步按它编码 */
 typedef enum
 {
     MOTOR_OUT_TORQUE,      /* 发 MotorOutput.torque_nm */
@@ -145,22 +149,22 @@ typedef struct Motor
         DmMotorState dm;   /* 只在 control 任务里用 */
     } brand;
 
-    /* 本周期的指令槽位：只在 control 任务里读写，motor_group_flush() 发送后清空 */
+    /* 本周期的指令槽位：只在 control 任务里读写，motor_group_send() 发送后清空 */
     float torque_cmd_nm;
     bool torque_set;
     SafeAction safe_action;
     bool safe_set;
-    MotorOutput out; /* motor_group_flush() 第 1 步写、第 2 步读 */
+    MotorOutput out; /* motor_group_send() 第 1 步写、第 2 步读 */
 
     struct Motor *next; /* 所属电机组的链表 */
 } Motor;
 
 /**
- * @brief   初始化并加入电机组：检查配置、查 ID 冲突、订阅反馈帧、登记看门狗
+ * @brief   初始化并加入电机组：检查配置、查 ID 冲突、登记看门狗
  * @param   conflict  失败原因是 ID 冲突时，指向冲突的那个电机，否则置 NULL（用于日志）
  * @return  false：配置不支持（ID 超范围、方向不是 ±1、减速比 ≤ 0、DJI 配了阻尼）、与组内电机的
- *          反馈 ID 或控制帧槽位冲突，或这路 CAN 的硬件滤波器已用完
- * @pre     初始化阶段（can_start() 之前）调用；cfg 在整个运行期间有效
+ *          反馈 ID 或控制帧槽位冲突
+ * @pre     初始化阶段调用；cfg 在整个运行期间有效
  */
 RM_NODISCARD bool motor_init(Motor *m, const MotorConfig *cfg, MotorGroup *group,
                              const Motor **conflict);
@@ -171,19 +175,26 @@ MotorCaps motor_caps(const Motor *m);
 bool motor_supports_torque(const Motor *m);
 
 /**
+ * @brief   把一帧 CAN 交给这个电机：是它的反馈（总线和反馈 ID 都对上）就解码、存下、喂看门狗
+ * @return  true：这帧是它的（长度不对的也算，丢弃不喂狗），调用方不用再交给别的电机；false：不是它的
+ * @pre     只在 comm_rx 任务里调用（兵种的 comm_rx_task.c）
+ */
+bool motor_receive(Motor *m, CanBusId bus, const CanFrame *frame);
+
+/**
  * @brief   拷贝一份完整的反馈快照
  * @return  是否在线；离线时 out 仍是最后一帧的内容（从未收到时全为 0）
  */
 RM_NODISCARD bool motor_read_feedback(const Motor *m, MotorFeedback *out);
 
 /**
- * @brief   记下本周期的力矩指令（输出轴 N·m），motor_group_flush() 时才编码发送，超出电调量程时截到量程
+ * @brief   记下本周期的力矩指令（输出轴 N·m）——只记下，周期末尾 motor_group_send() 才编码发送；超出电调量程时截到量程
  * @note    本周期没调用的电机发零力矩；电机离线或有停机动作时，这个指令不会发出（motor_group.c 的 final_output()）
  * @pre     motor_supports_torque(m)；只在 control 任务里调用
  */
 void motor_set_torque(Motor *m, float torque_nm);
 
-/** 本周期执行停机动作，优先于 motor_set_torque()；motor_group_flush() 时才发出。只在 control 任务里调用 */
+/** 记下本周期的停机动作，优先于 motor_set_torque()；motor_group_send() 时才发出。只在 control 任务里调用 */
 void motor_apply_safe_action(Motor *m, SafeAction action);
 
 /**

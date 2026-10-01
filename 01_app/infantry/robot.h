@@ -42,7 +42,7 @@ extern SafetyGate gate;
 extern Chassis chassis;
 extern Ins ins;
 
-/* ---------------- 任务入口（一个任务一个文件；daemon 各兵种相同，在 01_app/common/） ---------------- */
+/* ---------------- 任务入口（一个任务一个文件；detect 各兵种相同，在 01_app/common/） ---------------- */
 
 /** comm_rx_task.c：收到数据就运行，打开接收，然后把 CAN、串口 的数据交给对应解析器（接线写在这个文件里） */
 void comm_rx_task_entry(void *arg);

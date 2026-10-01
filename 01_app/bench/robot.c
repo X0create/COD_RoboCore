@@ -7,7 +7,7 @@
  *          4. app_main()：调度器启动前，由 CubeMX 的 freertos.c 调用
  *          5. startup_task()：调度器启动后第一个运行，打开 ADC、蜂鸣器，允许解锁
  *          control（遥控控制一台 M3508 的转速 + 一台达妙）、comm_rx、ins、heartbeat 一个任务一个文件在本目录；
- *          接线（哪个串口交给哪个解析器）在本目录的 comm_rx_task.c；daemon_task.c 各兵种相同，在 01_app/common/。
+ *          接线（哪个串口交给哪个解析器）在本目录的 comm_rx_task.c；detect_task.c 各兵种相同，在 01_app/common/。
  *          图传链路只解析和发布，暂不参与控制（ADR 0036）。调用关系总图见 docs/CALL_FLOW.md。
  *          startup_task 必须和 app_main 放在同一个文件里：它在 CubeMX 生成代码里已有弱定义，
  *          单独放进静态库的另一个 .o 时链接器不会去取，弱定义的空函数就会被悄悄用上。
@@ -15,7 +15,7 @@
 #include "robot.h"
 
 #include "01_app/common/comm_rx.h"
-#include "01_app/common/daemon_task.h"
+#include "01_app/common/detect_task.h"
 #include "04_core/log/log.h"
 #include "04_core/os/os.h"
 #include "05_platform/adc.h"
@@ -102,37 +102,55 @@ static bool init_objects(void)
 /* ================================================================== */
 
 /*
- * | 任务      | 文件                      | 优先级 | 栈    | 周期                         |
- * | --------- | ------------------------- | ------ | ----- | ---------------------------- |
- * | ins       | ins_task.c                | 5 最高 | 4 KB  | 1 ms                         |
- * | comm_rx   | comm_rx_task.c               | 4      | 2 KB  | 收到 CAN / 串口 / USB 就运行 |
- * | control   | control_task.c            | 3      | 4 KB  | 1 ms                         |
- * | daemon    | 01_app/common/daemon_task.c  | 2      | 1 KB  | 10 ms                        |
- * | heartbeat | heartbeat_task.c          | 1      | 1 KB  | 25 ms                        |
- *
- * 优先级数字越大越高：ins 最高，IMU 采样时刻要准；comm_rx 高于 control，控制周期读到最新反馈（《架构设计》任务划分）。
- * ins 的栈：EKF 的矩阵运算在栈上有临时变量，按预算表给 4 KB。
- * startup 任务由 CubeMX 创建，不在这张表里。
+ * 优先级数字越大越高：ins 最高，IMU 采样时刻要准；comm_rx 高于 control，控制周期读到最新反馈。
+ * 改优先级：改下面表里的数字；改栈大小：改紧挨着的栈数组。startup 任务由 CubeMX 创建，不在表里。
  */
-static RmTask ins_task, control_task, daemon_task,
+static StackType_t ins_stack[1024]; /* 4 KB：EKF 的矩阵运算在栈上有临时变量（预算表） */
+static StackType_t comm_rx_stack[512];   /* 2 KB */
+static StackType_t control_stack[1024];  /* 4 KB */
+static StackType_t detect_stack[256];    /* 1 KB */
+static StackType_t heartbeat_stack[256]; /* 1 KB */
+
+static RmTask ins_task, control_task, detect_task,
     heartbeat_task; /* comm_rx_task 在 01_app/common/comm_rx.c（中断要用它唤醒任务） */
-static StackType_t ins_stack[1024], comm_rx_stack[512], control_stack[1024], daemon_stack[256],
-    heartbeat_stack[256];
 
 #define STACK_WORDS(stack) ((uint32_t)(sizeof(stack) / sizeof((stack)[0])))
 
+typedef struct
+{
+    RmTask *task;
+    const char *name;
+    RmTaskEntry entry;
+    uint32_t priority;
+    StackType_t *stack;
+    uint32_t stack_words;
+} TaskDef;
+
+/* clang-format off */
+static const TaskDef task_table[] = {
+    /* 任务            名字         入口                  优先级  栈                                          周期 */
+    { &ins_task,       "ins",       ins_task_entry,       5u,  ins_stack,       STACK_WORDS(ins_stack)       }, /* 1 ms（ins_task.c） */
+    { &comm_rx_task,   "comm_rx",   comm_rx_task_entry,   4u,  comm_rx_stack,   STACK_WORDS(comm_rx_stack)   }, /* 收到 CAN / 串口 / USB 就运行（comm_rx_task.c） */
+    { &control_task,   "control",   control_task_entry,   3u,  control_stack,   STACK_WORDS(control_stack)   }, /* 1 ms（control_task.c） */
+    { &detect_task,    "detect",    detect_task_entry,    2u,  detect_stack,    STACK_WORDS(detect_stack)    }, /* 10 ms（01_app/common/detect_task.c） */
+    { &heartbeat_task, "heartbeat", heartbeat_task_entry, 1u,  heartbeat_stack, STACK_WORDS(heartbeat_stack) }, /* 25 ms（heartbeat_task.c） */
+};
+/* clang-format on */
+
+/** @return false：有任务创建失败，失败的任务名已记日志 */
 static bool create_tasks(void)
 {
-    return rm_task_create(&ins_task, "ins", ins_task_entry, NULL, 5u, ins_stack,
-                          STACK_WORDS(ins_stack))
-           && rm_task_create(&comm_rx_task, "comm_rx", comm_rx_task_entry, NULL, 4u, comm_rx_stack,
-                             STACK_WORDS(comm_rx_stack))
-           && rm_task_create(&control_task, "control", control_task_entry, NULL, 3u, control_stack,
-                             STACK_WORDS(control_stack))
-           && rm_task_create(&daemon_task, "daemon", daemon_task_entry, NULL, 2u, daemon_stack,
-                             STACK_WORDS(daemon_stack))
-           && rm_task_create(&heartbeat_task, "heartbeat", heartbeat_task_entry, NULL, 1u,
-                             heartbeat_stack, STACK_WORDS(heartbeat_stack));
+    for (unsigned i = 0u; i < sizeof(task_table) / sizeof(task_table[0]); i++)
+    {
+        const TaskDef *t = &task_table[i];
+        if (!rm_task_create(t->task, t->name, t->entry, NULL, t->priority, t->stack,
+                            t->stack_words))
+        {
+            RM_LOG_E("create task %s failed", t->name);
+            return false;
+        }
+    }
+    return true;
 }
 
 /* ================================================================== */
@@ -168,7 +186,6 @@ void app_main(void)
     }
     if (!create_tasks())
     {
-        RM_LOG_E("create tasks failed");
         halt_on_init_failure();
     }
     RM_LOG_I("starting scheduler");

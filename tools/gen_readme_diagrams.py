@@ -230,7 +230,7 @@ def runtime():
     # 6. 低优先级任务
     ay = 368
     s.text(24, ay - 8, "低优先级任务：只读话题，不参与控制", 12, INK2, bold=True)
-    aux = [("daemon", "100 Hz · 优先级 2", "报告设备上线 / 离线", 24),
+    aux = [("detect", "100 Hz · 优先级 2", "报告设备上线 / 离线", 24),
            ("heartbeat", "40 Hz · 优先级 1", "状态灯 · 蜂鸣器 · 电池 · 每秒日志", 300)]
     for name, meta, role, x in aux:
         s.rect(x, ay, 260, 58, tint(VIOLET, 0.07), tint(VIOLET, 0.35))
@@ -292,7 +292,7 @@ def startup():
           ("⑧ 系统就绪", "允许解锁"), ("⑨ 删除自己", "“startup done”")]),
         ("周期任务", "各自按周期运行", VIOLET,
          [("ins", "上电静止标定约 2 s"), ("comm_rx", "有数据就解析"),
-          ("control", "1 kHz 控制"), ("daemon · heartbeat", "上下线报告 · 灯与日志")]),
+          ("control", "1 kHz 控制"), ("detect · heartbeat", "上下线报告 · 灯与日志")]),
     ]
     y, lh, lx, bx = 74, 70, 24, 196
     bw_total = W - 24 - bx

@@ -1,9 +1,10 @@
 /**
  * @file    can.h
  * @brief   CAN / CAN FD 收发（《架构设计》核心机制第 1 节、运行时契约第 6 节）
- * @note    - 接收按“精确 ID 或精确范围”订阅，不用会多收的掩码；只支持 11 位标准 ID（DJI、达妙都用标准 ID）；
- *          - 中断里只把帧放进环形缓冲并调用通知回调，订阅者的回调在任务里由 can_dispatch() 调用；
- *          - 使用顺序：初始化阶段 can_subscribe*() → 调度器启动后 can_start() → 任务里 can_dispatch()。
+ * @note    - 只支持 11 位标准 ID（DJI、达妙都用标准 ID）；接收全部标准数据帧，扩展帧和远程帧拒收。
+ *            每条总线上只挂本车的设备，不用硬件滤波；帧交给谁由兵种的 comm_rx_task.c 显式写出（ADR 0049）；
+ *          - 中断里只把帧放进环形缓冲并调用通知回调，任务里用 can_read() 逐帧取出；
+ *          - 使用顺序：调度器启动后 can_start() → 任务里 can_read()。
  */
 #pragma once
 
@@ -37,37 +38,23 @@ typedef struct
     uint64_t stamp_us; /* 接收时刻（rm_time_now_us），发送时忽略 */
 } CanFrame;
 
-/** 订阅回调，在调用 can_dispatch() 的任务里执行 */
-typedef void (*CanRxHandler)(const CanFrame *frame, void *ctx);
-
 /** 收到新帧时的通知，在**中断**里调用；只能做“通知任务”这类事 */
 typedef void (*CanRxNotify)(void *ctx);
 
 /**
- * @brief   订阅一段连续 ID [first_id, last_id]，占用一个硬件滤波器
- * @return  false：ID 不合法、与已有订阅重叠，或这路总线的硬件滤波器已用完（CubeMX 的 StdFiltersNbr）
- * @pre     在 can_start() 之前调用（初始化阶段）
- */
-RM_NODISCARD bool can_subscribe_range(CanBusId bus, uint32_t first_id, uint32_t last_id,
-                                      CanRxHandler handler, void *ctx);
-
-/** 订阅一个 ID，等同于 can_subscribe_range(bus, id, id, …) */
-RM_NODISCARD bool can_subscribe(CanBusId bus, uint32_t id, CanRxHandler handler, void *ctx);
-
-/**
- * @brief   按已登记的订阅配置硬件滤波器（其余帧全部拒收），打开接收中断并启动总线
- * @param   notify  收到新帧时在中断里调用，可以为 NULL（只靠任务轮询 can_dispatch()）
+ * @brief   设置为接收全部标准数据帧，打开接收中断并启动总线
+ * @param   notify  收到新帧时在中断里调用，可以为 NULL（只靠任务轮询 can_read()）
  * @return  false：这块板没有这路总线，或 HAL 配置失败
  * @pre     调度器已经启动；每路总线只调用一次
  */
 RM_NODISCARD bool can_start(CanBusId bus, CanRxNotify notify, void *ctx);
 
 /**
- * @brief   把中断收下的帧逐个交给订阅者的回调
- * @return  本次分发的帧数
+ * @brief   取出一帧中断收下的帧
+ * @return  false：没有新帧（或这路总线没有启动）
  * @pre     只由一个任务调用（comm_rx）
  */
-uint32_t can_dispatch(CanBusId bus);
+bool can_read(CanBusId bus, CanFrame *out);
 
 /**
  * @brief   放进硬件发送队列，不等待发送完成
@@ -91,7 +78,7 @@ bool can_is_bus_off(CanBusId bus);
 
 /**
  * @brief   从 bus-off 恢复：重新启动控制器，滤波器和接收中断的配置保留
- * @pre     can_start() 成功过；由 daemon 任务调用，同一路两次调用至少间隔 100 ms（《架构设计》“发送队列满了怎么办”）
+ * @pre     can_start() 成功过；由 detect 任务调用，同一路两次调用至少间隔 100 ms（《架构设计》“发送队列满了怎么办”）
  * @note    恢复期间 can_send() 返回 false（丢帧），和发送队列满的处理相同
  */
 void can_recover(CanBusId bus);

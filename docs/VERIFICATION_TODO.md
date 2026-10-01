@@ -12,7 +12,7 @@
 | # | 验证什么 | 前提 | 操作 | 期望 | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | V1 | 第二次 DWT 回绕 | 只接 J-Link | 跑过 16 s，看 RTT 时间戳 | 在约 7.8 s、15.6 s 处都连续，不跳变不倒退 | 通过（2026-09-30，CLion + RTTClient：`alive N` 恒在 N×1000+12 ms，64–84 s 连续，其间跨过第 9、10 次回绕） |
-| V2 | FreeRTOS 任务窗口 | 同上 | 跑起来后 Halt，打开 View → FreeRTOS | 有 `imu`、`comm_rx`、`control`、`daemon`、`heartbeat`、`IDLE`、`Tmr Svc`，没有 `startup`；Stack Info 显示总大小（不再是 N/A） | 通过（2026-09-30，CLion GDB `info threads`：IDLE、heartbeat、comm_rx、control、ins、daemon、Tmr Svc，无 startup；IMU 任务名是 `ins` 不是 `imu`。栈总大小是 Ozone 的显示项，CLion 下未看） |
+| V2 | FreeRTOS 任务窗口 | 同上 | 跑起来后 Halt，打开 View → FreeRTOS | 有 `imu`、`comm_rx`、`control`、`detect`、`heartbeat`、`IDLE`、`Tmr Svc`，没有 `startup`；Stack Info 显示总大小（不再是 N/A） | 通过（2026-09-30，CLion GDB `info threads`：IDLE、heartbeat、comm_rx、control、ins、detect、Tmr Svc，无 startup；IMU 任务名是 `ins` 不是 `imu`。栈总大小是 Ozone 的显示项，CLion 下未看） |
 | V3 | 状态灯新节奏 | 同上 | 目测 | 绿灯每秒闪两下：先亮 50 ms，间隔约 150 ms 再亮 25 ms | 通过（2026-09-30，目测每秒闪两下） |
 | V4 | 设备清单 | 同上 | 上电看 RTT 开头 | `devices:` 下列出 `dr16 (timeout 200 ms)` | 通过（2026-09-30，列出 dm8009_1、m3508_1、vt_link、vision_link、dr16 (timeout 200 ms)） |
 | V5 | BMI088 读数与引脚 | 只接 J-Link，板子水平放稳 | 上电看 RTT | 出现 `bmi088 ready`（否则打印失败原因，说明片选 PC0 / PC3 或 SPI2 的推断有误）；`accel` 约 `0 0 9800` mm/s²（翻转板子 Z 变 -9800）；`gyro` 各轴只有几 mrad/s（零偏未标定）；转动板子时对应轴变化 | 通过（2026-09-30，`5863059`）：`bmi088 ready`；平放时 accel 约 `-60 5 9750` mm/s²（x 的 -60 与 pitch 6 mrad 一致，是放得不平），173 s 内 `read failures 0`；gyro 单次采样在 ±25 mrad/s 内跳（1 kHz 原始噪声），均值约 0 |
@@ -53,7 +53,7 @@
 
 | # | 验证什么 | 前提 | 操作 | 期望 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| V30 | 阶段 0 完成判据：FDCAN 1 Mbit/s 接收、滤波、comm_rx 分发、DJI 反馈解析 | 一台 DJI M3508 + C620 接 FDCAN1，ID 1，电调上电。固件不发任何指令（`motor_group_flush` 未链接进固件，2026-09-28 用 nm 确认） | 看 RTT | 出现 `m3508_1 online`；每秒一行 `m3508_1 angle … speed 0 … torque ≈0 … 温度`，温度接近室温 | 通过（2026-09-30）：`m3508_1 online`，静止 angle 0、speed 0、torque 在 ±60 mNm 内跳动、29 °C；全程 `mode safe` |
+| V30 | 阶段 0 完成判据：FDCAN 1 Mbit/s 接收、滤波、comm_rx 分发、DJI 反馈解析 | 一台 DJI M3508 + C620 接 FDCAN1，ID 1，电调上电。固件不发任何指令（`motor_group_send` 未链接进固件，2026-09-28 用 nm 确认） | 看 RTT | 出现 `m3508_1 online`；每秒一行 `m3508_1 angle … speed 0 … torque ≈0 … 温度`，温度接近室温 | 通过（2026-09-30）：`m3508_1 online`，静止 angle 0、speed 0、torque 在 ±60 mNm 内跳动、29 °C；全程 `mode safe` |
 | V31 | 角度、方向、多圈 | 同上，电机断电状态下也可手转输出轴；**上电时不要让输出轴负载** | 手慢慢正转输出轴一圈，再反转回来 | 正转一圈 `angle` 约增加 6283 mrad（2π），反转回到约 0；`speed` 符号与转向一致。若方向与坐标系约定相反，改配置 `direction` | 部分通过（2026-09-30，手转输出轴约 ±0.37 rad，未转满一圈）：反转时 angle 降到 -374 mrad、speed 为负，正转时 speed 为正并回到 -2 mrad，来回不累积误差；转子已跨过多圈（×19），多圈计数正常。满一圈 6283 mrad 未测 |
 | V32 | 离线与恢复 | 同上 | 拔掉 CAN 线再插回（或给电调断电再上电） | 拔掉后 20 ms 内出现 `m3508_1 offline`，插回出现 `m3508_1 online`；`angle` 以重新上线后的第一帧继续计数（电调复位后的编码器跳变待观察） | 通过（2026-09-30）：拔 CAN 后 `m3508_1 offline`，插回 `m3508_1 online`，angle 从 -2 mrad 接着计（电调未断电）；20 ms 的精确时间未测 |
 | V44 | CAN bus-off 自动恢复 | 同 V30（只接 M3508，不解锁） | 电调上电时，用导线把 CAN1 的 CANH、CANL 短接约 1 s 再断开 | RTT 出现 `can1 bus-off, restarting`（至多每 100 ms 一条），断开短接后 `m3508_1 online`、反馈恢复；不需要重启主控 | 待验证 |

@@ -4,7 +4,7 @@
 
 | 目录 | 类别 | 内容 |
 | --- | --- | --- |
-| `common/` | 各兵种共用 | `comm_rx.c`（接收的公共部分：中断唤醒任务、分发 CAN、打开接收）、`daemon_task.c`（设备上线 / 离线报告、CAN bus-off 恢复）、`safety_gate.c`（安全门与模式，全车停） |
+| `common/` | 各兵种共用 | `comm_rx.c`（接收的公共部分：中断唤醒任务、分发 CAN、打开接收）、`detect_task.c`（设备上线 / 离线报告、CAN bus-off 恢复）、`safety_gate.c`（安全门与模式，全车停） |
 | `chassis/` | 机构 | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮，读实测 → 算目标 → 算输出（ADR 0043） |
 | `ins/` | 机构 | 惯性导航：BMI088 → 零偏标定 → EKF → 发布 `imu_state` |
 | `infantry/` | 兵种 | 步兵（预设 `h723-infantry-debug`）。第一版只有底盘：四轮全向轮，遥控直接给底盘速度 |
@@ -27,6 +27,26 @@ infantry/
 - 读一个兵种：先看 `robot.c`（从上往下就是上电顺序和任务表），再看各 `*_task.c`。调用关系总图见 `docs/CALL_FLOW.md`。
 - 兵种目录内的对象定义在 `robot.c`、声明在 `robot.h`，只给本目录的文件用（相当于老模板的全局变量，ADR 0044）。
 - 新兵种：复制 `infantry/`，在 `CMakePresets.json` 里加一个预设（`RM_ROBOT` = 目录名）。
+
+## 参数在哪里
+
+兵种相关的参数都在 `<兵种>/config.h`；和兵种无关的（随传感器、板子或安全约定固定）留在各自模块里，所有兵种共用，改之前看对应 ADR。
+
+| 参数 | 位置 | 说明 |
+| --- | --- | --- |
+| 电机 ID、方向、总线、停机动作 | `<兵种>/config.h` 的电机表（如 `wheel_config`） | 改总线时同步改 `<兵种>/comm_rx_task.c` 读哪路 CAN |
+| 底盘尺寸、加速度、速度环 PID | `<兵种>/config.h` 的 `chassis_config` | PID 不带 dt，和 1 kHz 绑定（ADR 0029） |
+| 满杆速度、解锁拨杆、电池阈值、IMU 安装方向 | `<兵种>/config.h` | |
+| 串口接线（哪个串口接什么） | `<兵种>/comm_rx_task.c` 开头 | |
+| 任务优先级、栈大小 | `<兵种>/robot.c` 的任务表 | |
+| EKF 噪声（Q、R）、加速度低通系数 | `01_app/ins/ins.c` 开头 | 沿用旧工程 INS_Task.c |
+| 陀螺零偏标定、静止时在线修正的阈值 | `01_app/ins/ins.h` 的 `INS_CALIB_*`、`INS_STILL_*` | ADR 0033、0039 |
+| IMU 加热：目标温度、周期、PID、占空比上限 | `02_devices/imu/bmi088.h` 的 `BMI088_HEATER_TARGET_C`、`bmi088.c` 的 `HEATER_*` | 按本板实测（ADR 0042） |
+| 遥控丢失超时 200 ms | `04_core/msg/rc_state.h` 的 `RC_LOST_TIMEOUT_MS` | 安全约定（ADR 0030） |
+| IMU 就绪判定 20 ms | `04_core/msg/imu_state.h` 的 `IMU_STALE_MS` | 安全约定（ADR 0034） |
+| 电机离线超时 20 ms | `02_devices/motor/motor.h` 的 `MOTOR_OFFLINE_TIMEOUT_MS` | 安全约定（ADR 0031） |
+| 解锁后输出斜坡 300 ms | `01_app/common/safety_gate.h` 的 `SAFETY_RAMP_MS` | |
+| 达妙命令间隔 | `02_devices/motor/dm_motor.h` 的 `DM_CMD_INTERVAL_US` | |
 
 ## 规则
 

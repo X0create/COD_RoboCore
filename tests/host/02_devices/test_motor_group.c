@@ -16,6 +16,21 @@ static Motor pool[64];
 static unsigned pool_used;
 static MotorGroup group;
 
+/* 相当于兵种 comm_rx_task.c：把收到的一帧依次交给组里的每个电机（motor_receive），有电机认领就返回 true */
+static bool deliver(CanBusId bus, uint32_t id, const uint8_t *data, uint8_t len)
+{
+    CanFrame frame = { .id = id, .len = len };
+    memcpy(frame.data, data, len);
+    for (Motor *m = group.head; m != NULL; m = m->next)
+    {
+        if (motor_receive(m, bus, &frame))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 void setUp(void)
 {
     fake_can_reset();
@@ -52,7 +67,7 @@ static void feed(const Motor *m)
 {
     const uint8_t d[8] = { 0 };
     const uint32_t id = (m->cfg->type == MOTOR_GM6020 ? 0x204u : 0x200u) + m->cfg->id;
-    TEST_ASSERT_TRUE(fake_can_deliver(m->cfg->can_bus, id, d, 8));
+    TEST_ASSERT_TRUE(deliver(m->cfg->can_bus, id, d, 8));
 }
 
 static void test_id_conflicts_rejected(void)
@@ -91,7 +106,7 @@ static void test_feedback_online_and_timeout(void)
     const uint8_t d[8] = {
         0x03, 0xE8, 0x03, 0xE8, 0x20, 0x00, 25, 0
     }; /* 编码器 1000、1000 rpm、8192、25 °C */
-    TEST_ASSERT_TRUE(fake_can_deliver(CAN_BUS_1, 0x201, d, 8));
+    TEST_ASSERT_TRUE(deliver(CAN_BUS_1, 0x201, d, 8));
     TEST_ASSERT_TRUE(motor_read_feedback(m, &fb));
     TEST_ASSERT_TRUE(fb.online);
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, 5.4533f, fb.speed_rad_s);
@@ -103,12 +118,25 @@ static void test_feedback_online_and_timeout(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-4f, 3.0f, fb.torque_nm); /* 离线时仍是最后一帧的内容 */
 }
 
+/* 同一个反馈 ID 出现在另一路总线上：不是这个电机的帧，不收、不喂狗 */
+static void test_frame_on_other_bus_ignored(void)
+{
+    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
+    Motor *m = add(&c);
+    const uint8_t d[8] = { 0 };
+    TEST_ASSERT_FALSE(deliver(CAN_BUS_2, 0x201, d, 8));
+    MotorFeedback fb;
+    TEST_ASSERT_FALSE(motor_read_feedback(m, &fb));
+    TEST_ASSERT_TRUE(deliver(CAN_BUS_1, 0x201, d, 8));
+    TEST_ASSERT_TRUE(motor_read_feedback(m, &fb));
+}
+
 static void test_short_frame_ignored(void)
 {
     const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 2, SAFE_ACTION_ZERO_TORQUE);
     Motor *m = add(&c);
     const uint8_t d[8] = { 0 };
-    TEST_ASSERT_TRUE(fake_can_deliver(CAN_BUS_1, 0x202, d, 7));
+    TEST_ASSERT_TRUE(deliver(CAN_BUS_1, 0x202, d, 7));
     MotorFeedback fb;
     TEST_ASSERT_FALSE(motor_read_feedback(m, &fb));
 }
@@ -124,7 +152,7 @@ static void test_flush_packs_frame(void)
     feed(m2);
     motor_set_torque(m1, 3.0f);
     motor_set_torque(m2, -1.5f);
-    motor_group_flush(&group);
+    motor_group_send(&group);
 
     TEST_ASSERT_EQUAL_UINT32(1, fake_can_sent_count());
     const CanFrame *f = fake_can_sent(0);
@@ -145,14 +173,14 @@ static void test_unset_offline_and_cleared_slots_are_zero(void)
     Motor *m2 = add(&c2);
     feed(m1); /* m2 从未在线 */
     motor_set_torque(m2, 3.0f);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     const uint8_t zeros[8] = { 0 };
     TEST_ASSERT_EQUAL_HEX8_ARRAY(zeros, fake_can_sent(0)->data, 8);
 
     motor_set_torque(m1, 3.0f);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_EQUAL_HEX8(0x20, fake_can_sent(1)->data[0]);
-    motor_group_flush(&group); /* 这个周期没人写 */
+    motor_group_send(&group); /* 这个周期没人写 */
     TEST_ASSERT_EQUAL_HEX8_ARRAY(zeros, fake_can_sent(2)->data, 8);
 }
 
@@ -163,7 +191,7 @@ static void test_stop_all_overrides_torque(void)
     feed(m);
     motor_set_torque(m, 3.0f);
     motor_group_apply_stop_all(&group);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     const uint8_t zeros[8] = { 0 };
     TEST_ASSERT_EQUAL_HEX8_ARRAY(zeros, fake_can_sent(0)->data, 8);
 }
@@ -177,14 +205,14 @@ static void test_disable_sends_zero_once(void)
     add(&c2);
     feed(m1);
     motor_group_apply_stop_all(&group);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_EQUAL_UINT32(1, fake_can_sent_count());
     motor_group_apply_stop_all(&group);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_EQUAL_UINT32(1, fake_can_sent_count());
 
     motor_set_torque(m1, 3.0f);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_EQUAL_UINT32(2, fake_can_sent_count());
     TEST_ASSERT_EQUAL_HEX8(0x20, fake_can_sent(1)->data[0]);
 }
@@ -199,7 +227,7 @@ static void test_mixed_disable_keeps_sending(void)
     for (int i = 0; i < 3; i++)
     {
         motor_group_apply_stop_all(&group);
-        motor_group_flush(&group);
+        motor_group_send(&group);
     }
     TEST_ASSERT_EQUAL_UINT32(3, fake_can_sent_count());
 }
@@ -213,7 +241,7 @@ static void test_frames_per_bus_and_frame_id(void)
     Motor *mb = add(&b);
     feed(mb);
     motor_set_torque(mb, -3.0f);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_EQUAL_UINT32(2, fake_can_sent_count());
     TEST_ASSERT_EQUAL_INT(CAN_BUS_1, fake_can_sent_bus(0));
     TEST_ASSERT_EQUAL_HEX32(0x200, fake_can_sent(0)->id);
@@ -228,7 +256,7 @@ static void test_send_failure_counted(void)
     const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
     add(&c);
     fake_can_set_send_fail(true);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_EQUAL_UINT32(1, group.tx_dropped);
 }
 
@@ -263,7 +291,7 @@ static const uint8_t zero_mit[8] = { 0x7F, 0xFF, 0x7F, 0xF0, 0x00, 0x00, 0x07, 0
 static void feed_dm(uint8_t state)
 {
     const uint8_t d[8] = { (uint8_t)((state << 4) | 0x01u), 0x80, 0x00, 0x80, 0x08, 0x00, 30, 30 };
-    TEST_ASSERT_TRUE(fake_can_deliver(CAN_BUS_2, 0x11u, d, 8));
+    TEST_ASSERT_TRUE(deliver(CAN_BUS_2, 0x11u, d, 8));
 }
 
 static const CanFrame *last_sent(void)
@@ -289,8 +317,8 @@ static void test_dm_sends_zero_mit_every_cycle(void)
 {
     fake_can_set_bus_fd(CAN_BUS_2, true);
     add(&dm_config);
-    motor_group_flush(&group);
-    motor_group_flush(&group);
+    motor_group_send(&group);
+    motor_group_send(&group);
     TEST_ASSERT_EQUAL_UINT32(2, fake_can_sent_count());
     TEST_ASSERT_EQUAL_INT(CAN_BUS_2, fake_can_sent_bus(0));
     TEST_ASSERT_EQUAL_HEX32(0x01, last_sent()->id); /* 发往电机 CAN ID，不是反馈 ID */
@@ -301,7 +329,7 @@ static void test_dm_sends_zero_mit_every_cycle(void)
 static void test_dm_classic_bus_sends_classic_frames(void)
 {
     add(&dm_config);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_EQUAL_UINT32(1, fake_can_sent_count());
     TEST_ASSERT_FALSE(last_sent()->is_fd);
 }
@@ -312,22 +340,22 @@ static void test_dm_enable_sequence(void)
     Motor *m = add(&dm_config);
     feed_dm(0x0);
     motor_request_enable(m);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_TRUE(last_is_command(0xFC));
 
     fake_time_advance_ms(5u);
     feed_dm(0x0);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_EQUAL_HEX8_ARRAY(zero_mit, last_sent()->data, 8);
 
     fake_time_advance_ms(15u);
     feed_dm(0x0);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_TRUE(last_is_command(0xFC)); /* 20 ms 没确认：重发 */
 
     feed_dm(0x1);
     motor_set_torque(m, 10.0f);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_EQUAL_HEX8(0x7A, last_sent()->data[7]); /* 力矩 10 N·m 编码为 0x97A */
 }
 
@@ -337,16 +365,16 @@ static void test_dm_clear_error_once(void)
     Motor *m = add(&dm_config);
     feed_dm(0x8);
     motor_request_enable(m);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_TRUE(last_is_command(0xFB));
 
     fake_time_advance_ms(25u);
     feed_dm(0x8);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_EQUAL_HEX8_ARRAY(zero_mit, last_sent()->data, 8);
 
     feed_dm(0x0); /* 错误清除 */
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_TRUE(last_is_command(0xFC));
 }
 
@@ -357,14 +385,14 @@ static void test_dm_offline_cancels_enable(void)
     feed_dm(0x0);
     motor_request_enable(m);
     fake_time_advance_ms(MOTOR_OFFLINE_TIMEOUT_MS + 1u);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_EQUAL_HEX8_ARRAY(zero_mit, last_sent()->data, 8);
 
     feed_dm(0x0);
     for (int i = 0; i < 30; i++)
     {
         fake_time_advance_ms(1u);
-        motor_group_flush(&group);
+        motor_group_send(&group);
         TEST_ASSERT_FALSE(last_is_command(0xFC));
     }
 }
@@ -377,7 +405,7 @@ static void test_dm_stop_all_damp(void)
     motor_request_enable(m);
     motor_set_torque(m, 10.0f);
     motor_group_apply_stop_all(&group);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     const CanFrame *f = last_sent();
     TEST_ASSERT_EQUAL_HEX8(0x00, f->data[4]); /* Kp 0 */
     TEST_ASSERT_EQUAL_HEX8(0x33, f->data[5]);
@@ -396,7 +424,7 @@ static void test_dm_stop_all_disable(void)
     feed_dm(0x1);
     motor_request_enable(m);
     motor_group_apply_stop_all(&group);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_TRUE(last_is_command(0xFD));
     TEST_ASSERT_FALSE(m->brand.dm.want_enabled);
 }
@@ -406,7 +434,7 @@ static void test_dm_unrequested_enable_is_disabled(void)
 {
     add(&dm_config);
     feed_dm(0x1);
-    motor_group_flush(&group);
+    motor_group_send(&group);
     TEST_ASSERT_TRUE(last_is_command(0xFD));
 }
 
@@ -437,6 +465,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_id_conflicts_rejected);
     RUN_TEST(test_feedback_online_and_timeout);
+    RUN_TEST(test_frame_on_other_bus_ignored);
     RUN_TEST(test_short_frame_ignored);
     RUN_TEST(test_flush_packs_frame);
     RUN_TEST(test_unset_offline_and_cleared_slots_are_zero);

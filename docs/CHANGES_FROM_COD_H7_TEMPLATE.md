@@ -33,8 +33,8 @@
 | 2026-09-28 | CRC8 / CRC16 | `Algorithm/CRC.c`：`Get_/Verify_/Append_CRC*_Check_Sum`，查表数组对外可见；校验函数检查空指针和长度（长度 ≤ 2 返回 false） | `04_core/util/crc`：`crc8_calc/append/verify`、`crc16_*`，算法和查表数组不变（表是照抄的），数组改为文件内私有；长度用 `size_t`；不再检查空指针和长度，帧长度由协议解析在收帧时检查一次 | 边界检查一次（CODING_STANDARD 第 2 节）；旧的裁判系统解析在 CRC 前不查长度，靠 CRC 函数兜底，新解析改为先查长度 | 主机测试：逐位参考实现核对两张表全部 256 项，CRC16 与 CRC-16/MCRF4XX 公布校验值 0x6F91 一致 |
 | 2026-09-28 | 时间基准 | `bsp_dwt.c`：DWT 计数 | `rm_time_now_us()`：DWT 先解锁（M7 的 LAR 软件锁），再扩展成 64 位微秒、不回绕；启动时自检计数器在走 | 全工程唯一时间源（ADR 0020）；锁住时写 DWT 会被悄悄丢弃 | 硬件：2026-09-28 跨过第一次回绕连续；扩展逻辑主机测试 |
 | 2026-09-28 | 日志 | 无统一日志；调试靠 UART7 发 VOFA | SEGGER RTT（V8.58.0）日志，E/W/I/D 四级，每行带毫秒时间戳，整行一次写入 | 不占串口，多任务打日志不串行 | 硬件：2026-09-28 RTT 输出正常 |
-| 2026-09-28 | CAN 收发 | `bsp_can.c`：每路一个全放行的掩码滤波器，收帧后在中断回调里直接解析 | `can_subscribe*()` 按精确 ID / ID 范围配置硬件范围滤波器，其余帧拒收；中断只把帧放进环形缓冲并唤醒 comm_rx 任务，订阅者回调在任务里执行；接收 FIFO 按 CubeMX 配置自动选（FDCAN2 为 FIFO1）；发送时短暂关中断，多个任务可以共用 | 掩码会多收帧（UniC `can-range-claim-not-mask`）；中断里不做业务 | 编译 + 主机测试；上板待 V30 |
-| 2026-09-28 | CAN 滤波器数量 | 每路 1 个（全放行掩码） | 每路 16 个（`StdFiltersNbr`），一个订阅占一个 | 精确过滤需要按订阅分配滤波器 | 生成：2026-09-28 CubeMX 重新生成，`fdcan.c` 三路均为 16，`REGEN_CHECKLIST` 10 条全部通过 |
+| 2026-09-28 | CAN 收发 | `bsp_can.c`：每路一个全放行的掩码滤波器，收帧后在中断回调里直接解析 | 同样全放行（2026-10-01 起，ADR 0049；之前按精确 ID 订阅）；中断只把帧放进环形缓冲并唤醒 comm_rx 任务，任务里 `can_read()` 取出，按兵种 `comm_rx_task.c` 写明的接线交给电机（`motor_receive`）；接收 FIFO 按 CubeMX 配置自动选（FDCAN2 为 FIFO1）；发送时短暂关中断，多个任务可以共用 | 掩码会多收帧（UniC `can-range-claim-not-mask`）；中断里不做业务 | 编译 + 主机测试；上板待 V30 |
+| 2026-09-28 | CAN 滤波器数量 | 每路 1 个（全放行掩码） | CubeMX 仍为每路 16 个（`StdFiltersNbr`），2026-10-01 起代码不再使用（全放行，ADR 0049），不必为此重新生成 | 原为精确过滤按订阅分配 | 生成：2026-09-28 CubeMX 重新生成，`fdcan.c` 三路均为 16，`REGEN_CHECKLIST` 10 条全部通过 |
 | 2026-09-28 | 串口接收 | `bsp_uart.c`：DMA 双缓冲 + 空闲中断，DR16 只接受正好 18 字节的帧，解析在中断回调里 | `uart_rx_start()` / `uart_read()`：循环 DMA + 空闲中断，中断只通知，取数和解析在任务里；写位置读 DMA 计数；溢出等错误后自动重新启动接收 | 中断里不做业务（运行时契约第 2 节）；DR16 断线重连时的溢出不会让串口永久停收 | 编译 + 主机测试（取数逻辑）；上板待接 DR16 |
 | 2026-09-28 | DMA 缓冲区 | Keil 分散加载文件里的 `.AXI_SRAM` 段，变量上写 `__attribute__((section(".AXI_SRAM")))` | 自己的链接脚本 `dm_mc02.ld` 中的 `.dma_buf` 段（AXI SRAM，32 字节对齐，NOLOAD），用 `RM_DMA_BUF` 放入，只在 platform 层使用 | 与原工程同一思路（ADR 0021）；链接脚本不交给 CubeMX 管，重新生成不会丢段 | 链接：探测变量落在 0x24000000 |
 | 2026-09-28 | 状态灯 | 未使用板载 WS2812 | SPI6（PA7）驱动 WS2812：正常时绿灯每秒闪两下，第一次亮 50 ms、第二次亮 25 ms | 一眼能看出固件在跑（UniC 的指示约定，时长按用户要求） | 硬件：2026-09-28 绿灯闪烁正常（50 / 25 ms 版本待复看） |
@@ -69,7 +69,7 @@
 | 2026-09-28 | 蜂鸣器 | 只在 CubeMX 里配了 TIM12 通道 2，没有代码 | `02_devices/buzzer`：音符序列、不阻塞；启动音、解锁 / 上锁音、低电量每 2 s 两声；`05_platform/pwm` 新增 `pwm_set_frequency()` | ADR 0038 | 主机测试 buzzer 4 项；上板待 V17 |
 | 2026-09-28 | RLS 参数辨识 | `RLS.c`：CMSIS-DSP 矩阵 + `malloc`；**没有调用者**；增益向量只分配 1 个 float 却按 2 个使用（越界写堆）、遗忘因子从未赋值（为 0，1/λ 为无穷）、1×1 乘 2×2 维数不匹配 | `03_algorithm/power/rls`：按标准公式重写，静态存储，最多 4 个参数；暂不接入（等底盘功率控制） | 旧代码跑不起来，无法照搬（ADR 0038） | 主机测试 4 项（含功率模型用法：辨识 k1、k2） |
 | 2026-09-28 | 键盘状态机 | `KeyBoard_Info_Typedef`（短按 / 长按）声明了但没有使用 | **不移植** | 没有调用者；写操作手输入（command）时再做 | —— |
-| 2026-09-28 | 在线检测与话题 | 无统一机制 | `04_core/watchdog`（喂狗时间戳，在线与否读取时计算）、`04_core/msg/topic`（最新值 + 时间戳 + 唯一发布者）、daemon 任务 100 Hz 打印上线 / 离线与设备清单 | 《架构设计》核心机制第 2、3 节 | 主机测试 topic 6 项、watchdog 4 项；上板待 V4 |
+| 2026-09-28 | 在线检测与话题 | 无统一机制 | `04_core/watchdog`（喂狗时间戳，在线与否读取时计算）、`04_core/msg/topic`（最新值 + 时间戳 + 唯一发布者）、detect 任务 100 Hz 打印上线 / 离线与设备清单 | 《架构设计》核心机制第 2、3 节 | 主机测试 topic 6 项、watchdog 4 项；上板待 V4 |
 
 ### 算法（`03_algorithm/`）
 
@@ -77,7 +77,7 @@
 | --- | --- | --- | --- | --- | --- |
 | 2026-09-28 | PID | `Controller/PID.c`：参数是 `float[7]` 数组；结构体里存函数指针；输出出现 NaN / Inf 后状态锁死，之后每次都清零并返回 0 | `03_algorithm/control/pid`：计算方式不变（无 dt、死区保持输出、微分一阶低通、积分按误差累加值限幅、位置式 / 增量式）；参数改为带字段名的 `PidParam`；去掉函数指针；**去掉 NaN 锁死**；增量式改名 `PID_INCREMENTAL`；`pid_reset()` 同时复位微分滤波器 | NaN 只在外部数据入口检查一次（ADR 0026）；字段名比数组下标不易填错 | 主机测试 9 项，期望值按旧公式手算 |
 | 2026-09-30 | PID 抗积分饱和 | 位置式积分只按 `integral_limit` 限幅，输出饱和时照样累加 | 条件积分：积分只加到输出刚好等于 `output_limit`，误差与输出同向时不再多攒（ADR 0040） | IMU 加热冷态预热积分攒满导致过冲；堵转后恢复猛冲 | 主机测试：PID 2 项、加热 1 项（冷态 60 s 后过 40 °C 占空比立即为 0）；上板待 V6 冷启动 |
-| 2026-09-30 | CAN bus-off | `bsp_can.c` 不处理：FDCAN 进入 bus-off 后停在初始化状态，这路电机一直离线到重启 | `can_is_bus_off()` / `can_recover()`（Stop + Start，做法同 UniC），daemon 每 10 ms 检查、同一路至少隔 100 ms 重启一次 | 接线松动、电调掉电等偶发 bus-off 后能自己恢复；恢复前该路电机离线 = 机构停 | 编译；上板待 V44 |
+| 2026-09-30 | CAN bus-off | `bsp_can.c` 不处理：FDCAN 进入 bus-off 后停在初始化状态，这路电机一直离线到重启 | `can_is_bus_off()` / `can_recover()`（Stop + Start，做法同 UniC），detect 每 10 ms 检查、同一路至少隔 100 ms 重启一次 | 接线松动、电调掉电等偶发 bus-off 后能自己恢复；恢复前该路电机离线 = 机构停 | 编译；上板待 V44 |
 | 2026-09-30 | IMU 加热参数 | 上限 10%、积分不起作用（到不了 40 °C） | 每 1280 ms 一次、上限 8%、kp 0.01 / °C、积分时间 10 s（ADR 0042，本板实测 + 热模型） | UniC 参数（25%、kp 0.05）在本板上冲到 46 °C、稳态摆 ±1.5 °C | 主机测试（加热 5 项按新参数手算）；模型仿真；**上板 V6 通过**（稳态 40.125–40.25 °C，无过冲） |
 | 2026-09-28 | 一阶 / 二阶低通 | `LPF.c`：`Init` 不清“已初始化”标志，重新初始化后第一次输入不会填充历史 | `03_algorithm/filter/lpf`：公式不变；`lpf1_init` / `lpf2_init` 完整复位 | 重新初始化应等同于刚上电 | 主机测试 6 项（含旧工程 IMU 加速度滤波系数） |
 | 2026-09-28 | 卡尔曼滤波 | `Kalman_Filter.c`：矩阵运算用 CMSIS-DSP `arm_mat_*`，内存用 `malloc` 分配；EKF 通过 7 个函数指针和 5 个“跳过第 N 步”标志改写流程；测量先写进外部缓冲区，复制后把缓冲区清零；另有输出副本 | `03_algorithm/filter/kalman`：五步公式和顺序不变，每步是一个公开函数，EKF 自己组合调用；存储由调用者提供（`KALMAN_STORAGE_FLOATS` 宏算大小）；调用者直接写 `z`、读 `x`；新息 `y`、`S⁻¹` 留在结构体里给卡方检验用；矩阵运算用自写的 `03_algorithm/math/matrix`（列主元求逆） | 禁止运行时 `malloc`；函数指针和跳步标志难读（ADR 0029） | 主机测试 4 项（一维时与标量公式逐步一致、匀速模型估出速度）+ 矩阵 7 项 |
@@ -95,7 +95,7 @@
 | 2026-09-27 | 编译警告 | —— | 手写代码开 `-Wall -Wextra … -Werror`，有警告即失败 | 0 警告要求由编译器保证 | 编译 |
 | 2026-09-27 | 单元测试 | 无 | Unity v2.7.0，电脑上运行 | 算法和协议解析能在电脑上测 | 主机测试 |
 | 2026-09-27 | 文件编码 | 源码注释为 GBK | **UTF-8 + LF** | GBK 在 gcc、Git、clang-format 下乱码（ADR 0002） | —— |
-| 2026-09-30 | 任务文件 | `Application/Task/` 一个任务一个文件，任务在 `freertos.c` 创建 | **同左的写法**：`01_app/<兵种>/control_task.c`、`ins_task.c`、`heartbeat_task.c`，任务表在 `robot.c`；对象在 `robot.h` 共享（相当于全局变量，只限兵种目录内）。`CAN_Task` 并入 control 任务第 4 步，`Detect_Task` 对应 `01_app/common/daemon_task.c` | 队友反映新写法函数嵌套多、找不到循环体（ADR 0044）；对照表见 `docs/CALL_FLOW.md` | 编译 0 警告 + 主机测试 34/34；上板待做 |
+| 2026-09-30 | 任务文件 | `Application/Task/` 一个任务一个文件，任务在 `freertos.c` 创建 | **同左的写法**：`01_app/<兵种>/control_task.c`、`ins_task.c`、`heartbeat_task.c`，任务表在 `robot.c`；对象在 `robot.h` 共享（相当于全局变量，只限兵种目录内）。`CAN_Task` 并入 control 任务第 4 步，`Detect_Task` 对应 `01_app/common/detect_task.c` | 队友反映新写法函数嵌套多、找不到循环体（ADR 0044）；对照表见 `docs/CALL_FLOW.md` | 编译 0 警告 + 主机测试 34/34；上板待做 |
 | 2026-09-30 | 目录结构（第二次） | `Core / BSP / Components / Application` | **`boards / platform / core / algorithm / devices / app`**，与老模板一一对应：`Core`→`boards`、`BSP`→`platform`、`Components`→`algorithm` + `devices`、`Application`→`app`；`01_app/` 里机构和兵种平铺，兵种目录 `config.h`、`robot.h`、`robot.c`（对象 + 上电顺序 + 完整任务表）+ 每个任务一个 `*_task.c` | 0044 之后用户仍觉得太散（ADR 0045）；对照表见 `docs/CALL_FLOW.md` | 编译 0 警告 + 主机测试 34/34；上板待做 |
 | 2026-09-27 | 目录结构（第一次，已被上一行取代） | `BSP / Components / Application` | `platform / core / algorithm / devices / msgs / subsystems / robots / boards` | 分层单向依赖，芯片差异只在 platform（ADR 0017） | —— |
 

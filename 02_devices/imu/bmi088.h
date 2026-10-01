@@ -68,7 +68,7 @@ bool bmi088_read(Bmi088 *imu, Bmi088Sample *out);
 void bmi088_set_gyro_offset(Bmi088 *imu, const float offset_rad_s[3]);
 
 /**
- * @brief   加热恒温，每次读到新温度时调用（1 kHz）；内部每 100 次算一次 PID
+ * @brief   加热恒温，每次读到新温度时调用（1 kHz）；内部每 HEATER_PERIOD_MS（1280）次算一次 PID（ADR 0042）
  */
 void bmi088_heater_step(Bmi088 *imu, float temperature_c);
 

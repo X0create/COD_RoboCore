@@ -1,10 +1,9 @@
 /**
  * @file    can.c
  * @brief   STM32H7 FDCAN 收发，见 05_platform/can.h
- * @note    - 每个订阅占一个“范围滤波器”（FDCAN_FILTER_RANGE，精确 ID 就是首尾相同的范围），其余帧全部拒收；
- *            可用的滤波器数量由 CubeMX 的 StdFiltersNbr 决定；
+ * @note    - 接收全部标准数据帧，不用硬件滤波（同 COD-H7-Template `bsp_can.c` 的全放行，ADR 0049）；
  *          - 接收用哪个 FIFO 按 CubeMX 配置自动选：FDCAN1/3 用 FIFO0，FDCAN2 用 FIFO1（COD-H7-Template 的配置）；
- *          - 做法参考 COD-H7-Template `bsp_can.c`（它用一个全放行的掩码滤波器，这里改为按订阅精确过滤）。
+ *          - 中断把帧放进软件环形缓冲，comm_rx 任务用 can_read() 取出后按 ID 交给对应设备。
  */
 #include "05_platform/can.h"
 
@@ -17,20 +16,8 @@
 
 #include <stddef.h>
 
-#define MAX_SUBSCRIPTIONS 16u /* 软件表的上限；实际还受 CubeMX 的 StdFiltersNbr 限制 */
-
 typedef struct
 {
-    uint32_t first_id;
-    uint32_t last_id;
-    CanRxHandler handler;
-    void *ctx;
-} Subscription;
-
-typedef struct
-{
-    Subscription subs[MAX_SUBSCRIPTIONS];
-    uint32_t sub_count;
     CanRxRing ring; /* 中断写、comm_rx 任务读 */
     CanRxNotify notify;
     void *notify_ctx;
@@ -51,62 +38,16 @@ static bool uses_fifo0(const FDCAN_HandleTypeDef *h)
     return h->Init.RxFifo0ElmtsNbr > 0u;
 }
 
-static bool ranges_overlap(uint32_t a_first, uint32_t a_last, uint32_t b_first, uint32_t b_last)
-{
-    return a_first <= b_last && b_first <= a_last;
-}
-
-bool can_subscribe_range(CanBusId bus, uint32_t first_id, uint32_t last_id, CanRxHandler handler,
-                         void *ctx)
-{
-    CanBus *self = &buses[bus];
-    const uint32_t hw_filters = handles[bus]->Init.StdFiltersNbr;
-    if (self->started || handler == NULL || first_id > last_id || last_id > CAN_STD_ID_MAX
-        || self->sub_count >= MAX_SUBSCRIPTIONS || self->sub_count >= hw_filters)
-    {
-        return false;
-    }
-    for (uint32_t i = 0u; i < self->sub_count; i++)
-    {
-        if (ranges_overlap(first_id, last_id, self->subs[i].first_id, self->subs[i].last_id))
-        {
-            return false;
-        }
-    }
-    self->subs[self->sub_count] = (Subscription){ first_id, last_id, handler, ctx };
-    self->sub_count++;
-    return true;
-}
-
-bool can_subscribe(CanBusId bus, uint32_t id, CanRxHandler handler, void *ctx)
-{
-    return can_subscribe_range(bus, id, id, handler, ctx);
-}
-
 bool can_start(CanBusId bus, CanRxNotify notify, void *ctx)
 {
     FDCAN_HandleTypeDef *h = handles[bus];
     CanBus *self = &buses[bus];
     const bool fifo0 = uses_fifo0(h);
 
-    for (uint32_t i = 0u; i < self->sub_count; i++)
-    {
-        FDCAN_FilterTypeDef filter = {
-            .IdType = FDCAN_STANDARD_ID,
-            .FilterIndex = i,
-            .FilterType = FDCAN_FILTER_RANGE,
-            .FilterConfig = fifo0 ? FDCAN_FILTER_TO_RXFIFO0 : FDCAN_FILTER_TO_RXFIFO1,
-            .FilterID1 = self->subs[i].first_id,
-            .FilterID2 = self->subs[i].last_id,
-        };
-        if (HAL_FDCAN_ConfigFilter(h, &filter) != HAL_OK)
-        {
-            return false;
-        }
-    }
-
-    /* 没有匹配任何滤波器的帧（标准帧、扩展帧、远程帧）一律拒收 */
-    if (HAL_FDCAN_ConfigGlobalFilter(h, FDCAN_REJECT, FDCAN_REJECT, FDCAN_REJECT_REMOTE,
+    /* 不配置滤波器（HAL_FDCAN_Init 已把滤波器区清零，即全部停用）：不匹配任何滤波器的标准数据帧收进接收 FIFO，
+     * 扩展帧和远程帧拒收。帧交给谁由兵种的 comm_rx_task.c 按 ID 显式分派 */
+    const uint32_t accept = fifo0 ? FDCAN_ACCEPT_IN_RX_FIFO0 : FDCAN_ACCEPT_IN_RX_FIFO1;
+    if (HAL_FDCAN_ConfigGlobalFilter(h, accept, FDCAN_REJECT, FDCAN_REJECT_REMOTE,
                                      FDCAN_REJECT_REMOTE)
         != HAL_OK)
     {
@@ -124,26 +65,9 @@ bool can_start(CanBusId bus, CanRxNotify notify, void *ctx)
     return true;
 }
 
-uint32_t can_dispatch(CanBusId bus)
+bool can_read(CanBusId bus, CanFrame *out)
 {
-    CanBus *self = &buses[bus];
-    CanFrame frame;
-    uint32_t count = 0u;
-
-    while (can_rx_ring_pop(&self->ring, &frame))
-    {
-        for (uint32_t i = 0u; i < self->sub_count; i++)
-        {
-            const Subscription *sub = &self->subs[i];
-            if (frame.id >= sub->first_id && frame.id <= sub->last_id)
-            {
-                sub->handler(&frame, sub->ctx);
-                break;
-            }
-        }
-        count++;
-    }
-    return count;
+    return can_rx_ring_pop(&buses[bus].ring, out);
 }
 
 bool can_bus_is_fd(CanBusId bus)
@@ -197,7 +121,7 @@ void can_recover(CanBusId bus)
     FDCAN_HandleTypeDef *h = handles[bus];
     if (HAL_FDCAN_Stop(h) == HAL_OK)
     {
-        (void)HAL_FDCAN_Start(h); /* 失败时仍是 bus-off，daemon 100 ms 后再试 */
+        (void)HAL_FDCAN_Start(h); /* 失败时仍是 bus-off，detect 任务 100 ms 后再试 */
     }
 }
 

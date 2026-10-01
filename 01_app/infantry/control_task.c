@@ -54,7 +54,7 @@ void control_task_entry(void *arg)
         {
             motor_group_apply_stop_all(&motors);
         }
-        motor_group_flush(&motors);
+        motor_group_send(&motors);
 
         rm_task_delay_until(&last_wake, CONTROL_PERIOD_MS);
     }
