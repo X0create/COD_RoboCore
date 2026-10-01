@@ -145,7 +145,7 @@ comm_rx_task：
 └─ for (;;)
    ├─ rm_task_wait_notify(10)                   等中断通知，最多 10 ms
    ├─ 每一路 CAN：can_read() 取一帧            05_platform/can/can_stm32h7.c
-   │  └─ motor_receive(&wheel_motor[i], …)      02_devices/motor/motor.c     总线和反馈 ID 对上就解码（dji / dm_decode_feedback）→ 存反馈、喂狗
+   │  └─ motor_receive(&wheel_motor[i], …)      02_devices/motor/motor.c     总线和反馈 ID 对上就解码（dji / dm_decode_feedback）→ 存反馈、按中断里的接收时刻喂狗
    ├─ uart_read(UART_5) → dr16_on_bytes()       02_devices/remote/dr16.c     凑满 18 字节 → dr16_decode → watchdog_feed_data 保存到 dr16.rc
    └─ recover_bus_off()                         同一个文件                   bus-off 的总线每 100 ms 重启一次
 ```

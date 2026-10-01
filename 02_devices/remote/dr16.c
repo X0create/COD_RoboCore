@@ -94,7 +94,7 @@ void dr16_on_bytes(Dr16 *self, const uint8_t *data, uint32_t len, uint64_t now_u
             RcState state;
             if (dr16_decode(self->frame, &state))
             {
-                watchdog_feed_data(&self->wd, &self->rc, &state, sizeof(state));
+                watchdog_feed_data(&self->wd, &self->rc, &state, sizeof(state), now_us);
             }
             else
             {

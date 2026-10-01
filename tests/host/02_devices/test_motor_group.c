@@ -7,6 +7,7 @@
 
 #include <string.h>
 
+#include "05_platform/time/time.h"
 #include "fake_can.h"
 #include "fake_time.h"
 #include "unity.h"
@@ -19,7 +20,9 @@ static MotorGroup group;
 /* 相当于comm_rx_task.c：把收到的一帧依次交给组里的每个电机（motor_receive），有电机认领就返回 true */
 static bool deliver(CanBusId bus, uint32_t id, const uint8_t *data, uint8_t len)
 {
-    CanFrame frame = { .id = id, .len = len };
+    CanFrame frame = { .id = id,
+                       .len = len,
+                       .stamp_us = rm_time_now_us() }; /* 中断里记下的接收时刻 */
     memcpy(frame.data, data, len);
     for (Motor *m = group.head; m != NULL; m = m->next)
     {
@@ -117,6 +120,18 @@ static void test_feedback_online_and_timeout(void)
     fake_time_advance_ms(1u);
     TEST_ASSERT_FALSE(motor_read_feedback(m, &fb));      /* 超过 20 ms 算离线 */
     TEST_ASSERT_FLOAT_WITHIN(1e-4f, 3.0f, fb.torque_nm); /* 离线时仍是最后一帧的内容 */
+}
+
+/* comm_rx_task 被耽误：30 ms 前收到的帧现在才处理，按接收时刻算已超过 20 ms，电机仍离线 */
+static void test_stale_frame_stays_offline(void)
+{
+    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
+    Motor *m = add(&c);
+    CanFrame frame = { .id = 0x201, .len = 8, .stamp_us = rm_time_now_us() };
+    fake_time_advance_ms(30u);
+    TEST_ASSERT_TRUE(motor_receive(m, CAN_BUS_1, &frame));
+    MotorFeedback fb;
+    TEST_ASSERT_FALSE(motor_read_feedback(m, &fb));
 }
 
 /* 同一个反馈 ID 出现在另一路总线上：不是这个电机的帧，不收、不喂狗 */
@@ -466,6 +481,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_id_conflicts_rejected);
     RUN_TEST(test_feedback_online_and_timeout);
+    RUN_TEST(test_stale_frame_stays_offline);
     RUN_TEST(test_frame_on_other_bus_ignored);
     RUN_TEST(test_short_frame_ignored);
     RUN_TEST(test_flush_packs_frame);

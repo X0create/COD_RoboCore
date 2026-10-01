@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "02_devices/motor/motor_group.h"
+#include "05_platform/time/time.h"
 #include "fake_can.h"
 #include "fake_time.h"
 #include "unity.h"
@@ -61,7 +62,9 @@ static MotorGroup group;
 /* 相当于comm_rx_task.c：把收到的一帧依次交给组里的每个电机（motor_receive），有电机认领就返回 true */
 static bool deliver(CanBusId bus, uint32_t id, const uint8_t *data, uint8_t len)
 {
-    CanFrame frame = { .id = id, .len = len };
+    CanFrame frame = { .id = id,
+                       .len = len,
+                       .stamp_us = rm_time_now_us() }; /* 中断里记下的接收时刻 */
     memcpy(frame.data, data, len);
     for (Motor *m = group.head; m != NULL; m = m->next)
     {

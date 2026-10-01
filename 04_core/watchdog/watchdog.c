@@ -32,12 +32,11 @@ void watchdog_feed(Watchdog *wd)
     rm_critical_exit();
 }
 
-void watchdog_feed_data(Watchdog *wd, void *slot, const void *src, size_t size)
+void watchdog_feed_data(Watchdog *wd, void *slot, const void *src, size_t size, uint64_t rx_us)
 {
-    const uint64_t now_us = rm_time_now_us();
     rm_critical_enter();
     memcpy(slot, src, size);
-    wd->last_feed_us = now_us;
+    wd->last_feed_us = rx_us;
     wd->fed = true;
     rm_critical_exit();
 }

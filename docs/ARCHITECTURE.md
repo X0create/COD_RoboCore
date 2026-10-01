@@ -312,7 +312,7 @@ bool imu_ready = ins_read(&ins, &imu);
 ### 3. 看门狗（在线检测 + 最新数据）
 
 每个设备（以及 ins 这类产生数据的模块）结构体里有一个 `Watchdog`：**收到一帧合法数据**（校验通过、字段在有效范围内）才喂狗，
-喂的是 `rm_time_now_us()` 的时间戳。有数据要给别的任务读的，用 `watchdog_feed_data(wd, &slot, &new, size)` 把数据和时刻在同一个临界区里写进去；
+喂的是这帧数据的**接收时刻**（`rm_time_now_us()` 的时间）：CAN 用中断里记下的 `CanFrame.stamp_us`，串口用读出这段字节的时刻。任务被耽误、帧积压时，旧帧按真正的年龄判断，不会被当成刚收到的数据。有数据要给别的任务读的，用 `watchdog_feed_data(wd, &slot, &new, size, rx_us)` 把数据和时刻在同一个临界区里写进去；
 读取函数 `dr16_read()`、`ins_read()`、`motor_read_feedback()` 内部都是 `watchdog_read_data()`。
 
 **一个设备的在线状态只有这一个来源（ADR 0059）。** 控制用的 `xxx_read()` 和 detect_task 的上线 / 离线日志读的是同一个时间戳、同一个超时、
@@ -323,7 +323,7 @@ bool imu_ready = ins_read(&ins, &imu);
 
 ```c
 watchdog_register(&self->wd, "dr16", RC_LOST_TIMEOUT_MS);          // xxx_init() 里登记：名字和超时
-watchdog_feed_data(&self->wd, &self->rc, &state, sizeof(state));   // 收到合法帧
+watchdog_feed_data(&self->wd, &self->rc, &state, sizeof(state), now_us);   // 收到合法帧，now_us = 读出这段字节的时刻
 return watchdog_read_data(&self->wd, &self->rc, out, sizeof(*out)); // dr16_read()
 ```
 
@@ -1324,6 +1324,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0057 | 用户 2026-10-01 仍觉得不如老模板直观（任务分在两个目录）。去掉兵种层（0056）后“通用 / 兵种特有”的区分已不成立，**全部 6 个任务放进 `01_applic/tasks/`**（≈ 老模板 Application/Task）：`robot/robot_control_task.c` 等改名 `tasks/control_task.c`、`comm_rx_task.c`、`log_task.c`；`robot/` 只留参数和对象（`robot_config.h`、`robot.h/.c`）。取代 0055 的“两处” | 一个目录看全部任务，和老模板一一对应 |
 | 0058 | 用户 2026-10-01 仍觉得“话题 / 拷贝绕”，选**去掉话题层**：删除 `04_core/msg/`（`Topic`、`xxx_claim/publish/read`、`rc_state.h` 等四个消息头文件），数据类型移到产生它的模块（`RcState` → `dr16.h`，`ImuState` → `ins.h`，`VtRcState`/`KbmState` → `vt_link.h`）；模块对象自带“最新一份 + `Snapshot`”（`04_core/util/snapshot`，即原 topic 去掉认领），读取用 `dr16_read()`、`ins_read()`、`vt_link_read_rc/kbm()`，超时由产生方定。`robot.c` 不再有话题实例，`dr16_init`/`ins_init`/`vt_link_init` 不再会失败。取代 0013 的话题实例部分；其余章节里规划中的“话题”（`RobotCmd`、`GimbalState`、话题表）都按本条理解为“产生方保存 + 读取函数” | 跳到定义一步就到数据所在模块；数据是模块成员，天然只有一个写入者，不需要运行时认领 |
 | 0059 | 用户 2026-10-01 评审“同种数据东一块西一块”：① **在线状态只有一个来源**：`Snapshot` 并入 `Watchdog`（新增 `watchdog_feed_data()` / `watchdog_read_data()`，数据和接收时刻在同一临界区写入），删除 `04_core/util/snapshot`；dr16、vt_link（`vt13`、`vt_kbm` 各一个）、ins、电机反馈的读取函数和 detect 日志都看同一个看门狗；超时边界统一为“≤ 超时算在线”（电机原为 < 20 ms）；`MotorFeedback.stamp_us` 删除（接收时刻只在看门狗里）；读取失败时仍拷出旧数据（只能用来打印）；② **任务声明归位**：每个任务一对 `tasks/xxx_task.{h,c}`，`robot.h` 只声明车上的对象；③ **接收流程一个文件**：`system/comm_rx_common.{h,c}` 并入 `tasks/comm_rx_task.c`（中断回调、打开接收、分派、bus-off 恢复），未使用的 `comm_rx_start_usb` 删除（接视觉时再加）；④ `04_core/msg/` 规划条目删除，事件队列、环形队列以后放 `util/` | 一个状态一个权威来源；找任务入口、看接收流程都只有一个文件 |
+| 0060 | 用户 2026-10-01 确认修复“旧 CAN 帧刷新在线状态”：`watchdog_feed_data()` 增加参数 `rx_us`（数据的接收时刻），`motor_receive` 传中断里记下的 `CanFrame.stamp_us`，不再用解析时刻；DR16 传读出字节的时刻（串口没有逐字节时刻），VT 链路、ins 传当时的时刻 | comm_rx_task 被耽误时，积压的旧帧不会让离线的电机“复活” |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 

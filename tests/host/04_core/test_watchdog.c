@@ -5,6 +5,7 @@
  */
 #include "04_core/watchdog/watchdog.h"
 
+#include "05_platform/time/time.h"
 #include "fake_time.h"
 #include "unity.h"
 
@@ -110,9 +111,9 @@ static void test_feed_data_and_read(void)
     TEST_ASSERT_EQUAL_INT(0, out); /* 从未收到：初始化时的 0 */
 
     int v = 7;
-    watchdog_feed_data(&wd, &slot, &v, sizeof(v));
+    watchdog_feed_data(&wd, &slot, &v, sizeof(v), rm_time_now_us());
     v = 8;
-    watchdog_feed_data(&wd, &slot, &v, sizeof(v));
+    watchdog_feed_data(&wd, &slot, &v, sizeof(v), rm_time_now_us());
     TEST_ASSERT_TRUE(watchdog_read_data(&wd, &slot, &out, sizeof(out)));
     TEST_ASSERT_EQUAL_INT(8, out);
 
@@ -123,6 +124,21 @@ static void test_feed_data_and_read(void)
     TEST_ASSERT_FALSE(watchdog_is_online(&wd)); /* 与 detect 日志用的判断一致 */
 }
 
+/* 积压的旧数据按它的接收时刻判断：150 ms 前收到、现在才处理的一帧，超时 100 ms 时不算在线 */
+static void test_old_rx_time_stays_offline(void)
+{
+    static Watchdog wd;
+    static int slot;
+    int out;
+    const int v = 1;
+    watchdog_register(&wd, "old", 100u);
+    const uint64_t rx_us = rm_time_now_us();
+    fake_time_advance_ms(150u);
+    watchdog_feed_data(&wd, &slot, &v, sizeof(v), rx_us);
+    TEST_ASSERT_FALSE(watchdog_read_data(&wd, &slot, &out, sizeof(out)));
+    TEST_ASSERT_FALSE(watchdog_is_online(&wd));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -131,5 +147,6 @@ int main(void)
     RUN_TEST(test_poll_reports_changes_only);
     RUN_TEST(test_for_each_visits_all_registered);
     RUN_TEST(test_feed_data_and_read);
+    RUN_TEST(test_old_rx_time_stays_offline);
     return UNITY_END();
 }

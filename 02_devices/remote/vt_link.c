@@ -8,6 +8,7 @@
 
 #include "02_devices/referee/ref_frame.h"
 #include "04_core/util/crc.h"
+#include "05_platform/time/time.h"
 
 #define VT13_SOF0   0xA9u
 #define VT13_SOF1   0x53u
@@ -96,7 +97,7 @@ static void handle_ref_frame(VtLink *self, const RefFrame *f)
         .mouse_right = d[7] != 0u,
         .keys = (uint16_t)(d[8] | (d[9] << 8)),
     };
-    watchdog_feed_data(&self->kbm_wd, &self->kbm, &kbm, sizeof(kbm));
+    watchdog_feed_data(&self->kbm_wd, &self->kbm, &kbm, sizeof(kbm), rm_time_now_us());
 }
 
 typedef enum
@@ -129,7 +130,7 @@ static ParseResult parse_head(VtLink *self, size_t *consumed)
         {
             return PARSE_BAD;
         }
-        watchdog_feed_data(&self->rc_wd, &self->rc, &rc, sizeof(rc));
+        watchdog_feed_data(&self->rc_wd, &self->rc, &rc, sizeof(rc), rm_time_now_us());
         *consumed = VT13_FRAME_LEN;
         return PARSE_CONSUMED;
     }

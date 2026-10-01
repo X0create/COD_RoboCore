@@ -41,8 +41,12 @@ void watchdog_register(Watchdog *wd, const char *name, uint32_t timeout_ms);
 /** 收到一帧合法数据时调用（只要在线状态、没有数据给别人读的设备用这个） */
 void watchdog_feed(Watchdog *wd);
 
-/** 收到一帧合法数据：在同一个临界区里把 src 整份拷进 slot 并记下时刻，读到的数据和它的时刻一定对得上 */
-void watchdog_feed_data(Watchdog *wd, void *slot, const void *src, size_t size);
+/**
+ * @brief   收到一帧合法数据：在同一个临界区里把 src 整份拷进 slot 并记下它的接收时刻，读到的数据和它的时刻一定对得上
+ * @param   rx_us  这帧数据的接收时刻（rm_time_now_us() 的时间）。能在中断里记下时刻的（CAN 的 CanFrame.stamp_us）就用它，
+ *                 这样任务被耽误、帧积压时，旧帧按它真正的年龄判断，不会被当成刚收到的数据
+ */
+void watchdog_feed_data(Watchdog *wd, void *slot, const void *src, size_t size, uint64_t rx_us);
 
 /** 现在是否在线 */
 bool watchdog_is_online(const Watchdog *wd);

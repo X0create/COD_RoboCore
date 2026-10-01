@@ -70,10 +70,11 @@ InsEvent ins_step(Ins *ins)
     }
 
     /* 4. 更新姿态：机体系 → 航向零偏在线修正 → 加速度低通 → EKF → 欧拉角、多圈航向 */
-    const ImuState st = update_attitude(ins, &s, rm_time_now_us());
+    const uint64_t now_us = rm_time_now_us();
+    const ImuState st = update_attitude(ins, &s, now_us);
 
-    /* 5. 发布给 control、log */
-    watchdog_feed_data(&ins->wd, &ins->state, &st, sizeof(st));
+    /* 5. 保存最新姿态和它的时刻，control、log 用 ins_read() 读 */
+    watchdog_feed_data(&ins->wd, &ins->state, &st, sizeof(st), now_us);
     return INS_EVENT_NONE;
 }
 

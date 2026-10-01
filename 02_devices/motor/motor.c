@@ -44,7 +44,7 @@ bool motor_receive(Motor *m, CanBusId bus, const CanFrame *frame)
         dji_decode_feedback(m->cfg, &m->brand.dji, frame->data, &fb);
     }
     fb.online = false; /* 在线与否由 motor_read_feedback() 读取时计算 */
-    watchdog_feed_data(&m->wd, &m->fb, &fb, sizeof(fb));
+    watchdog_feed_data(&m->wd, &m->fb, &fb, sizeof(fb), frame->stamp_us); /* 中断里记下的接收时刻 */
     return true;
 }
 
