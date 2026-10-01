@@ -39,7 +39,7 @@ MotorCaps dji_caps(MotorType type);
 /**
  * @brief   解析一帧反馈，更新多圈计数，得到输出轴上的国际单位（纯计算）
  * @param   data  8 字节反馈数据
- * @note    out 的 online、stamp_us 不在这里填
+ * @note    out 的 online 不在这里填
  */
 void dji_decode_feedback(const MotorConfig *cfg, DjiMotorState *state, const uint8_t data[8],
                          MotorFeedback *out);

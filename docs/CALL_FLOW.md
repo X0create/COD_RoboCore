@@ -68,12 +68,11 @@ COD-H7-Template/
 └── log_task.c         1 s：RTT 打印状态
 01_applic/robot/（这台车的参数和对象）
 ├── robot_config.h     全部参数：电机表、PID、底盘尺寸、满杆速度、解锁拨杆、IMU 安装方向 ← Config.h
-├── robot.h            全部对象和任务入口的声明                       ← 相当于老模板的全局变量
+├── robot.h            全部对象的声明（任务入口在 tasks/ 各自的 .h）   ← 相当于老模板的全局变量
 └── robot.c            ① 对象定义 ② robot_init() ③ 任务表 robot_tasks[] ← freertos.c 的任务列表
 01_applic/system/（通用的框架）
 ├── app_main.c         上电顺序（只有这一份）：app_main()、startup_task()
-├── safety_gate.c      全车唯一的安全门：急停、遥控丢失、未解锁、IMU 未就绪 → 全车停
-└── comm_rx_common.c   接收的公共部分：中断唤醒任务、打开接收、CAN bus-off 恢复
+└── safety_gate.c      全车唯一的安全门：急停、遥控丢失、未解锁、IMU 未就绪 → 全车停
 01_applic/modules/ins/ins.c              惯性导航：一次姿态计算 ins_step()
 01_applic/modules/chassis/chassis.c      底盘：读实测 → 算目标 → 算输出
 ```
@@ -132,7 +131,7 @@ for (;;)
    ├─ bmi088_heater_step()                      加热 PID
    ├─ （上电前 2 s）calibrate_gyro()            陀螺零偏标定，静止才采用
    └─ update_attitude()                         安装旋转 → 零偏在线修正 → 加速度低通 → quat_ekf_update → 欧拉角、多圈航向
-      └─ snapshot_write(&ins->snap, ...)        保存最新姿态（ins_step 第 5 步），control、log 用 ins_read 读
+      └─ watchdog_feed_data(&ins->wd, ...)      保存最新姿态和时刻（ins_step 第 5 步），control、log 用 ins_read 读
 ```
 
 ### comm_rx_task（收到数据就运行）：`01_applic/tasks/comm_rx_task.c:comm_rx_task_entry`
@@ -140,15 +139,15 @@ for (;;)
 ```
 中断：HAL_FDCAN_RxFifo0/1Callback               05_platform/can/can_stm32h7.c    帧放进环形缓冲
       HAL_UARTEx_RxEventCallback                05_platform/uart/uart_stm32h7.c   DMA 收到的字节留在缓冲区
-      └─ ⚡函数指针 notify → notify_from_isr()（01_applic/system/comm_rx_common.c）  唤醒 comm_rx_task
+      └─ ⚡函数指针 notify → notify_from_isr()（同一个 comm_rx_task.c）  唤醒 comm_rx_task
 comm_rx_task：
-├─ comm_rx_start_can()、comm_rx_start_uart(UART_5)   任务开头打开接收（接线就写在这个文件里）
+├─ start_can()、start_uart(UART_5)            任务开头打开接收（接线就写在这个文件里）
 └─ for (;;)
-   ├─ comm_rx_wait()                            等中断通知，最多 10 ms
+   ├─ rm_task_wait_notify(10)                   等中断通知，最多 10 ms
    ├─ 每一路 CAN：can_read() 取一帧            05_platform/can/can_stm32h7.c
    │  └─ motor_receive(&wheel_motor[i], …)      02_devices/motor/motor.c     总线和反馈 ID 对上就解码（dji / dm_decode_feedback）→ 存反馈、喂狗
-   ├─ uart_read(UART_5) → dr16_on_bytes()       02_devices/remote/dr16.c     凑满 18 字节 → dr16_decode → 保存到 dr16.rc
-   └─ comm_rx_recover_bus_off()                 01_applic/system/comm_rx_common.c      bus-off 的总线每 100 ms 重启一次
+   ├─ uart_read(UART_5) → dr16_on_bytes()       02_devices/remote/dr16.c     凑满 18 字节 → dr16_decode → watchdog_feed_data 保存到 dr16.rc
+   └─ recover_bus_off()                         同一个文件                   bus-off 的总线每 100 ms 重启一次
 ```
 
 ### detect_task（10 ms）：`01_applic/tasks/detect_task.c:detect_task_entry`

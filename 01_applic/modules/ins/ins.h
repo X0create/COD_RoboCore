@@ -21,7 +21,8 @@
 #include "03_algorithm/attitude/gyro_bias.h"
 #include "03_algorithm/attitude/quat_ekf.h"
 #include "03_algorithm/filter/lpf.h"
-#include "04_core/util/snapshot.h"
+#include "04_core/watchdog/watchdog.h"
+#include "05_platform/compiler.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -89,7 +90,7 @@ typedef struct
 {
     const InsConfig *cfg;
     ImuState state; /* 最新姿态（标定完成后才写入），只通过 ins_read() 读 */
-    Snapshot snap;  /* state 的写入时刻 */
+    Watchdog wd; /* state 的写入时刻和超时：ins_read() 的就绪判定和 detect 日志都只看它 */
     Bmi088 imu;
     InsPhase phase;
     GyroBias calib;
@@ -105,14 +106,14 @@ typedef struct
 } Ins;
 
 /**
- * @brief   初始化滤波器和 EKF
- * @pre     初始化阶段调用
+ * @brief   初始化滤波器和 EKF，登记看门狗
+ * @pre     初始化阶段调用；同一个 ins 只初始化一次（看门狗只能登记一次）
  */
 void ins_init(Ins *ins, const InsConfig *cfg);
 
 /**
  * @brief   读最新姿态（在临界区里整份拷贝）
- * @return  false：IMU 未就绪（还没标定完，或 IMU_STALE_MS 内没有更新），out 不被修改
+ * @return  false：IMU 未就绪（还没标定完，或超过 IMU_STALE_MS 没有更新）；这时 out 是旧数据，只能用来打印
  */
 RM_NODISCARD bool ins_read(const Ins *ins, ImuState *out);
 

@@ -44,12 +44,7 @@ bool motor_receive(Motor *m, CanBusId bus, const CanFrame *frame)
         dji_decode_feedback(m->cfg, &m->brand.dji, frame->data, &fb);
     }
     fb.online = false; /* 在线与否由 motor_read_feedback() 读取时计算 */
-    fb.stamp_us = rm_time_now_us();
-
-    rm_critical_enter();
-    m->fb = fb;
-    rm_critical_exit();
-    watchdog_feed(&m->wd);
+    watchdog_feed_data(&m->wd, &m->fb, &fb, sizeof(fb));
     return true;
 }
 
@@ -137,10 +132,7 @@ bool motor_supports_torque(const Motor *m)
 
 bool motor_read_feedback(const Motor *m, MotorFeedback *out)
 {
-    rm_critical_enter();
-    *out = m->fb;
-    rm_critical_exit();
-    out->online = watchdog_is_online(&m->wd);
+    out->online = watchdog_read_data(&m->wd, &m->fb, out, sizeof(*out));
     return out->online;
 }
 

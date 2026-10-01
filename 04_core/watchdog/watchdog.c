@@ -5,6 +5,7 @@
 #include "watchdog.h"
 
 #include <stddef.h>
+#include <string.h>
 
 #include "04_core/os/critical.h"
 #include "05_platform/time/time.h"
@@ -31,15 +32,41 @@ void watchdog_feed(Watchdog *wd)
     rm_critical_exit();
 }
 
+void watchdog_feed_data(Watchdog *wd, void *slot, const void *src, size_t size)
+{
+    const uint64_t now_us = rm_time_now_us();
+    rm_critical_enter();
+    memcpy(slot, src, size);
+    wd->last_feed_us = now_us;
+    wd->fed = true;
+    rm_critical_exit();
+}
+
+/* 调用方在临界区里取出 fed 和 last_us。now_us 在进临界区之前取：这之间若恰好喂了狗，时间戳比 now_us 还新，按“刚喂过”处理 */
+static bool online_at(const Watchdog *wd, bool fed, uint64_t last_us, uint64_t now_us)
+{
+    return fed && (last_us >= now_us || now_us - last_us <= (uint64_t)wd->timeout_ms * 1000u);
+}
+
 bool watchdog_is_online(const Watchdog *wd)
 {
-    /* 先取时刻再读时间戳：这之间若恰好喂了狗，时间戳比 now_us 还新，按“刚喂过”处理 */
     const uint64_t now_us = rm_time_now_us();
     rm_critical_enter();
     const bool fed = wd->fed;
     const uint64_t last_us = wd->last_feed_us;
     rm_critical_exit();
-    return fed && (last_us >= now_us || now_us - last_us < (uint64_t)wd->timeout_ms * 1000u);
+    return online_at(wd, fed, last_us, now_us);
+}
+
+bool watchdog_read_data(const Watchdog *wd, const void *slot, void *out, size_t size)
+{
+    const uint64_t now_us = rm_time_now_us();
+    rm_critical_enter();
+    memcpy(out, slot, size);
+    const bool fed = wd->fed;
+    const uint64_t last_us = wd->last_feed_us;
+    rm_critical_exit();
+    return online_at(wd, fed, last_us, now_us);
 }
 
 void watchdog_poll(WatchdogChangeFn fn, void *ctx)

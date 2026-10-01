@@ -99,7 +99,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 ```text
 COD_RoboCore/
 ├── 01_applic/               业务（≈ 老模板 Application/）
-│   ├── system/              通用框架：app_main.c（上电顺序）、安全门、comm_rx_common.c（接收公共部分）
+│   ├── system/              通用框架：app_main.c（上电顺序）、安全门
 │   ├── tasks/               全部 6 个任务（≈ 老模板 Application/Task）：ins、control、comm_rx、detect、indicator、log
 │   ├── modules/             机构（可复用）
 │   │   ├── chassis/         底盘（全向轮 / 麦轮 / 舵轮）

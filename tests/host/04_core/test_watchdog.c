@@ -24,15 +24,15 @@ static void test_never_fed_is_offline(void)
     TEST_ASSERT_FALSE(watchdog_is_online(&wd));
 }
 
-/* “现在 − 最后喂狗 < 超时”才在线：差 1 µs 到超时仍在线，正好等于超时算离线 */
+/* “现在 − 最后喂狗 ≤ 超时”才在线：正好等于超时仍在线，再多 1 µs 算离线 */
 static void test_timeout_boundary(void)
 {
     static Watchdog wd;
     watchdog_register(&wd, "boundary", 200u);
     watchdog_feed(&wd);
-    fake_time_set_us(5000000u + 200000u - 1u);
-    TEST_ASSERT_TRUE(watchdog_is_online(&wd));
     fake_time_set_us(5000000u + 200000u);
+    TEST_ASSERT_TRUE(watchdog_is_online(&wd));
+    fake_time_set_us(5000000u + 200000u + 1u);
     TEST_ASSERT_FALSE(watchdog_is_online(&wd));
     watchdog_feed(&wd);
     TEST_ASSERT_TRUE(watchdog_is_online(&wd));
@@ -99,6 +99,30 @@ static void test_for_each_visits_all_registered(void)
     TEST_ASSERT_EQUAL_INT(before + 1, after);
 }
 
+/* 数据和时刻一起写入：读到最新值；超时后仍拷出旧值，但返回离线 */
+static void test_feed_data_and_read(void)
+{
+    static Watchdog wd;
+    static int slot;
+    int out = -1;
+    watchdog_register(&wd, "data", 100u);
+    TEST_ASSERT_FALSE(watchdog_read_data(&wd, &slot, &out, sizeof(out)));
+    TEST_ASSERT_EQUAL_INT(0, out); /* 从未收到：初始化时的 0 */
+
+    int v = 7;
+    watchdog_feed_data(&wd, &slot, &v, sizeof(v));
+    v = 8;
+    watchdog_feed_data(&wd, &slot, &v, sizeof(v));
+    TEST_ASSERT_TRUE(watchdog_read_data(&wd, &slot, &out, sizeof(out)));
+    TEST_ASSERT_EQUAL_INT(8, out);
+
+    fake_time_advance_ms(101u);
+    out = -1;
+    TEST_ASSERT_FALSE(watchdog_read_data(&wd, &slot, &out, sizeof(out)));
+    TEST_ASSERT_EQUAL_INT(8, out);
+    TEST_ASSERT_FALSE(watchdog_is_online(&wd)); /* 与 detect 日志用的判断一致 */
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -106,5 +130,6 @@ int main(void)
     RUN_TEST(test_timeout_boundary);
     RUN_TEST(test_poll_reports_changes_only);
     RUN_TEST(test_for_each_visits_all_registered);
+    RUN_TEST(test_feed_data_and_read);
     return UNITY_END();
 }

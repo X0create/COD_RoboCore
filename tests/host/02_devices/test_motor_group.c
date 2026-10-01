@@ -111,10 +111,11 @@ static void test_feedback_online_and_timeout(void)
     TEST_ASSERT_TRUE(fb.online);
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, 5.4533f, fb.speed_rad_s);
     TEST_ASSERT_FLOAT_WITHIN(1e-4f, 3.0f, fb.torque_nm);
-    TEST_ASSERT_EQUAL_UINT64(1000000u, fb.stamp_us);
 
     fake_time_advance_ms(MOTOR_OFFLINE_TIMEOUT_MS);
-    TEST_ASSERT_FALSE(motor_read_feedback(m, &fb));      /* 正好 20 ms 算离线 */
+    TEST_ASSERT_TRUE(motor_read_feedback(m, &fb)); /* 正好 20 ms 还算在线 */
+    fake_time_advance_ms(1u);
+    TEST_ASSERT_FALSE(motor_read_feedback(m, &fb));      /* 超过 20 ms 算离线 */
     TEST_ASSERT_FLOAT_WITHIN(1e-4f, 3.0f, fb.torque_nm); /* 离线时仍是最后一帧的内容 */
 }
 

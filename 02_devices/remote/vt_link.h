@@ -14,8 +14,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "04_core/util/snapshot.h"
 #include "04_core/watchdog/watchdog.h"
+#include "05_platform/compiler.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -64,15 +64,14 @@ _Static_assert(sizeof(KbmState) <= 256, "消息不超过 256 字节（运行时�
 
 #define VT13_FRAME_LEN     21u
 #define VT_LINK_BUF_LEN    64u /* 图传链路上最长的 0xA5 帧是 0x0302 的 39 字节 */
-#define VT_LINK_TIMEOUT_MS 200u /* 这么久没收到就算掉线（vt_link_read_*() 返回 false） */
+#define VT_LINK_TIMEOUT_MS 200u /* 超过这么久没收到就算掉线（vt_link_read_*() 返回 false） */
 
 typedef struct
 {
-    VtRcState rc; /* 最新一帧 VT13 遥控器数据，只通过 vt_link_read_rc() 读 */
-    Snapshot rc_snap;
-    KbmState kbm; /* 最新一帧键鼠数据，只通过 vt_link_read_kbm() 读 */
-    Snapshot kbm_snap;
-    Watchdog wd;
+    VtRcState rc;    /* 最新一帧 VT13 遥控器数据，只通过 vt_link_read_rc() 读 */
+    Watchdog rc_wd;  /* rc 的接收时刻和超时（设备清单里叫 vt13） */
+    KbmState kbm;    /* 最新一帧键鼠数据，只通过 vt_link_read_kbm() 读 */
+    Watchdog kbm_wd; /* kbm 的接收时刻和超时（设备清单里叫 vt_kbm） */
     uint8_t buf[VT_LINK_BUF_LEN];
     uint32_t len;
     uint32_t bad_bytes;      /* 找帧时丢弃的字节数（调试用） */
@@ -82,10 +81,10 @@ typedef struct
 /** 初始化、登记看门狗  @pre 初始化阶段调用 */
 void vt_link_init(VtLink *self);
 
-/** 读最新的 VT13 遥控器数据  @return false：VT_LINK_TIMEOUT_MS 内没收到 */
+/** 读最新的 VT13 遥控器数据  @return false：超过 VT_LINK_TIMEOUT_MS 没收到（out 是旧数据） */
 RM_NODISCARD bool vt_link_read_rc(const VtLink *self, VtRcState *out);
 
-/** 读最新的键鼠数据  @return false：VT_LINK_TIMEOUT_MS 内没收到 */
+/** 读最新的键鼠数据  @return false：超过 VT_LINK_TIMEOUT_MS 没收到（out 是旧数据） */
 RM_NODISCARD bool vt_link_read_kbm(const VtLink *self, KbmState *out);
 
 /** 喂入从串口读到的一段字节（comm_rx_task 里调用） */

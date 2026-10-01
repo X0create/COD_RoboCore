@@ -62,7 +62,7 @@ void safety_gate_set_system_ready(SafetyGate *gate);
 
 /**
  * @brief   每个控制周期调用一次
- * @param   rc         本周期读到的遥控快照；遥控丢失（话题过期）时传 NULL
+ * @param   rc         本周期读到的遥控数据；遥控丢失（dr16_read 返回 false）时传 NULL
  * @param   imu_ready  本周期 ins_read() 是否读到（IMU 就绪）
  */
 SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, bool imu_ready,

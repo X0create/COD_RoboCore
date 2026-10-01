@@ -771,11 +771,6 @@
               <FilePath>..\..\..\01_applic\system\app_main.c</FilePath>
             </File>
             <File>
-              <FileName>comm_rx_common.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\system\comm_rx_common.c</FilePath>
-            </File>
-            <File>
               <FileName>safety_gate.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\01_applic\system\safety_gate.c</FilePath>
@@ -1039,11 +1034,6 @@
               <FileName>crc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\04_core\util\crc.c</FilePath>
-            </File>
-            <File>
-              <FileName>snapshot.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\04_core\util\snapshot.c</FilePath>
             </File>
           </Files>
         </Group>

@@ -130,7 +130,7 @@ def architecture():
     s.text(rx, 68, "各层都可以用", 13, INK2, bold=True)
     shared = [
         ("03_algorithm", "纯计算，不碰硬件", ["PID", "斜坡", "低通", "卡尔曼", "四元数 EKF", "矩阵", "轮组运动学"], YELLOW, False),
-        ("04_core", "基础设施", ["快照 snapshot", "设备看门狗", "RTT 日志", "任务封装"], YELLOW, False),
+        ("04_core", "基础设施", ["设备看门狗（在线 + 最新数据）", "RTT 日志", "任务封装"], YELLOW, False),
         ("tests/host", "电脑上的单元测试", ["假 CAN / SPI / PWM / 时钟", "替换 05_platform"], MAGENTA, True),
     ]
     cy, ch = 78, 88

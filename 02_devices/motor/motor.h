@@ -103,9 +103,8 @@ typedef struct
     bool torque_is_estimate; /* true：由电流 × 力矩常数估算，只可参考 */
     float temperature_c;     /* C610 不报温度，恒为 0 */
     uint8_t error_code; /* 驱动器上报的错误码，0 = 正常（DJI 没有；达妙为状态码 0x8–0xE） */
-    bool enabled;      /* 驱动器已使能（DJI 电调没有使能概念，恒为 true） */
-    bool online;       /* 读取时按 MOTOR_OFFLINE_TIMEOUT_MS 计算 */
-    uint64_t stamp_us; /* 收到这帧的时刻 */
+    bool enabled; /* 驱动器已使能（DJI 电调没有使能概念，恒为 true） */
+    bool online;  /* 读取时按 MOTOR_OFFLINE_TIMEOUT_MS 计算 */
 } MotorFeedback;
 
 /** 这种型号支持什么 */
@@ -157,7 +156,7 @@ typedef struct Motor
 {
     const MotorConfig *cfg;
     Watchdog wd;
-    MotorFeedback fb; /* comm_rx_task 写，临界区保护 */
+    MotorFeedback fb; /* comm_rx_task 写；和接收时刻一起由 wd 保管（watchdog_feed_data） */
     union
     {
         DjiMotorState dji; /* 只在 comm_rx_task 里用 */

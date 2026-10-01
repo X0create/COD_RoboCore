@@ -56,7 +56,7 @@ startup_task（CubeMX 建的，优先级最高，第一个运行）     → 01_a
 ```
 串口空闲中断（DR16 一帧收完）                          → 05_platform/uart/uart_stm32h7.c:HAL_UARTEx_RxEventCallback
     数据已经由 DMA 写进循环缓冲，这里什么都不拷
-    叫醒 comm_rx_task                                     → 01_applic/system/comm_rx_common.c:notify_from_isr
+    叫醒 comm_rx_task                                     → 01_applic/tasks/comm_rx_task.c:notify_from_isr
 
 CAN 接收中断（收到一帧）                                → 05_platform/can/can_stm32h7.c:HAL_FDCAN_RxFifo0Callback
     把这一帧放进 CAN 接收环形缓冲（满了就丢弃并计数）
@@ -227,7 +227,7 @@ motor_group_send()：                                     → 02_devices/motor/m
 detect_task（每 10 ms）：                                 → 01_applic/tasks/detect_task.c
     开始时打印一次“本固件有哪些设备”
     之后：设备在线 / 离线状态变了 → 打印一行
-    （只报告，不决定停车；停不停由读数据的一方按时间戳自己判断）
+    （只报告，不决定停车；它和 dr16_read 等读取函数看的是同一个看门狗，判断结果一致）
 
 indicator_task（每 25 ms）：                              → 01_applic/tasks/indicator_task.c
     开始时：打开 ADC、蜂鸣器，放启动音
@@ -247,7 +247,7 @@ log_task（每 1 s）：                                      → 01_applic/task
 
 | 数据 | 谁写 | 谁读 | 怎么保证安全 |
 | --- | --- | --- | --- |
-| 遥控（`dr16` 对象里） | comm_rx_task（DR16 解析） | control_task、log_task（`dr16_read`） | 临界区里整份拷贝，带写入时刻；200 ms 内才算在线 |
+| 遥控（`dr16` 对象里） | comm_rx_task（DR16 解析） | control_task、log_task（`dr16_read`） | 和接收时刻一起由看门狗保管，临界区里整份拷贝；200 ms 内才算在线（detect 日志同一判断） |
 | 姿态（`ins` 对象里） | ins_task | control_task、log_task（`ins_read`） | 同上，20 ms 内才算就绪 |
 | 电机反馈 | comm_rx_task（`motor_receive`） | control_task（底盘）、log_task | 临界区里整份拷贝；20 ms 内收到过才算在线 |
 | 电机指令 | control_task（底盘） | control_task（`motor_group_send`） | 写和发在同一个任务里 |

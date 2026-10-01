@@ -14,8 +14,8 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| `system/` | `app_main.c`（上电顺序，只有这一份）、`safety_gate.c`（全车唯一的安全门）、`comm_rx_common.c`（接收的公共部分：中断唤醒、打开接收、CAN bus-off 恢复） |
-| `tasks/` | 全部任务：`ins_task.c`（1 kHz 姿态）、`control_task.c`（1 kHz 控制）、`comm_rx_task.c`（接收）、`detect_task.c`（10 ms 上线 / 离线）、`indicator_task.c`（25 ms 灯、蜂鸣器、电池）、`log_task.c`（1 s 打印） |
+| `system/` | `app_main.c`（上电顺序，只有这一份）、`safety_gate.c`（全车唯一的安全门） |
+| `tasks/` | 全部任务，每个一对 `xxx_task.h/.c`（入口声明在 .h）：`ins_task.c`（1 kHz 姿态）、`control_task.c`（1 kHz 控制）、`comm_rx_task.c`（接收的完整流程：中断唤醒、打开接收、分派、bus-off 恢复）、`detect_task.c`（10 ms 上线 / 离线）、`indicator_task.c`（25 ms 灯、蜂鸣器、电池）、`log_task.c`（1 s 打印） |
 | `modules/chassis/` | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮，读实测 → 算目标 → 算输出（ADR 0043） |
 | `modules/ins/` | 惯性导航：`ins.c`（BMI088 → 零偏标定 → EKF → 保存最新姿态，`ins_read()` 读） |
 | `modules/gimbal/`、`shooter/`、`leg/`、`arm/` | （规划）云台、发射、轮腿、机械臂（工程） |
@@ -56,8 +56,8 @@ robot/
 | 电池：分压比、低电量阈值 | `tasks/indicator_task.c` 的 `battery_config` | 板子和电池的属性，通用（ADR 0038） |
 | M3508 / C620 换算常数 | `02_devices/motor/motor.h` 的 `DJI_M3508_*`、`DJI_C620_*` | 附录 A.2 |
 | π | `03_algorithm/math/math_const.h` 的 `RM_PI` 等 | |
-| EKF 噪声（Q、R）、加速度低通系数 | `ins/ins.c` 开头 | 沿用旧工程 INS_Task.c |
-| 陀螺零偏标定、静止时在线修正的阈值 | `ins/ins.h` 的 `INS_CALIB_*`、`INS_STILL_*` | ADR 0033、0039 |
+| EKF 噪声（Q、R）、加速度低通系数 | `modules/ins/ins.c` 开头 | 沿用旧工程 INS_Task.c |
+| 陀螺零偏标定、静止时在线修正的阈值 | `modules/ins/ins.h` 的 `INS_CALIB_*`、`INS_STILL_*` | ADR 0033、0039 |
 | IMU 加热：目标温度、周期、PID、占空比上限 | `02_devices/imu/bmi088.h` 的 `BMI088_HEATER_TARGET_C`、`bmi088.c` 的 `HEATER_*` | 按本板实测（ADR 0042） |
 | 遥控丢失超时 200 ms | `02_devices/remote/dr16.h` 的 `RC_LOST_TIMEOUT_MS` | 安全约定（ADR 0030） |
 | IMU 就绪判定 20 ms | `01_applic/modules/ins/ins.h` 的 `IMU_STALE_MS` | 安全约定（ADR 0034） |

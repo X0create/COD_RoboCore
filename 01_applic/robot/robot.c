@@ -11,10 +11,12 @@
 #include "robot.h"
 
 #include "01_applic/system/app_main.h"
-#include "01_applic/system/comm_rx_common.h"
+#include "01_applic/tasks/comm_rx_task.h"
+#include "01_applic/tasks/control_task.h"
 #include "01_applic/tasks/detect_task.h"
 #include "01_applic/tasks/indicator_task.h"
 #include "01_applic/tasks/ins_task.h"
+#include "01_applic/tasks/log_task.h"
 #include "04_core/log/log.h"
 #include "robot_config.h"
 
@@ -81,7 +83,7 @@ static StackType_t indicator_stack[256]; /* 1 KB */
 static StackType_t log_stack[256];       /* 1 KB */
 
 static RmTask ins_task, control_task, detect_task, indicator_task,
-    log_task; /* comm_rx_task 在 01_applic/system/comm_rx_common.c（中断要用它唤醒任务） */
+    log_task; /* comm_rx_task 在 comm_rx_task.c（中断要用它唤醒任务） */
 
 #define STACK_WORDS(stack) ((uint32_t)(sizeof(stack) / sizeof((stack)[0])))
 

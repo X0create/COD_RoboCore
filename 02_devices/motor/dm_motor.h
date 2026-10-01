@@ -43,7 +43,7 @@ bool dm_config_valid(const MotorConfig *cfg);
 
 MotorCaps dm_caps(void);
 
-/** 解析反馈帧 @note out 的 online、stamp_us 不在这里填 */
+/** 解析反馈帧 @note out 的 online 不在这里填 */
 void dm_decode_feedback(const MotorConfig *cfg, const uint8_t data[8], MotorFeedback *out);
 
 /** 编码 MIT 帧（输出轴单位，乘方向；各量截到范围内） */

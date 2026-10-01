@@ -15,9 +15,8 @@ if(NOT RM_BOARD)
 endif()
 
 add_library(rm_app STATIC
-    # 上电顺序、接收公共部分
+    # 上电顺序
     system/app_main.c
-    system/comm_rx_common.c
     # 全部任务（≈ 老模板 Application/Task）
     tasks/ins_task.c
     tasks/control_task.c

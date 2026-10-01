@@ -114,7 +114,7 @@ void gimbal_step(Gimbal *self, ...)
 - **必须**：任务文件都放在 `01_applic/tasks/`（ADR 0057）。
   任务只写“什么时候跑、按什么顺序调用谁”，计算放进 `modules/` 等其他文件。
 - **必须**：任务的文件、入口函数、任务名都以 `_task` 结尾：`detect_task.c`、`detect_task_entry`、任务名 `"detect_task"`；
-  不是任务的文件不要以 `_task` 结尾（例：接收的公共函数叫 `comm_rx_common.c`，任务本身是 `comm_rx_task.c`）。
+  不是任务的文件不要以 `_task` 结尾（例：`modules/ins/ins.c` 是算法，任务本身是 `tasks/ins_task.c`）。
 - **应该**按以下顺序 include，组与组之间空一行：
   1. 本模块自己的头文件；
   2. C 标准库；
@@ -289,7 +289,7 @@ float out = sin(angle_rad) * 0.5;
   供 `01_applic/tasks/` 里的任务直接使用；其他层不得 include `robot.h`。
 - **必须**：不写递归，不用变长数组（VLA）；较大的缓冲区（几百字节以上）不放在栈上。
 - **必须**：DMA 缓冲区用 `RM_DMA_BUF` 声明，BDMA 缓冲区用 `RM_BDMA_BUF` 声明（ADR 0021）。
-- **必须**：`volatile` 只用于硬件寄存器和中断里置位的简单标志，**不能**当作任务之间的同步手段。跨任务共享的数据用 `snapshot` 或临界区。
+- **必须**：`volatile` 只用于硬件寄存器和中断里置位的简单标志，**不能**当作任务之间的同步手段。跨任务共享的数据用 `watchdog_feed_data` / `watchdog_read_data` 或临界区。
 - **应该**：只在通信帧结构上用 `packed`，并且不对 packed 结构体的成员取地址。
 - **应该**：配置（`const XxxConfig`）和运行状态（`Xxx`）分成两个结构体。
 
@@ -340,10 +340,10 @@ Motor *yaw_motor = malloc(sizeof(Motor));
 
 ## 11. 中断与并发
 
-- **必须**：中断处理函数里只做两件事：把数据放进环形缓冲区，或者通知任务。不调用控制逻辑，不调用 `snapshot_*` / `xxx_read()`，不打日志。
+- **必须**：中断处理函数里只做两件事：把数据放进环形缓冲区，或者通知任务。不调用控制逻辑，不调用 `watchdog_*` / `xxx_read()`，不打日志。
 - **必须**：临界区里不延时、不调用任何阻塞函数，并且保持很短（拷贝一个快照的量级）。
 - **必须**：任务里用 `rm_task_delay_until()` 或 `rm_task_delay()`，不用 `HAL_Delay()`。
-- **必须**：跨任务的数据由产生它的模块保存（模块对象里放数据 + `Snapshot`），只有这个模块的 `.c` 写；别人只调用它的 `xxx_read()`（ADR 0058）。
+- **必须**：跨任务的数据由产生它的模块保存（模块对象里放数据 + `Watchdog`，在线状态只看这一个，ADR 0059），只有这个模块的 `.c` 写；别人只调用它的 `xxx_read()`（ADR 0058）。
 - **必须**：不能丢的信号（急停、遥控丢失、解锁）作为状态保存，不作为事件放进事件队列。
 - **必须**：只在中断里调用带 `FromISR` 后缀的 RTOS 接口，并且只在优先级数值不小于 `configMAX_SYSCALL_INTERRUPT_PRIORITY` 的中断里调用。
 
@@ -359,7 +359,7 @@ Motor *yaw_motor = malloc(sizeof(Motor));
 
 | 写法 | 用在 | 例子 |
 | --- | --- | --- |
-| `RM_ASSERT(cond)` | 编程错误：不该发生，一旦发生说明代码或配置写错了 | 初始化失败、在中断里调用 `snapshot_*` |
+| `RM_ASSERT(cond)` | 编程错误：不该发生，一旦发生说明代码或配置写错了 | 初始化失败、在中断里调用 `watchdog_*` |
 | `RM_CHECK(cond, ERR_XXX)` | 运行中可能发生、可以恢复的问题 | 外部数据非法（CRC、长度、NaN）、队列满、EKF 发散 |
 | 返回 `bool` / 状态枚举 | 告诉调用方“没做成” | 见 9.1 |
 

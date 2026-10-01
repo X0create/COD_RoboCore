@@ -66,17 +66,18 @@ bool vt13_decode(const uint8_t frame[VT13_FRAME_LEN], VtRcState *out)
 void vt_link_init(VtLink *self)
 {
     *self = (VtLink){ 0 };
-    watchdog_register(&self->wd, "vt_link", VT_LINK_TIMEOUT_MS);
+    watchdog_register(&self->rc_wd, "vt13", VT_LINK_TIMEOUT_MS);
+    watchdog_register(&self->kbm_wd, "vt_kbm", VT_LINK_TIMEOUT_MS);
 }
 
 bool vt_link_read_rc(const VtLink *self, VtRcState *out)
 {
-    return snapshot_read(&self->rc_snap, &self->rc, out, sizeof(*out), VT_LINK_TIMEOUT_MS);
+    return watchdog_read_data(&self->rc_wd, &self->rc, out, sizeof(*out));
 }
 
 bool vt_link_read_kbm(const VtLink *self, KbmState *out)
 {
-    return snapshot_read(&self->kbm_snap, &self->kbm, out, sizeof(*out), VT_LINK_TIMEOUT_MS);
+    return watchdog_read_data(&self->kbm_wd, &self->kbm, out, sizeof(*out));
 }
 
 static void handle_ref_frame(VtLink *self, const RefFrame *f)
@@ -95,7 +96,7 @@ static void handle_ref_frame(VtLink *self, const RefFrame *f)
         .mouse_right = d[7] != 0u,
         .keys = (uint16_t)(d[8] | (d[9] << 8)),
     };
-    snapshot_write(&self->kbm_snap, &self->kbm, &kbm, sizeof(kbm));
+    watchdog_feed_data(&self->kbm_wd, &self->kbm, &kbm, sizeof(kbm));
 }
 
 typedef enum
@@ -128,7 +129,7 @@ static ParseResult parse_head(VtLink *self, size_t *consumed)
         {
             return PARSE_BAD;
         }
-        snapshot_write(&self->rc_snap, &self->rc, &rc, sizeof(rc));
+        watchdog_feed_data(&self->rc_wd, &self->rc, &rc, sizeof(rc));
         *consumed = VT13_FRAME_LEN;
         return PARSE_CONSUMED;
     }
@@ -177,10 +178,6 @@ void vt_link_on_bytes(VtLink *self, const uint8_t *data, uint32_t len)
         {
             consumed = 1u; /* 丢掉开头一个字节，从下一个字节重新找帧头 */
             self->bad_bytes++;
-        }
-        else
-        {
-            watchdog_feed(&self->wd);
         }
         memmove(self->buf, self->buf + consumed, self->len - consumed);
         self->len -= (uint32_t)consumed;

@@ -68,7 +68,7 @@ void dr16_init(Dr16 *self)
 
 bool dr16_read(const Dr16 *self, RcState *out)
 {
-    return snapshot_read(&self->snap, &self->rc, out, sizeof(*out), RC_LOST_TIMEOUT_MS);
+    return watchdog_read_data(&self->wd, &self->rc, out, sizeof(*out));
 }
 
 void dr16_on_bytes(Dr16 *self, const uint8_t *data, uint32_t len, uint64_t now_us)
@@ -94,8 +94,7 @@ void dr16_on_bytes(Dr16 *self, const uint8_t *data, uint32_t len, uint64_t now_u
             RcState state;
             if (dr16_decode(self->frame, &state))
             {
-                snapshot_write(&self->snap, &self->rc, &state, sizeof(state));
-                watchdog_feed(&self->wd);
+                watchdog_feed_data(&self->wd, &self->rc, &state, sizeof(state));
             }
             else
             {

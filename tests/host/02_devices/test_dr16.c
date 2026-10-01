@@ -190,8 +190,10 @@ static void test_lost_after_timeout(void)
     dr16_on_bytes(dr16, f, DR16_FRAME_LEN, 10000000u);
     fake_time_advance_ms(RC_LOST_TIMEOUT_MS);
     TEST_ASSERT_TRUE(dr16_read(dr16, &rc));
+    TEST_ASSERT_TRUE(watchdog_is_online(&dr16->wd));
     fake_time_advance_ms(1u);
     TEST_ASSERT_FALSE(dr16_read(dr16, &rc));
+    TEST_ASSERT_FALSE(watchdog_is_online(&dr16->wd)); /* 日志和控制同一个判断 */
 }
 
 int main(void)

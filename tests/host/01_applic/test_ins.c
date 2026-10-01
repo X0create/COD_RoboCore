@@ -19,7 +19,10 @@ static const InsConfig rot_z90 = { .install_rotation = { 0, -1, 0, 1, 0, 0, 0, 0
 /* 芯片 x 轴朝机体 z（上）：机体 x = 芯片 y，机体 y = 芯片 z，机体 z = 芯片 x */
 static const InsConfig chip_x_up = { .install_rotation = { 0, 1, 0, 0, 0, 1, 1, 0, 0 } };
 
-static Ins ins;
+/* 每个测试用一个新的 Ins：看门狗每个实例只能登记一次（ins_init 的前提） */
+static Ins pool[16];
+static unsigned pool_used;
+static Ins *ins;
 
 static void set16(SpiDevice dev, uint8_t reg, int16_t v)
 {
@@ -42,8 +45,9 @@ static void sensor(int16_t gx, int16_t gy, int16_t gz)
 
 static void start(const InsConfig *cfg)
 {
-    ins_init(&ins, cfg);
-    TEST_ASSERT_EQUAL_INT(BMI088_OK, ins_start(&ins));
+    ins = &pool[pool_used++];
+    ins_init(ins, cfg);
+    TEST_ASSERT_EQUAL_INT(BMI088_OK, ins_start(ins));
 }
 
 /* 跑 n 步（每步假时钟前进 1 ms），返回最后一个非 NONE 事件 */
@@ -53,7 +57,7 @@ static InsEvent steps(uint32_t n)
     for (uint32_t i = 0u; i < n; i++)
     {
         fake_time_advance_ms(1u);
-        const InsEvent ev = ins_step(&ins);
+        const InsEvent ev = ins_step(ins);
         if (ev != INS_EVENT_NONE)
         {
             last = ev;
@@ -80,11 +84,11 @@ static void test_publishes_only_after_calibration(void)
     sensor(10, -5, 3); /* 零偏约 0.01 rad/s 量级 */
     TEST_ASSERT_EQUAL_INT(INS_EVENT_NONE, steps(INS_CALIB_SAMPLES - 1u));
     ImuState st;
-    TEST_ASSERT_FALSE(ins_read(&ins, &st));
+    TEST_ASSERT_FALSE(ins_read(ins, &st));
 
     TEST_ASSERT_EQUAL_INT(INS_EVENT_CALIBRATED, steps(1u));
     steps(1u);
-    TEST_ASSERT_TRUE(ins_read(&ins, &st));
+    TEST_ASSERT_TRUE(ins_read(ins, &st));
     for (int i = 0; i < 3; i++)
     {
         TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, st.gyro_rad_s[i]);
@@ -100,14 +104,14 @@ static void test_moving_rejects_then_retries(void)
     {
         sensor((i % 2u) ? 300 : -300, 0, 0); /* ±0.32 rad/s 来回 */
         fake_time_advance_ms(1u);
-        const InsEvent ev = ins_step(&ins);
+        const InsEvent ev = ins_step(ins);
         if (i + 1u == INS_CALIB_SAMPLES)
         {
             TEST_ASSERT_EQUAL_INT(INS_EVENT_CALIB_NOT_STILL, ev);
         }
     }
     ImuState st;
-    TEST_ASSERT_FALSE(ins_read(&ins, &st));
+    TEST_ASSERT_FALSE(ins_read(ins, &st));
 
     sensor(0, 0, 0);
     TEST_ASSERT_EQUAL_INT(INS_EVENT_CALIBRATED, steps(INS_CALIB_SAMPLES));
@@ -130,7 +134,7 @@ static void test_install_rotation_applied(void)
     sensor(100, 0, 0);
     steps(1u);
     ImuState st;
-    TEST_ASSERT_TRUE(ins_read(&ins, &st));
+    TEST_ASSERT_TRUE(ins_read(ins, &st));
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, st.gyro_rad_s[0]);
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 100.0f * GYRO_LSB, st.gyro_rad_s[1]);
 }
@@ -144,7 +148,7 @@ static void test_bad_frames_stop_publishing(void)
     set16(SPI_DEV_IMU_ACCEL, 0x16, 0); /* 加速度全零 */
     TEST_ASSERT_EQUAL_INT(INS_EVENT_READ_FAILED, steps(IMU_STALE_MS + 1u));
     ImuState st;
-    TEST_ASSERT_FALSE(ins_read(&ins, &st));
+    TEST_ASSERT_FALSE(ins_read(ins, &st));
     TEST_ASSERT_EQUAL_FLOAT(0.0f, fake_pwm_duty(PWM_IMU_HEATER));
 
     fake_spi_set_reg(SPI_DEV_IMU_GYRO, 0x00, 0xFF); /* 陀螺 ID 错 */
@@ -163,11 +167,11 @@ static void test_uses_measured_dt(void)
     for (int i = 0; i < 250; i++)
     {
         fake_time_advance_ms(2u);
-        TEST_ASSERT_EQUAL_INT(INS_EVENT_NONE, ins_step(&ins));
+        TEST_ASSERT_EQUAL_INT(INS_EVENT_NONE, ins_step(ins));
         t_s += 0.002f;
     }
     ImuState st;
-    TEST_ASSERT_TRUE(ins_read(&ins, &st));
+    TEST_ASSERT_TRUE(ins_read(ins, &st));
     /* 第一次更新用标称 1 ms，其余 249 次各 2 ms */
     TEST_ASSERT_FLOAT_WITHIN(5e-3f, rate * (t_s - 0.001f), st.yaw_rad);
 }
@@ -179,7 +183,7 @@ static void test_level_attitude(void)
     sensor(0, 0, 0);
     steps(INS_CALIB_SAMPLES + 3000u);
     ImuState st;
-    TEST_ASSERT_TRUE(ins_read(&ins, &st));
+    TEST_ASSERT_TRUE(ins_read(ins, &st));
     TEST_ASSERT_FLOAT_WITHIN(1e-2f, 0.0f, st.pitch_rad);
     TEST_ASSERT_FLOAT_WITHIN(1e-2f, 0.0f, st.roll_rad);
 }
@@ -192,14 +196,14 @@ static void test_still_tracks_yaw_bias(void)
     steps(INS_CALIB_SAMPLES + 1u);
     sensor(0, 0, 10);
     steps(60000u);
-    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 10.0f * GYRO_LSB, ins.imu.gyro_offset_rad_s[2]);
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, ins.imu.gyro_offset_rad_s[0]);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 10.0f * GYRO_LSB, ins->imu.gyro_offset_rad_s[2]);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, ins->imu.gyro_offset_rad_s[0]);
 
     ImuState before;
     ImuState after;
-    TEST_ASSERT_TRUE(ins_read(&ins, &before));
+    TEST_ASSERT_TRUE(ins_read(ins, &before));
     steps(10000u);
-    TEST_ASSERT_TRUE(ins_read(&ins, &after));
+    TEST_ASSERT_TRUE(ins_read(ins, &after));
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, before.yaw_rad, after.yaw_rad); /* 10 s 内漂移 < 1 mrad */
 }
 
@@ -211,7 +215,7 @@ static void test_slow_rotation_not_absorbed(void)
     steps(INS_CALIB_SAMPLES + 1u);
     sensor(0, 0, 30);
     steps(30000u);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, ins.imu.gyro_offset_rad_s[2]);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, ins->imu.gyro_offset_rad_s[2]);
 }
 
 /* 在动（角速度来回变化）：不更新零偏 */
@@ -225,7 +229,7 @@ static void test_vibration_not_absorbed(void)
         sensor(0, 0, (i % 2u) ? 60 : -40); /* 均值 10 LSB，但标准差约 0.05 rad/s */
         steps(1u);
     }
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, ins.imu.gyro_offset_rad_s[2]);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, ins->imu.gyro_offset_rad_s[2]);
 }
 
 /* 修正的是机体 z 轴：芯片 x 朝上时改芯片 x 的零偏，芯片 z 不动 */
@@ -236,8 +240,8 @@ static void test_tracks_body_z_through_install_rotation(void)
     steps(INS_CALIB_SAMPLES + 1u);
     sensor(10, 0, 0);
     steps(60000u);
-    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 10.0f * GYRO_LSB, ins.imu.gyro_offset_rad_s[0]);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, ins.imu.gyro_offset_rad_s[2]);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 10.0f * GYRO_LSB, ins->imu.gyro_offset_rad_s[0]);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, ins->imu.gyro_offset_rad_s[2]);
 }
 
 int main(void)

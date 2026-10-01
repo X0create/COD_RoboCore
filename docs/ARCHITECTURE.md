@@ -114,7 +114,7 @@ flowchart TD
     SUB["01_applic/modules/<机构><br/>云台 / 底盘 / 发射 / 腿 / INS"]
     DEV["02_devices<br/>电机 / IMU / 遥控 / 裁判 / 视觉"]
     ALG["03_algorithm<br/>PID / 滤波 / 四元数 / LQR"]
-    CORE["04_core<br/>快照 / 看门狗 / 日志 / 参数 / 错误"]
+    CORE["04_core<br/>看门狗 / 日志 / 参数 / 错误"]
     PLAT["05_platform<br/>CAN / UART / SPI / 时间 / Flash 接口"]
     H7["05_platform/stm32h7"]
     F4["05_platform/stm32f4"]
@@ -142,7 +142,7 @@ flowchart TD
 | 01_applic/modules/<机构> | 一个机构的完整闭环（云台、底盘、发射、腿、INS） | 02_devices、03_algorithm、04_core | include 其他机构；只能走话题 |
 | 02_devices | 一个外部设备的协议和状态（在线、原始值 → SI 单位） | 05_platform 接口、03_algorithm、04_core | HAL、具体芯片头文件 |
 | 03_algorithm | 纯计算，输入输出全走参数 | 标准库、CMSIS-DSP（可选） | RTOS、HAL、全局变量 |
-| 04_core | 快照（util/snapshot）、看门狗、日志、参数存储、OS 封装 | 05_platform 接口、FreeRTOS | 任何具体设备 |
+| 04_core | 看门狗（设备在线 + 最新数据）、日志、参数存储、OS 封装 | 05_platform 接口、FreeRTOS | 任何具体设备 |
 | 05_platform | 外设驱动的抽象接口 + 每种芯片一份实现 | HAL（仅实现目录） | 任何上层 |
 
 依赖规则靠两道检查：① CMake 每层一个库目标，并只把本层的 `include/` 目录导出给允许使用它的上层，可以挡住大部分越层 include，但挡不住相对路径和同层互相引用；② `tools/check_deps.py` 扫描所有 `#include`，对照上表检查方向，包括“机构之间不互相 include”，在 CI 里运行。
@@ -161,7 +161,7 @@ COD_RoboCore/
 │   ├── board-dji_c.cmake
 │   └── warnings.cmake           # -Wall -Wextra -Werror -Wdouble-promotion 等
 ├── 01_applic/                   # 业务（≈ 老模板 Application/），分 system / tasks / modules / robot（ADR 0054–0056）
-│   ├── system/                  # 通用的框架：app_main（上电顺序）safety_gate comm_rx_common（ADR 0050）
+│   ├── system/                  # 通用的框架：app_main（上电顺序）safety_gate（ADR 0050）
 │   ├── tasks/                   # 全部任务：ins control comm_rx detect indicator log（≈ 老模板 Application/Task，ADR 0057）
 │   ├── modules/                 # 机构，只放计算；功率控制属于 chassis / leg 内部，见“功率控制”一节
 │   │   └── ins/  chassis/  gimbal/  shooter/  leg/  arm/
@@ -187,7 +187,6 @@ COD_RoboCore/
 │   └── ballistic/
 ├── 04_core/
 │   ├── os/                      # 任务创建、临界区（静态分配）
-│   ├── msg/                     # （规划）event_queue spsc_ring
 │   ├── watchdog/                # 设备在线检测、任务心跳、喂 IWDG
 │   ├── error/                   # RM_ASSERT、RM_CHECK、ErrorCode、HardFault 记录
 │   ├── log/                     # SEGGER RTT 日志
@@ -278,7 +277,7 @@ bool can_read(CanBusId bus, CanFrame *out);         // 取一帧中断收下的�
   - **D3 域的外设（SPI6、LPUART1、I2C4、ADC3 等）由 BDMA 服务，BDMA 只能访问 SRAM4（`0x38000000`）**。这些外设的 DMA 缓冲区要用另一个宏 `RM_BDMA_BUF` 放进 SRAM4 段。COD-H7-Template 的分散加载文件里已经有 `.SRAM4` 段，并且初始化了 BDMA 和 ADC3。
   - 为什么选“不可缓存”而不是 Cache 维护，详见 ADR 0021。
 
-### 2. 共享数据：谁产生谁保存，`xxx_read()` 读取（ADR 0058）
+### 2. 共享数据：谁产生谁保存，`xxx_read()` 读取（ADR 0058、0059）
 
 跨任务的数据不经过中间的“话题”对象，而是**由产生它的模块自己保存最新一份**，别人调用这个模块的读取函数整份拷贝出来：
 
@@ -289,7 +288,7 @@ typedef struct { int16_t ch[5]; RcSwitch sw[2]; /* ... */ } RcState;
 typedef struct {
     /* ... 分帧状态 ... */
     RcState  rc;     // 最新一帧合法数据，只由 dr16.c 写
-    Snapshot snap;   // rc 的写入时刻（04_core/util/snapshot）
+    Watchdog wd;     // rc 的接收时刻和超时（04_core/watchdog），控制和日志都看它
 } Dr16;
 
 bool dr16_read(const Dr16 *self, RcState *out);   // 200 ms 内有合法帧才返回 true
@@ -305,25 +304,31 @@ bool imu_ready = ins_read(&ins, &imu);
 
 - **最新值语义**：控制量只关心最新一帧，不用队列，不会积压。
 - **类型明确**：读取函数的参数是具体的模块对象和数据类型，由编译器检查；不用字符串名字，也不用 `void *` 通用接口。这是和 basic\_framework 最大的区别。
-- **线程安全**：`snapshot_write()` / `snapshot_read()` 在临界区里拷贝数据和时间戳（数据 ≤ 256 字节），调用方不用自己加锁；只能在任务里调用，中断里禁止。
+- **线程安全**：`watchdog_feed_data()` / `watchdog_read_data()` 在临界区里拷贝数据和时间戳（数据 ≤ 256 字节），调用方不用自己加锁；只能在任务里调用，中断里禁止。
 - **带时间戳**：每次写入记录 64 位微秒时间；超时时限由产生数据的模块定（遥控 200 ms、IMU 20 ms），写在它的头文件里，读取函数超时就返回 false，读取方走安全门。
 - **只有一个写入者**：数据是模块对象的成员，只有这个模块的 `.c` 写它，不需要运行时“认领”。
 - **事件**（按键单击、UI 刷新）另用 `event_queue`，定长，满了丢新事件并计数；急停、解锁这类不能丢的信号作为状态保存，不走事件队列。
 
-### 3. 看门狗（在线检测）
+### 3. 看门狗（在线检测 + 最新数据）
 
-每个设备结构体里有一个 `Watchdog`：**收到一帧合法数据**（校验通过、字段在有效范围内）才 `watchdog_feed()`，喂的是 `rm_time_now_us()` 的时间戳。
+每个设备（以及 ins 这类产生数据的模块）结构体里有一个 `Watchdog`：**收到一帧合法数据**（校验通过、字段在有效范围内）才喂狗，
+喂的是 `rm_time_now_us()` 的时间戳。有数据要给别的任务读的，用 `watchdog_feed_data(wd, &slot, &new, size)` 把数据和时刻在同一个临界区里写进去；
+读取函数 `dr16_read()`、`ins_read()`、`motor_read_feedback()` 内部都是 `watchdog_read_data()`。
 
-**在线与否在读取时判断，不等守护任务来标记。** `watchdog_is_online(wd, now_us)` 用“现在 − 最后喂狗时间 < 超时”当场计算。control_task 每个周期读快照时自己算，所以检测延迟就是超时本身。如果等 100 Hz 的守护任务去标记离线，最坏还要再多 10 ms。
+**一个设备的在线状态只有这一个来源（ADR 0059）。** 控制用的 `xxx_read()` 和 detect_task 的上线 / 离线日志读的是同一个时间戳、同一个超时、
+同一条边界（现在 − 最后喂狗 ≤ 超时算在线），不会出现“日志说离线、控制仍认为在线”。
 
-04_core/watchdog 的守护任务以 100 Hz 扫描，只负责**报告**：执行离线回调、在 RTT 打日志、驱动 LED 或蜂鸣器。
+**在线与否在读取时判断，不等守护任务来标记。** control_task 每个周期读数据时当场算，所以检测延迟就是超时本身。
+如果等 100 Hz 的 detect_task 去标记离线，最坏还要再多 10 ms。detect_task 只负责**报告**：在 RTT 打上线 / 离线日志（以后驱动 LED 或蜂鸣器）。
 
 ```c
-static Watchdog yaw_motor_wd = { .name = "yaw_motor", .timeout_ms = 20, .on_offline = yaw_motor_on_offline };
+watchdog_register(&self->wd, "dr16", RC_LOST_TIMEOUT_MS);          // xxx_init() 里登记：名字和超时
+watchdog_feed_data(&self->wd, &self->rc, &state, sizeof(state));   // 收到合法帧
+return watchdog_read_data(&self->wd, &self->rc, out, sizeof(*out)); // dr16_read()
 ```
 
 - 喂狗和判断都读 `rm_time_now_us()` 这一个 64 位时钟，不会出现 UniC 那种“两个时钟起点不同”的问题（`two-clocks-watchdog-bug`），所以不另设“时钟错误”检查（ADR 0026）。
-- 需要被监测的设备必须显式登记；`robot_init()` 结束时打印一次“本固件认为车上有哪些设备”的清单，这是排查“某设备没接上”时第一个要看的东西。
+- 需要被监测的设备必须显式登记；detect_task 开始时打印一次“本固件认为车上有哪些设备”的清单，这是排查“某设备没接上”时第一个要看的东西。
 
 子系统每个周期先查自己依赖的设备是否在线，有一个离线就执行本机构规定的安全动作（不是笼统地“输出 0”，见“运行时契约”第 5 小节）。
 
@@ -723,7 +728,7 @@ void startup_task(void *argument)
 **数据类型和产生它的模块放在一起**（ADR 0058：取代 0013、0045 的 `04_core/msg/`）。`RcState` 在 `dr16.h`，`ImuState` 在 `ins.h`，
 `VtRcState` / `KbmState` 在 `vt_link.h`；以后的 `RobotCmd` 在 command 模块、`GimbalState` 在 gimbal 模块。
 
-- 模块对象里放“最新一份数据 + `Snapshot`”，提供 `xxx_read(const Xxx *self, T *out)`；超时时限是这个模块头文件里的常量。
+- 模块对象里放“最新一份数据 + `Watchdog`”，提供 `xxx_read(const Xxx *self, T *out)`；超时时限是这个模块头文件里的常量，登记看门狗时传入。
 - 每个数据结构体用 `_Static_assert(sizeof(T) <= 256, "...")` 限制大小（临界区拷贝时间）。
 - 读取方只 include 产生方的头文件；机构之间仍不互相 include，需要别的机构的数据时由 `robot.c` / control_task 读出来传进去。
 
@@ -738,7 +743,7 @@ typedef struct {
     Pid         yaw_angle_pid, yaw_speed_pid;      // 算法状态归本子系统所有
     Pid         pitch_angle_pid, pitch_speed_pid;
     GimbalState state;        // 本云台的最新状态，只由 gimbal.c 写
-    Snapshot    snap;
+    Watchdog    state_wd;     // state 的写入时刻和超时
 } Gimbal;
 
 bool gimbal_init(Gimbal *self, Motor *yaw, Motor *pitch);   // 配置不匹配返回 false
@@ -752,7 +757,7 @@ bool gimbal_read_state(const Gimbal *self, GimbalState *out);
 
 | 操作 | 任务中 | RTOS 管理的中断 | 高于 RTOS 的中断 | 实现 |
 | --- | --- | --- | --- | --- |
-| `snapshot_write()` / `xxx_read()` | 可以 | 禁止 | 禁止 | 任务临界区内拷贝数据和时间戳 |
+| `watchdog_feed_data()` / `xxx_read()` | 可以 | 禁止 | 禁止 | 任务临界区内拷贝数据和时间戳 |
 | `event_queue_push()` | 可以 | `event_queue_push_from_isr()` | 禁止 | 任务版用任务临界区，ISR 版用 ISR 临界区 |
 | `event_queue_pop()` | 可以 | 禁止 | 禁止 | 任务临界区 |
 | `spsc_ring_push()` | —— | 可以 | 可以 | 无锁：只有一个生产者写 head、一个消费者写 tail |
@@ -1177,9 +1182,9 @@ CMake 是唯一的“真相来源”：它同时生成板子固件和 PC 测试�
 | `GimbalAngles`、`BodyTilt` | 随机姿态下与数值微分对比 |
 | 底盘运动学 | 正解 ∘ 逆解 = 恒等 |
 | 裁判 / 遥控 / 达妙协议 | 录制的真实帧，含 CRC 错误帧、截断帧 |
-| 快照、看门狗 | 超时、过期判定；读取失败时不改 out；两份实例互不干扰 |
+| 看门狗 | 超时边界（≤ 超时算在线）；数据和时刻一起写入、读出；两份实例互不干扰 |
 | 模式状态机 | 状态 × 事件全表遍历 |
-| 快照、event\_queue 并发 | host 上多线程压力测试 + ThreadSanitizer；板上再用 tests/target 自测固件验证（中断抢占只有板上测得出） |
+| 看门狗数据读写、event\_queue 并发 | host 上多线程压力测试 + ThreadSanitizer；板上再用 tests/target 自测固件验证（中断抢占只有板上测得出） |
 | 参数存储 | host 假 Flash 模拟写到一半掉电、CRC 错、版本不匹配 |
 | 安全门 | 逐条触发全车停、机构停的条件，检查受影响的机构和恢复斜坡 |
 
@@ -1318,6 +1323,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0056 | 用户 2026-10-01：“写每个兵种的没什么意义，只需要写一个通用的”。去掉兵种这一层：`01_applic/robots/infantry/` 改为 **`01_applic/robot/`**，文件去掉兵种前缀（`robot_config.h`、`robot.h/.c`、`control_task.c`、`comm_rx_task.c`、`log_task.c`），删除规划中的 hero / engineer / heavy / wheel_leg / sentry 目录；去掉 `RM_ROBOT`，预设 `h723-infantry-debug` → **`h723-debug`**，Keil Target 用 CubeMX 原名 `dm_mc02`。本仓库是通用模板，做具体的车（含多板的每块板）就复制一份仓库改 `robot/`。取代 0051 ② 的兵种前缀规则和 0054 的 `robots/` 部分 | 模板里只有一套代码要维护；新车从完整可编译的模板开始 |
 | 0057 | 用户 2026-10-01 仍觉得不如老模板直观（任务分在两个目录）。去掉兵种层（0056）后“通用 / 兵种特有”的区分已不成立，**全部 6 个任务放进 `01_applic/tasks/`**（≈ 老模板 Application/Task）：`robot/robot_control_task.c` 等改名 `tasks/control_task.c`、`comm_rx_task.c`、`log_task.c`；`robot/` 只留参数和对象（`robot_config.h`、`robot.h/.c`）。取代 0055 的“两处” | 一个目录看全部任务，和老模板一一对应 |
 | 0058 | 用户 2026-10-01 仍觉得“话题 / 拷贝绕”，选**去掉话题层**：删除 `04_core/msg/`（`Topic`、`xxx_claim/publish/read`、`rc_state.h` 等四个消息头文件），数据类型移到产生它的模块（`RcState` → `dr16.h`，`ImuState` → `ins.h`，`VtRcState`/`KbmState` → `vt_link.h`）；模块对象自带“最新一份 + `Snapshot`”（`04_core/util/snapshot`，即原 topic 去掉认领），读取用 `dr16_read()`、`ins_read()`、`vt_link_read_rc/kbm()`，超时由产生方定。`robot.c` 不再有话题实例，`dr16_init`/`ins_init`/`vt_link_init` 不再会失败。取代 0013 的话题实例部分；其余章节里规划中的“话题”（`RobotCmd`、`GimbalState`、话题表）都按本条理解为“产生方保存 + 读取函数” | 跳到定义一步就到数据所在模块；数据是模块成员，天然只有一个写入者，不需要运行时认领 |
+| 0059 | 用户 2026-10-01 评审“同种数据东一块西一块”：① **在线状态只有一个来源**：`Snapshot` 并入 `Watchdog`（新增 `watchdog_feed_data()` / `watchdog_read_data()`，数据和接收时刻在同一临界区写入），删除 `04_core/util/snapshot`；dr16、vt_link（`vt13`、`vt_kbm` 各一个）、ins、电机反馈的读取函数和 detect 日志都看同一个看门狗；超时边界统一为“≤ 超时算在线”（电机原为 < 20 ms）；`MotorFeedback.stamp_us` 删除（接收时刻只在看门狗里）；读取失败时仍拷出旧数据（只能用来打印）；② **任务声明归位**：每个任务一对 `tasks/xxx_task.{h,c}`，`robot.h` 只声明车上的对象；③ **接收流程一个文件**：`system/comm_rx_common.{h,c}` 并入 `tasks/comm_rx_task.c`（中断回调、打开接收、分派、bus-off 恢复），未使用的 `comm_rx_start_usb` 删除（接视觉时再加）；④ `04_core/msg/` 规划条目删除，事件队列、环形队列以后放 `util/` | 一个状态一个权威来源；找任务入口、看接收流程都只有一个文件 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
@@ -1491,7 +1497,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 
 接线沿用 COD-H7-Template：M3508 接 FDCAN1，ID 1；DR16 接 UART5。
 
-- [ ] 共享数据：`04_core/util/snapshot`（临界区拷贝 + 时间戳）、`RcState`（dr16）完成；`RobotCmd` 未做（2026-10-01 ADR 0058 去掉话题层）
+- [ ] 共享数据：`watchdog_feed_data/read_data`（临界区拷贝 + 时间戳，ADR 0059）、`RcState`（dr16）完成；`RobotCmd` 未做（2026-10-01 ADR 0058 去掉话题层）
 - [x] `04_core/watchdog`：在线状态在读取时计算；清单打印（2026-09-28，detect_task 打印；上板待 V4）
 - [x] `02_devices/remote/dr16`：检查帧长和取值范围，输出 `RcState`；用录制帧和错误帧做单元测试（模糊测试推迟到阶段 5 以后）（2026-09-28，主机测试 9 项，帧由独立的组帧函数生成、并用 Python 算的字节核对；上板待 V10–V12）
 - [x] `02_devices/motor`：`motor.h` 统一接口 + `dji_motor.c`（先只做 M3508）、ID 冲突检查、反馈快照（2026-09-28：M3508 / M2006 / GM6020 反馈，M3508 / M2006 力矩指令，主机测试；上板待 V30–V32）

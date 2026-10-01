@@ -14,8 +14,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "04_core/util/snapshot.h"
 #include "04_core/watchdog/watchdog.h"
+#include "05_platform/compiler.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -79,9 +79,8 @@ _Static_assert(sizeof(RcState) <= 256, "消息不超过 256 字节（运行时�
 
 typedef struct
 {
-    RcState rc;    /* 最新一帧合法数据，只通过 dr16_read() 读 */
-    Snapshot snap; /* rc 的写入时刻 */
-    Watchdog wd;   /* 只用于上线 / 离线日志和设备清单；丢失判定看 dr16_read() */
+    RcState rc; /* 最新一帧合法数据，只通过 dr16_read() 读 */
+    Watchdog wd; /* rc 的接收时刻和超时：dr16_read() 的丢失判定和 detect 日志都只看它 */
     uint8_t frame[DR16_FRAME_LEN];
     uint8_t len;    /* frame 里已收到的字节数 */
     bool have_last; /* last_rx_us 是否有效 */
@@ -94,7 +93,7 @@ void dr16_init(Dr16 *self);
 
 /**
  * @brief   读最新一帧遥控数据（在临界区里整份拷贝）
- * @return  false：遥控丢失（从未收到，或 RC_LOST_TIMEOUT_MS 内没有合法帧），out 不被修改
+ * @return  false：遥控丢失（从未收到，或超过 RC_LOST_TIMEOUT_MS 没有合法帧）；这时 out 是旧数据，只能用来打印
  */
 RM_NODISCARD bool dr16_read(const Dr16 *self, RcState *out);
 

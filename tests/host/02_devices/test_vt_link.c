@@ -177,14 +177,15 @@ static void test_other_commands_ignored(void)
     TEST_ASSERT_EQUAL_UINT32(1, vt->ignored_frames);
 }
 
-/* 合法帧喂看门狗 */
+/* VT13 帧只喂 vt13 的看门狗，键鼠的不受影响 */
 static void test_valid_frame_feeds_watchdog(void)
 {
     uint8_t f[VT13_FRAME_LEN];
     centered(f);
-    TEST_ASSERT_FALSE(watchdog_is_online(&vt->wd));
+    TEST_ASSERT_FALSE(watchdog_is_online(&vt->rc_wd));
     vt_link_on_bytes(vt, f, VT13_FRAME_LEN);
-    TEST_ASSERT_TRUE(watchdog_is_online(&vt->wd));
+    TEST_ASSERT_TRUE(watchdog_is_online(&vt->rc_wd));
+    TEST_ASSERT_FALSE(watchdog_is_online(&vt->kbm_wd));
 }
 
 int main(void)

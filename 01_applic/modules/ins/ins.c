@@ -30,11 +30,12 @@ void ins_init(Ins *ins, const InsConfig *cfg)
     {
         lpf2_init(&ins->accel_lpf[i], accel_lpf_coef);
     }
+    watchdog_register(&ins->wd, "ins", IMU_STALE_MS);
 }
 
 bool ins_read(const Ins *ins, ImuState *out)
 {
-    return snapshot_read(&ins->snap, &ins->state, out, sizeof(*out), IMU_STALE_MS);
+    return watchdog_read_data(&ins->wd, &ins->state, out, sizeof(*out));
 }
 
 Bmi088Status ins_start(Ins *ins)
@@ -72,7 +73,7 @@ InsEvent ins_step(Ins *ins)
     const ImuState st = update_attitude(ins, &s, rm_time_now_us());
 
     /* 5. 发布给 control、log */
-    snapshot_write(&ins->snap, &ins->state, &st, sizeof(st));
+    watchdog_feed_data(&ins->wd, &ins->state, &st, sizeof(st));
     return INS_EVENT_NONE;
 }
 
