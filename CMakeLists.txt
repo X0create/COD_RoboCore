@@ -29,17 +29,15 @@ endif()
 add_subdirectory(platform)
 add_subdirectory(core)             # 电脑侧只有 rm_core_common，其余只用于固件（见 core/CMakeLists.txt）
 add_subdirectory(algorithm)
-add_subdirectory(msgs)
 add_subdirectory(devices)
-add_subdirectory(subsystems)
-add_subdirectory(robots)           # 电脑侧只有 rm_robot_logic（安全门），其余只用于固件
+add_subdirectory(app)              # 电脑侧只有 rm_app_logic（安全门、底盘、ins），其余只用于固件
 
 if(RM_BOARD)
     # 固件目标。CubeMX 生成的 CMakeLists 把 main.c 等源文件加到名为 ${CMAKE_PROJECT_NAME} 的目标上，
     # 所以目标名必须等于项目名；生成代码不套用本仓库的严格警告
     add_executable(${CMAKE_PROJECT_NAME})
     add_subdirectory(${RM_BOARD_DIR}/cmake/stm32cubemx ${CMAKE_BINARY_DIR}/stm32cubemx)
-    target_link_libraries(${CMAKE_PROJECT_NAME} rm_robot)
+    target_link_libraries(${CMAKE_PROJECT_NAME} rm_app)
 endif()
 
 option(RM_HOST_TESTS "编译电脑侧单元测试（只在 host-tests 预设中打开）" OFF)

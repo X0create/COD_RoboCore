@@ -8,7 +8,7 @@ v0.2 融合了队内原有的《嵌入式代码规范》：它提出的 8 条目
 
 ## 0. 适用范围与用词
 
-**适用于**本仓库中手写的 C 代码：`platform/`、`core/`、`algorithm/`、`devices/`、`msgs/`、`subsystems/`、`robots/`、`tests/`。
+**适用于**本仓库中手写的 C 代码：`platform/`、`core/`、`algorithm/`、`devices/`、`app/`、`tests/`。
 
 **不适用于**以下代码，并且**不要修改它们**：
 - CubeMX 生成的代码：只在 `USER CODE BEGIN … END` 区域里写，区域里的代码遵守本规范；
@@ -267,8 +267,8 @@ float out = sin(angle_rad) * 0.5;
 
 - **必须**：不调用 `malloc` / `free` / `calloc` / `realloc`。所有对象静态分配，或由调用方提供存储。
 - **必须**：全局变量一律加 `static`，其他文件通过函数访问；全局变量只写常量初值，硬件相关的初始化放在显式的 `xxx_init()` 里。
-  **例外**（ADR 0044）：`robots/<兵种>/` 的对象（话题、设备、子系统、安全门）定义在 `robot.c`、声明在同目录 `objects.h`，
-  供本目录一个任务一个文件的 `*_task.c` 直接使用；其他层不得 include `objects.h`。
+  **例外**（ADR 0044）：`app/<兵种>/` 的对象（话题、设备、子系统、安全门）定义在 `robot.c`、声明在同目录 `robot.h`，
+  供本目录一个任务一个文件的 `*_task.c` 直接使用；其他层不得 include `robot.h`。
 - **必须**：不写递归，不用变长数组（VLA）；较大的缓冲区（几百字节以上）不放在栈上。
 - **必须**：DMA 缓冲区用 `RM_DMA_BUF` 声明，BDMA 缓冲区用 `RM_BDMA_BUF` 声明（ADR 0021）。
 - **必须**：`volatile` 只用于硬件寄存器和中断里置位的简单标志，**不能**当作任务之间的同步手段。跨任务共享的数据走话题或临界区。
@@ -307,17 +307,17 @@ Motor *yaw_motor = malloc(sizeof(Motor));
 - **应该**：参数超过 5 个时，改为传结构体。
 - **应该**：检查失败时尽早返回，而不是层层嵌套 `if`。
 - **必须**：不用函数指针表模拟多态，不用 `void *` 做通用接口。不同品牌、型号按 `type` 用 `switch` 分派，
-  并且**品牌分支只出现在 `devices/motor/` 等设备目录内部**，子系统和 `robots/` 不判断接的是 DJI 还是达妙。
+  并且**品牌分支只出现在 `devices/motor/` 等设备目录内部**，`app/` 不判断接的是 DJI 还是达妙。
   拿不准时，选新队员能直接读懂的写法。
 - **必须**：硬件相关的初始化放在 `xxx_init()`（调度器启动前，配置外设）和 `xxx_start()`（调度器启动后，打开中断和 DMA）里；
-  启动顺序只在 `app_main()` 里写（《架构设计》运行时契约第 1 节）。
+  启动顺序只在兵种 `robot.c` 的 `app_main()` 和 `startup_task()` 里写（《架构设计》运行时契约第 1 节）。
 
 ## 10. 宏与条件编译
 
 - **应该**：能用 `static inline` 函数、`enum` 或 `const` 代替的，就不要写宏。
 - 必须写宏时，**必须**给参数和整体都加括号；多条语句**必须**用 `do { … } while (0)` 包起来。
 - **必须**：不写生成代码的宏（X-macro 等），也不用宏拼接函数名。
-- **必须**：兵种和主控的差异放在 `robots/<兵种>/config.h` 和 `boards/` 里处理；`devices/`、`subsystems/` 里不写 `#ifdef INFANTRY` 这类判断。
+- **必须**：兵种和主控的差异放在 `app/<兵种>/config.h` 和 `boards/` 里处理；`devices/` 和 `app/` 的机构目录里不写 `#ifdef INFANTRY` 这类判断。
 - **必须**：不用 `#if 0` 保留废弃代码，直接删除，需要时从 Git 历史里找回。
 
 ## 11. 中断与并发
@@ -373,7 +373,7 @@ Motor *yaw_motor = malloc(sizeof(Motor));
 | 位置 | 要求 |
 | --- | --- |
 | `boards/<板子>/` | **必须**有 `README.md`（资源分配、接线）和 `REGEN_CHECKLIST.md` |
-| `robots/<兵种>/` | **必须**有 `README.md`：电机 ID 和接线、CAN 拓扑（哪两个节点开了终端电阻）、标定步骤 |
+| `app/<兵种>/` | **必须**有 `README.md`：电机 ID 和接线、CAN 拓扑（哪两个节点开了终端电阻）、标定步骤 |
 | `devices/` 下的设备驱动 | **应该**有 `README.md`：协议来源和版本、注意事项（如达妙设置零点前必须先失能） |
 | `algorithm/`、`core/` 下的单个模块 | 头文件注释能说清楚用法的，**可以**不另写 README |
 

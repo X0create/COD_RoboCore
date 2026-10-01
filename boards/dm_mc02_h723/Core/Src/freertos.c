@@ -64,7 +64,7 @@ const osThreadAttr_t startup_attributes = {
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-void app_main(void); /* 框架入口，定义在 robots/common/app_main.c */
+void app_main(void); /* 框架入口，定义在 app/<兵种>/robot.c（预设选兵种） */
 
 /* USER CODE END FunctionPrototypes */
 

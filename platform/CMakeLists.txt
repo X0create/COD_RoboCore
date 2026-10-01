@@ -7,8 +7,8 @@ add_library(rm_platform_common STATIC
     common/dma_ring.c
     common/ws2812.c
 )
-# common/ 里的模块会用到接口头文件里的类型（如 CanFrame）
-target_include_directories(rm_platform_common PUBLIC common include)
+# common/ 里的模块会用到接口头文件里的类型（如 CanFrame）；接口头文件在 platform/ 下，以 "platform/can.h" 的形式 include
+target_include_directories(rm_platform_common PUBLIC common ${PROJECT_SOURCE_DIR})
 rm_target_warnings(rm_platform_common)
 
 # 当前主控的平台实现：同名函数，CMake 只编译这一份（ADR 0017）
@@ -23,7 +23,7 @@ if(RM_CHIP)
         ${RM_CHIP}/uart.c
         ${RM_CHIP}/usb_cdc.c
     )
-    target_include_directories(rm_platform PUBLIC include)
+    target_include_directories(rm_platform PUBLIC ${PROJECT_SOURCE_DIR})
     target_link_libraries(rm_platform
         PUBLIC rm_vendor
         PRIVATE rm_platform_common

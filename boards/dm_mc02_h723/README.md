@@ -37,7 +37,7 @@ Copyright (c) 2025 GrassFan_Wang
 固件由仓库根目录的 CMake 构建（WSL，仓库根目录）：
 
 ```bash
-cmake --preset h723-template-debug && cmake --build --preset h723-template-debug
+cmake --preset h723-bench-debug && cmake --build --preset h723-bench-debug
 ```
 
 根目录的 `CMakeLists.txt` 通过 `add_subdirectory` 复用 CubeMX 生成的 `cmake/stm32cubemx/CMakeLists.txt`（源文件清单随重新生成自动更新），

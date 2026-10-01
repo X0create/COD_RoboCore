@@ -101,10 +101,10 @@ def architecture():
     s.text(24, 54, "左侧五层只能从上往下调用；右侧模块各层都可以使用。虚线框为规划中、尚无代码。", 12.5, INK2)
 
     layers = [
-        ("robots", "兵种层", "这台车怎么组装、怎么控制", BLUE,
-         ["启动流程 app_main", "控制任务", "安全门", "config.h 参数与接线"]),
-        ("subsystems", "子系统", "一个机构或功能的完整逻辑", AQUA,
-         ["ins 惯导", "*云台", "*底盘", "*发射", "*轮腿"]),
+        ("app/<兵种>", "兵种", "这台车怎么组装、怎么控制", BLUE,
+         ["robot.c：对象 · 上电 · 任务表", "*_task.c", "config.h"]),
+        ("app/<机构>", "机构", "一个机构的完整逻辑", AQUA,
+         ["ins 惯导", "底盘", "安全门", "*云台", "*发射", "*轮腿"]),
         ("devices", "设备驱动", "协议字节 ⇄ 物理量", ORANGE,
          ["DJI 电机", "达妙电机", "BMI088", "DR16", "VT13 图传", "视觉帧", "电池", "蜂鸣器"]),
         ("platform", "外设接口", "唯一直接操作硬件的一层", VIOLET,
@@ -129,9 +129,8 @@ def architecture():
     rx, rw = 664, 272
     s.text(rx, 68, "各层都可以用", 13, INK2, bold=True)
     shared = [
-        ("algorithm", "纯计算，不碰硬件", ["PID", "斜坡", "低通", "卡尔曼", "四元数 EKF", "矩阵"], YELLOW, False),
-        ("msgs", "模块之间传递的数据", ["imu_state", "rc_state", "vt_rc_state", "kbm_state"], YELLOW, False),
-        ("core", "基础设施", ["带时间戳的话题", "设备看门狗", "RTT 日志", "任务封装"], YELLOW, False),
+        ("algorithm", "纯计算，不碰硬件", ["PID", "斜坡", "低通", "卡尔曼", "四元数 EKF", "矩阵", "轮组运动学"], YELLOW, False),
+        ("core", "基础设施", ["话题与消息 imu_state · rc_state …", "设备看门狗", "RTT 日志", "任务封装"], YELLOW, False),
         ("tests/host", "电脑上的单元测试", ["假 CAN / SPI / PWM / 时钟", "替换 platform"], MAGENTA, True),
     ]
     cy, ch = 78, 88
@@ -281,16 +280,16 @@ def safety_gate():
 def startup():
     W, H = 960, 330
     s = Svg(W, H, "上电后按什么顺序启动")
-    s.text(24, 54, "app_main 里任何一步失败都停在 halt_on_init_failure()，接上调试器就能看到停在哪。⑧ 之前安全门一直是 Init，不能解锁。", 12.5, INK2)
+    s.text(24, 54, "前两行都在兵种的 robot.c 里。任何一步失败都停在 halt_on_init_failure()，调试器能看到停在哪。⑧ 之前安全门一直是 Init，不能解锁。", 12.5, INK2)
 
     lanes = [
         ("app_main", "调度器启动前，单线程", BLUE,
          [("① 时钟", "DWT 计数器自检"), ("② 日志", "RTT 初始化"),
-          ("③ robot_init", "组装设备与子系统"), ("④ 创建任务", "全部静态分配"),
+          ("③ 初始化对象", "组装设备和机构"), ("④ 创建任务", "按任务表静态创建"),
           ("⑤ 启动调度器", "交给 FreeRTOS")]),
         ("startup 任务", "调度器启动后运行一次", AQUA,
-         [("⑥ 打开 CAN", "按订阅配置滤波"), ("⑦ 打开串口 / USB", "登记过的才打开"),
-          ("⑧ robot_start", "允许解锁"), ("⑨ 删除自己", "“startup done”")]),
+         [("⑥ comm_rx_start", "打开 CAN / 串口 / USB"), ("⑦ ADC · 蜂鸣器", "启动音"),
+          ("⑧ 系统就绪", "允许解锁"), ("⑨ 删除自己", "“startup done”")]),
         ("周期任务", "各自按周期运行", VIOLET,
          [("ins", "上电静止标定约 2 s"), ("comm_rx", "有数据就解析"),
           ("control", "1 kHz 控制"), ("daemon · heartbeat", "上下线报告 · 灯与日志")]),

@@ -1,12 +1,12 @@
 # 与芯片无关的部分：不直接依赖 FreeRTOS 和 HAL，电脑测试和固件都链接它。
-# 其中话题、看门狗要用 rm_critical_*()（core/os/critical.h）和 rm_time_now_us()（platform/time.h）：
+# 话题消息（core/msg/rc_state.h 等）只有头文件。话题、看门狗要用 rm_critical_*()（core/os/critical.h）和 rm_time_now_us()（platform/time.h）：
 # 固件里由 rm_core、rm_platform 提供，电脑测试里由 tests/host/fakes 提供
 add_library(rm_core_common STATIC
     msg/topic.c
     util/crc.c
     watchdog/watchdog.c
 )
-# 以 "core/util/crc.h" 的形式 include；rm_platform_common 带来 platform/include
+# 以 "core/util/crc.h"、"core/msg/rc_state.h" 的形式 include
 target_include_directories(rm_core_common PUBLIC ${PROJECT_SOURCE_DIR})
 target_link_libraries(rm_core_common PUBLIC rm_platform_common)
 rm_target_warnings(rm_core_common)

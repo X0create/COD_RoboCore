@@ -14,9 +14,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "core/msg/kbm_state.h"
+#include "core/msg/vt_rc_state.h"
 #include "core/watchdog/watchdog.h"
-#include "msgs/kbm_state.h"
-#include "msgs/vt_rc_state.h"
 
 #ifdef __cplusplus
 extern "C"

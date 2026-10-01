@@ -9,7 +9,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 ## 设计原则
 
 - **明了易懂**：结构体 + 函数，不用宏生成代码，不用函数指针表模拟多态，新队员能顺着目录读懂。
-- **分层单向依赖**：robots → subsystems → devices → platform，算法层（algorithm）是纯计算，可以在 PC 上测试。
+- **分层单向依赖**：app → devices → platform，算法层（algorithm）是纯计算，可以在 PC 上测试。
 - **只写必要的安全机制**：安全门只分“全车停”和“机构停”，每个机构有自己规定的安全动作，而不是简单地“输出 0”；同一个故障只在一处处理。
 - **静态内存**：初始化之后不再分配内存。
 - **单一时间基准**：所有时间戳、超时判断都读同一个时钟。
@@ -86,8 +86,10 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 
 ## 文件结构
 
-依赖方向从上到下：`robots` → `subsystems` → `devices` → `platform`；`algorithm`、`msgs`、`core` 可被各层使用，
-`algorithm` 是纯计算。标“（规划）”的目录还没有代码。
+依赖方向从上到下：`app` → `devices` → `platform`；`algorithm`、`core` 可被各层使用，
+`algorithm` 是纯计算。标“（规划）”的目录还没有代码。和老模板 COD-H7-Template 的对应：
+`Core/` → `boards/`，`BSP/` → `platform/`，`Components/Algorithm、Controller` → `algorithm/`，
+`Components/Device` → `devices/`，`Application/` → `app/`（详见 `docs/CALL_FLOW.md`）。
 
 ![分层结构图](docs/images/architecture.svg)
 
@@ -95,44 +97,45 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 COD_RoboCore/
 ├── boards/                  每块板一个目录（CubeMX 生成代码，只改 USER CODE 区）
 │   └── dm_mc02_h723/        达妙 DM-MC02：.ioc、链接脚本 dm_mc02.ld、启动文件、REGEN_CHECKLIST.md
-├── platform/                外设接口：include/ 放声明，每种芯片一份实现，链接时选择
-│   ├── include/platform/    can、uart、spi、pwm、adc、usb_cdc、time、status_led 的接口
+├── platform/                外设接口（≈ 老模板 BSP/）：每种芯片一份实现，链接时选择
+│   ├── can.h uart.h …       can、uart、spi、pwm、adc、usb_cdc、time、status_led 的接口（只有声明）
 │   ├── common/              与芯片无关的纯逻辑：环形缓冲、CAN 长度码、64 位计数扩展、WS2812 编码
 │   ├── stm32h7/             H723 实现（FDCAN、循环 DMA 串口、DWT 时钟、.dma_buf 等）
 │   └── stm32f4/             （规划）C 板实现
 ├── core/                    与业务无关的基础设施
-│   ├── msg/                 带时间戳的话题
+│   ├── msg/                 带时间戳的话题，以及各条消息：imu_state、rc_state、vt_rc_state、kbm_state
 │   ├── watchdog/            设备在线判断
 │   ├── log/                 RTT 日志（含 SEGGER RTT 源码）
 │   ├── os/                  临界区、延时、静态任务创建
 │   └── util/                CRC
-├── algorithm/               纯计算，电脑上可测
+├── algorithm/               纯计算，电脑上可测（≈ 老模板 Components/Algorithm、Controller）
 │   ├── control/             PID、斜坡
 │   ├── filter/              低通、卡尔曼
 │   ├── attitude/            四元数 EKF、陀螺零偏估计
+│   ├── kinematics/          全向轮、麦轮、舵轮运动学
 │   ├── math/                矩阵运算
 │   └── power/               RLS（功率模型辨识）
-├── msgs/                    消息类型与话题函数：imu_state、rc_state、vt_rc_state、kbm_state
-├── devices/                 具体设备驱动
+├── devices/                 具体设备驱动（≈ 老模板 Components/Device）
 │   ├── motor/               统一电机接口、DJI、达妙、电机组发送
 │   ├── imu/                 BMI088（含恒温加热）
 │   ├── remote/              DR16 遥控器、VT13 图传链路
 │   ├── referee/             裁判系统帧检查（协议解析等官方文档）
 │   ├── vision/              视觉 USB 通信帧层
 │   └── battery/  buzzer/    电池电压、蜂鸣器提示音
-├── subsystems/              机构与功能子系统
-│   ├── ins/                 惯性导航（标定、零偏在线修正、EKF、发布姿态）
-│   └── gimbal/ chassis/ …   （规划）云台、底盘、发射、轮腿
-├── robots/                  兵种层
-│   ├── common/              启动流程 app_main、接收任务 comm_rx、守护任务 daemon、安全门
-│   ├── _template/           样板兵种：config.h（固定参数）、robot.c（对象、初始化、任务表），一个任务一个文件
-│   └── infantry/            步兵（第一版只有底盘）
+├── app/                     业务（≈ 老模板 Application/）：机构 + 兵种
+│   ├── common/              各兵种共用：comm_rx_task.c（收 CAN / 串口 / USB）、daemon_task.c（上线 / 离线）、安全门
+│   ├── chassis/             机构：底盘（全向轮 / 麦轮 / 舵轮）
+│   ├── ins/                 机构：惯性导航（标定、零偏在线修正、EKF、发布姿态）
+│   ├── gimbal/ shoot/ …     （规划）云台、发射、轮腿
+│   ├── infantry/            兵种：步兵（第一版只有底盘）
+│   └── bench/               台架验证固件：一台 M3508、一台达妙、DR16、图传、USB 视觉链路
+│                            每个兵种目录：config.h、robot.h、robot.c（对象 + 上电顺序 + 任务表）、每个任务一个 *_task.c
 ├── tests/host/              电脑侧单元测试（Unity）
 │   └── fakes/               假 CAN / SPI / PWM / 时钟 / OS
 ├── cmake/                   交叉编译工具链、板级编译选项、警告设置
 ├── tools/                   gen_readme_diagrams.py（生成本页的图）；（规划）新建兵种、依赖检查
 ├── docs/                    架构设计与实施计划、编码规范、开发环境、与旧模板的差异、待验证清单；images/ 放本页的图
-└── CMakePresets.json        两个预设：host-tests（电脑测试）、h723-template-debug（MC02 固件）
+└── CMakePresets.json        三个预设：host-tests（电脑测试）、h723-bench-debug（台架验证固件）、h723-infantry-debug（步兵）
 ```
 
 各层目录（platform、core、algorithm……）都有自己的 `README.md`，说明这一层放什么、不放什么。
@@ -182,10 +185,10 @@ cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset
 **2. 编译 DM-MC02 固件**（WSL，仓库根目录；`~/tools/arm-gnu-toolchain-*` 下的编译器会被自动找到）：
 
 ```bash
-cmake --preset h723-template-debug && cmake --build --preset h723-template-debug
+cmake --preset h723-bench-debug && cmake --build --preset h723-bench-debug
 ```
 
-输出 `build/h723-template-debug/COD_RoboCore.elf`，编译必须 0 警告。
+输出 `build/h723-bench-debug/COD_RoboCore.elf`，编译必须 0 警告。
 
 **3. 烧录并看日志**：Ozone 打开这个 ELF → **Download & Reset** → F5 运行 → **View → Terminal** 看 RTT 日志。
 上电后约 2 s 内不要动板子（陀螺零偏标定）。看到 `startup done`、每秒一行 `alive N, mode safe` 就是跑起来了。
@@ -194,18 +197,18 @@ cmake --preset h723-template-debug && cmake --build --preset h723-template-debug
 
 ## 新建一个兵种
 
-1. 复制 `robots/_template/` 为 `robots/<兵种名>/`。
+1. 复制 `app/infantry/` 为 `app/<兵种名>/`，在 `CMakePresets.json` 里照 `h723-infantry-debug` 加一个预设。
 2. 改 `config.h`：PID 参数、解锁用哪个拨杆、IMU 安装方向、电池参数等固定参数。
-3. 改 `robot.c`：电机配置（CAN 总线、ID、停机动作）、`robot_init()` 里登记设备和子系统；`objects.h` 同步声明新增的对象。
+3. 改 `robot.c`：电机配置（CAN 总线、ID、停机动作）、`init_objects()` 里登记设备和子系统、任务表；`robot.h` 同步声明新增的对象和任务。
 4. 改 `control_task.c`：每个控制周期做什么（读输入 → 安全门 → 子系统 → 发送，四步写在循环里）。`heartbeat_task.c` 改打印内容。
    各任务的调用关系见 `docs/CALL_FLOW.md`。
-5. 编译时选这个兵种：`cmake --preset h723-template-debug -DRM_ROBOT=<兵种名>`。
+5. 编译时选这个兵种：`cmake --preset h723-<兵种名>-debug`。
 
 分层规则、命名和安全相关代码的写法见 `docs/CODING_STANDARD.md`。
 
 ## 注意事项
 
-- **样板固件会给电机发指令。** 未解锁时持续发零电流，解锁后按遥控转动。接电机前先把电机固定在台架上、输出轴不带负载、断电开关放在手边；只看反馈时手扶即可，让电机转起来时不行。
+- **固件会给电机发指令**（bench、infantry 都是）。 未解锁时持续发零电流，解锁后按遥控转动。接电机前先把电机固定在台架上、输出轴不带负载、断电开关放在手边；只看反馈时手扶即可，让电机转起来时不行。
 - **不要随手暂停正在控制电机的程序。** 调试器暂停后 CAN 指令停发，电调怎么反应还没有实测。
 - **未上板的功能不要直接上车。** 以上表的验证状态为准，“🧪”只代表电脑测试通过。
 

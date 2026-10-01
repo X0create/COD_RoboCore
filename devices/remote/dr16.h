@@ -14,8 +14,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "core/msg/rc_state.h"
 #include "core/watchdog/watchdog.h"
-#include "msgs/rc_state.h"
 
 #ifdef __cplusplus
 extern "C"

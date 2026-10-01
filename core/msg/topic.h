@@ -35,7 +35,7 @@ typedef struct
 
 /**
  * @brief   认领发布权
- * @return  false：已被别的模块认领（配置错误，robot_init() 应失败）
+ * @return  false：已被别的模块认领（配置错误，兵种 robot.c 的 init_objects() 应失败）
  * @pre     只在初始化阶段（调度器启动前）调用
  */
 RM_NODISCARD bool topic_claim(Topic *topic, const char *owner);
