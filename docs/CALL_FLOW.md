@@ -120,8 +120,8 @@ for (;;)
 └─ ins_step(&ins)                               01_app/ins/ins.c
    ├─ bmi088_read()                             02_devices/imu/bmi088.c
    ├─ bmi088_heater_step()                      加热 PID
-   ├─ （上电前 2 s）calibrate_step()            陀螺零偏标定，静止才采用
-   └─ run_step()                                安装旋转 → 零偏在线修正 → 加速度低通 → quat_ekf_update → 欧拉角、多圈航向
+   ├─ （上电前 2 s）calibrate_gyro()            陀螺零偏标定，静止才采用
+   └─ update_attitude()                         安装旋转 → 零偏在线修正 → 加速度低通 → quat_ekf_update → 欧拉角、多圈航向
       └─ imu_state_publish(&imu_state, ...)     control、heartbeat 读
 ```
 

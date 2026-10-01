@@ -34,31 +34,16 @@ ImuStateTopic imu_state; /* 发布：ins   读取：control、heartbeat */
 /* 设备 */
 Dr16 dr16;
 
-/* 四个驱动轮：顺序 = 轮 0–3（左前、左后、右后、右前），ID 按实车接线改 */
-#define WHEEL(wheel_name, esc_id)                                                                  \
-    {                                                                                              \
-        .name = (wheel_name), .type = MOTOR_M3508, .can_bus = INFANTRY_WHEEL_CAN_BUS,              \
-        .id = (esc_id), .direction = INFANTRY_WHEEL_DIRECTION, .gear_ratio = DJI_M3508_GEAR_RATIO, \
-        .stop_action = SAFE_ACTION_ZERO_TORQUE                                                     \
-    }
-static const MotorConfig wheel_config[CHASSIS_WHEELS] = {
-    WHEEL("wheel_lf", 1u),
-    WHEEL("wheel_lb", 2u),
-    WHEEL("wheel_rb", 3u),
-    WHEEL("wheel_rf", 4u),
-};
+/* 电机、底盘、电池、IMU 的参数都在 config.h 的配置表里（wheel_config、chassis_config …） */
 Motor wheel_motor[CHASSIS_WHEELS];
 MotorGroup motors;
 
-static const BatteryConfig battery_config = INFANTRY_BATTERY_CONFIG;
 Battery battery;
 Buzzer buzzer;
 
 /* 子系统与安全门 */
 SafetyGate gate;
-static const ChassisConfig chassis_config = INFANTRY_CHASSIS_CONFIG;
 Chassis chassis;
-static const InsConfig ins_config = { .install_rotation = INFANTRY_IMU_INSTALL_ROTATION };
 Ins ins;
 
 /* ================================================================== */
@@ -106,7 +91,7 @@ static bool init_objects(void)
         return false;
     }
     battery_init(&battery, &battery_config);
-    safety_gate_init(&gate, INFANTRY_ARM_SWITCH);
+    safety_gate_init(&gate, arm_switch);
     return true;
 }
 

@@ -23,8 +23,7 @@ static Pid speed_pid; /* 老模板的 Chassis_PID */
 void control_task_entry(void *arg)
 {
     (void)arg;
-    const PidParam speed_param = BENCH_SPEED_PID_PARAM;
-    pid_init(&speed_pid, PID_POSITION, &speed_param);
+    pid_init(&speed_pid, PID_POSITION, &speed_pid_param);
 
     RmTaskPeriod last_wake = rm_task_period_start();
     for (;;)

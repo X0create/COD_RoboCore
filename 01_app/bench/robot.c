@@ -49,43 +49,16 @@ VisionLink vision_link;
 volatile uint32_t usb_rx_bytes;
 volatile uint32_t usb_echo_dropped;
 
-/* 电机：配置是 const，运行状态单独存放（《架构设计》“配置和运行状态分开存放”） */
-static const MotorConfig chassis_motor_config = {
-    .name = "m3508_1",
-    .type = MOTOR_M3508,
-    .can_bus = CAN_BUS_1,
-    .id = 1u,
-    .direction = 1,
-    .gear_ratio = DJI_M3508_GEAR_RATIO,
-    .stop_action = SAFE_ACTION_ZERO_TORQUE,
-};
+/* 电机、电池、IMU 的参数都在 config.h 的配置表里 */
 Motor chassis_motor;
-
-/* 达妙 DM8009：ID、范围同旧工程 Motor.c 的 DM_8009_Motor[0]；阻尼 Kd 为暂定值，台架确认（V41） */
-static const MotorConfig joint_motor_config = {
-    .name = "dm8009_1",
-    .type = MOTOR_DM,
-    .can_bus = CAN_BUS_2,
-    .id = 0x01u,
-    .direction = 1,
-    .gear_ratio = 1.0f,
-    .stop_action = SAFE_ACTION_DAMP,
-    .dm = { .master_id = 0x11u,
-            .p_max = 3.141593f,
-            .v_max = 45.0f,
-            .t_max = 54.0f,
-            .damp_kd = 1.0f },
-};
 Motor joint_motor;
 MotorGroup motors;
 
-static const BatteryConfig battery_config = BENCH_BATTERY_CONFIG;
 Battery battery;
 Buzzer buzzer;
 
 /* 子系统与安全门 */
 SafetyGate gate;
-static const InsConfig ins_config = { .install_rotation = BENCH_IMU_INSTALL_ROTATION };
 Ins ins;
 
 /* ================================================================== */
@@ -159,7 +132,7 @@ static bool init_objects(void)
         return false;
     }
     battery_init(&battery, &battery_config);
-    safety_gate_init(&gate, BENCH_ARM_SWITCH);
+    safety_gate_init(&gate, arm_switch);
     return true;
 }
 

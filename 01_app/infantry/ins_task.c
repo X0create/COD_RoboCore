@@ -54,7 +54,8 @@ void ins_task_entry(void *arg)
     RmTaskPeriod last_wake = rm_task_period_start();
     for (;;)
     {
-        log_ins_event(ins_step(&ins), &failing);
+        const InsEvent ev = ins_step(&ins); /* 读 BMI088 → 加热 → 标定或更新姿态 → 发布 imu_state */
+        log_ins_event(ev, &failing);
         rm_task_delay_until(&last_wake, INS_PERIOD_MS);
     }
 }

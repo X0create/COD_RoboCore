@@ -19,9 +19,9 @@
 static ChassisVel chassis_cmd_from_rc(const RcState *rc)
 {
     const float k = 1.0f / (float)RC_CH_MAX;
-    return (ChassisVel){ .vx_m_s = (float)rc->ch[3] * k * INFANTRY_MAX_VX_M_S,
-                         .vy_m_s = -(float)rc->ch[2] * k * INFANTRY_MAX_VY_M_S,
-                         .wz_rad_s = -(float)rc->ch[0] * k * INFANTRY_MAX_WZ_RAD_S };
+    return (ChassisVel){ .vx_m_s = (float)rc->ch[3] * k * max_vx_m_s,
+                         .vy_m_s = -(float)rc->ch[2] * k * max_vy_m_s,
+                         .wz_rad_s = -(float)rc->ch[0] * k * max_wz_rad_s };
 }
 
 void control_task_entry(void *arg)

@@ -48,7 +48,8 @@ static void rotate(const float r[9], const float in[3], float out[3])
     }
 }
 
-static InsEvent calibrate_step(Ins *ins, const Bmi088Sample *s)
+/* 上电标定阶段每次调用：攒满 INS_CALIB_SAMPLES 个陀螺样本，静止才把均值作为零偏，否则返回拒绝原因并重新采样 */
+static InsEvent calibrate_gyro(Ins *ins, const Bmi088Sample *s)
 {
     gyro_bias_add(&ins->calib, s->gyro_rad_s);
     if (ins->calib.count < INS_CALIB_SAMPLES)
@@ -101,7 +102,8 @@ static void track_yaw_bias(Ins *ins, const float gyro_body[3])
     bmi088_set_gyro_offset(&ins->imu, offset);
 }
 
-static void run_step(Ins *ins, const Bmi088Sample *s, uint64_t now_us)
+/* 标定完成后每次调用：转到机体系 → 航向零偏在线修正 → 加速度低通 → EKF → 欧拉角、多圈航向 → 发布 imu_state */
+static void update_attitude(Ins *ins, const Bmi088Sample *s, uint64_t now_us)
 {
     ImuState st;
     float accel_body[3];
@@ -164,8 +166,8 @@ InsEvent ins_step(Ins *ins)
     bmi088_heater_step(&ins->imu, s.temperature_c);
     if (ins->phase == INS_PHASE_CALIBRATING)
     {
-        return calibrate_step(ins, &s);
+        return calibrate_gyro(ins, &s);
     }
-    run_step(ins, &s, rm_time_now_us());
+    update_attitude(ins, &s, rm_time_now_us());
     return INS_EVENT_NONE;
 }

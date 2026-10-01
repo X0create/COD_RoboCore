@@ -26,7 +26,7 @@ static void test_si_pid_matches_old_raw_pid(void)
     const PidParam old_param = {
         .kp = 13.0f, .ki = 0.1f, .integral_limit = 5000.0f, .output_limit = 12000.0f
     };
-    const PidParam si_param = BENCH_SPEED_PID_PARAM;
+    const PidParam si_param = speed_pid_param;
     Pid old_pid, si_pid;
     pid_init(&old_pid, PID_POSITION, &old_param);
     pid_init(&si_pid, PID_POSITION, &si_param);
@@ -55,7 +55,7 @@ static void test_si_pid_matches_old_raw_pid(void)
 
 static void test_converted_values(void)
 {
-    const PidParam p = BENCH_SPEED_PID_PARAM;
+    const PidParam p = speed_pid_param;
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, 0.8729f, p.kp);
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, 4.3945f, p.output_limit);
     TEST_ASSERT_FLOAT_WITHIN(1e-2f, 27.27f, p.integral_limit);
