@@ -17,14 +17,14 @@ if(NOT RM_BOARD)
     return()
 endif()
 
-# 各兵种共用的任务和上电顺序，加上当前兵种目录下的全部 .c（<兵种>_robot.c 和本兵种的任务文件）
+# 上电顺序、接收公共部分、各兵种共用的任务（tasks/），加上当前兵种目录下的全部 .c（<兵种>_robot.c 和本兵种的任务文件）
 file(GLOB rm_robot_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/robots/${RM_ROBOT}/*.c)
 add_library(rm_app STATIC
     system/app_main.c
     system/comm_rx_common.c
-    system/detect_task.c
-    system/indicator_task.c
-    modules/ins/ins_task.c
+    tasks/ins_task.c
+    tasks/detect_task.c
+    tasks/indicator_task.c
     ${rm_robot_sources}
 )
 target_link_libraries(rm_app PUBLIC rm_app_logic rm_core rm_devices rm_algorithm)

@@ -36,7 +36,7 @@ extern MotorGroup motors;                 /* 全部电机，control_task 最后�
 extern Chassis chassis;
 extern Ins ins;
 
-/* ---------------- 本目录的任务入口（ins、detect、indicator 各兵种相同，在 01_applic/modules/ins/、01_applic/system/） ---------------- */
+/* ---------------- 本目录的任务入口（ins、detect、indicator 各兵种相同，在 01_applic/tasks/） ---------------- */
 
 /** infantry_comm_rx_task.c：收到数据就运行，打开接收，然后把 CAN、串口 的数据交给对应解析器（接线写在这个文件里） */
 void comm_rx_task_entry(void *arg);

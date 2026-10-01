@@ -2,12 +2,12 @@
  * @file    infantry_log_task.c
  * @brief   步兵的 log_task（1 s）：通过 RTT 打印模式、遥控、四个轮子、底盘目标、IMU、电池
  * @note    只读对象（infantry_robot.h），不参与控制；打印的数值只供观察，单个 float 读写是原子的，但不同字段可能来自不同周期。
- *          状态灯、蜂鸣器、低电量提示在 01_applic/system/indicator_task.c；上线 / 离线的变化由 detect_task 打印。
+ *          状态灯、蜂鸣器、低电量提示在 01_applic/tasks/indicator_task.c；上线 / 离线的变化由 detect_task 打印。
  *          浮点用整数打印（RTT 的 printf 不支持 %f）：毫弧度/秒、毫米/秒、毫牛·米。
  */
 #include "infantry_robot.h"
 
-#include "01_applic/system/indicator_task.h"
+#include "01_applic/tasks/indicator_task.h"
 
 #include "04_core/log/log.h"
 #include "04_core/os/os.h"

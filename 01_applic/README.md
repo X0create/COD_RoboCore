@@ -1,14 +1,15 @@
 # 01_applic/
 
-业务层，相当于老模板的 `Application/`。分三类子目录（ADR 0054）：
+业务层，相当于老模板的 `Application/`。分四类子目录（ADR 0054、0055）：
 
 ```
 01_applic/
-├── system/      各兵种共用的框架：上电顺序、安全门、indicator、detect、接收公共部分
-├── modules/     机构，各兵种复用
+├── system/      各兵种共用的框架：上电顺序、安全门、接收公共部分
+├── tasks/       各兵种共用的任务：ins_task、detect_task、indicator_task
+├── modules/     机构，各兵种复用（只放计算，不放任务）
 │   ├── chassis/  ins/
 │   └── gimbal/  shooter/  leg/  arm/          （规划）
-└── robots/      兵种，一台车（多板时一块板）一个目录
+└── robots/      兵种，一台车（多板时一块板）一个目录；本兵种特有的任务也在这里
     ├── infantry/
     ├── hero/  engineer/  heavy/  wheel_leg/    （规划）
     └── sentry/gimbal_board/  sentry/chassis_board/   （规划，多板）
@@ -16,9 +17,10 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| `system/` | `app_main.c`（上电顺序，只有这一份）、`safety_gate.c`（全车唯一的安全门）、`indicator_task.c`（状态灯、蜂鸣器、低电量）、`detect_task.c`（设备上线 / 离线报告）、`comm_rx_common.c`（接收的公共部分：中断唤醒、打开接收、CAN bus-off 恢复） |
+| `system/` | `app_main.c`（上电顺序，只有这一份）、`safety_gate.c`（全车唯一的安全门）、`comm_rx_common.c`（接收的公共部分：中断唤醒、打开接收、CAN bus-off 恢复） |
+| `tasks/` | 各兵种共用的任务：`ins_task.c`（1 kHz 姿态解算）、`detect_task.c`（10 ms 设备上线 / 离线报告）、`indicator_task.c`（25 ms 状态灯、蜂鸣器、低电量） |
 | `modules/chassis/` | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮，读实测 → 算目标 → 算输出（ADR 0043） |
-| `modules/ins/` | 惯性导航：`ins.c`（BMI088 → 零偏标定 → EKF → 发布 `imu_state`）、`ins_task.c`（1 kHz 任务，各兵种共用） |
+| `modules/ins/` | 惯性导航：`ins.c`（BMI088 → 零偏标定 → EKF → 发布 `imu_state`） |
 | `modules/gimbal/`、`shooter/`、`leg/`、`arm/` | （规划）云台、发射、轮腿、机械臂（工程） |
 | `robots/infantry/` | 步兵（预设 `h723-infantry-debug`）。第一版只有底盘：四轮全向轮，遥控直接给底盘速度 |
 | `robots/hero/`、`engineer/`、`heavy/`、`wheel_leg/` | （规划）英雄、工程、重装（规则未出）、平衡步兵 |
@@ -47,8 +49,9 @@ infantry/
 ## 一处定义
 
 - **一个参数，一个定义位置**：位置见下表。
-- **一个状态，一个权威来源**：安全门模式只在 `system/safety_gate.c` 的 `safety_gate`；电池状态只在 `indicator_task.c`（别处用 `indicator_battery_*()` 读）；
+- **一个状态，一个权威来源**：安全门模式只在 `system/safety_gate.c` 的 `safety_gate`；电池状态只在 `tasks/indicator_task.c`（别处用 `indicator_battery_*()` 读）；
   遥控、姿态只在各自的话题；电机反馈只在电机对象（`motor_read_feedback()`）。读的一方不另存副本。
+- **任务放哪里**：各兵种共用的任务在 `tasks/`，本兵种特有的任务（control、comm_rx、log）在 `robots/<兵种>/`；`*_task.c` 不出现在别处。任务只负责“什么时候跑、按什么顺序调用谁”，计算在 `modules/` 等其他文件里。
 - **一项职责，一个负责模块**：状态灯和蜂鸣器只有 indicator_task 操作；CAN 接收和 bus-off 恢复都在 comm_rx_task；上线 / 离线报告只在 detect_task；上电顺序只在 `app_main.c`。
 
 ## 参数在哪里
@@ -60,7 +63,7 @@ infantry/
 | 满杆速度、解锁拨杆、IMU 安装方向 | `<兵种>/<兵种>_config.h` | |
 | 串口接线（哪个串口接什么） | `<兵种>/<兵种>_comm_rx_task.c` 开头 | |
 | 任务优先级、栈大小 | `<兵种>/<兵种>_robot.c` 的任务表 | |
-| 电池：分压比、低电量阈值 | `system/indicator_task.c` 的 `battery_config` | 板子和电池的属性，各兵种相同（ADR 0038） |
+| 电池：分压比、低电量阈值 | `tasks/indicator_task.c` 的 `battery_config` | 板子和电池的属性，各兵种相同（ADR 0038） |
 | M3508 / C620 换算常数 | `02_devices/motor/motor.h` 的 `DJI_M3508_*`、`DJI_C620_*` | 附录 A.2 |
 | π | `03_algorithm/math/math_const.h` 的 `RM_PI` 等 | |
 | EKF 噪声（Q、R）、加速度低通系数 | `ins/ins.c` 开头 | 沿用旧工程 INS_Task.c |

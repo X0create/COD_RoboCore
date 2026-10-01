@@ -97,12 +97,13 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 ```text
 COD_RoboCore/
 ├── 01_applic/                  业务（≈ 老模板 Application/）：机构 + 兵种
-│   ├── system/              各兵种共用：app_main.c（上电顺序）、安全门、indicator（灯 / 蜂鸣器 / 电池）、detect（上线 / 离线）、comm_rx_common.c
+│   ├── system/              各兵种共用的框架：app_main.c（上电顺序）、安全门、comm_rx_common.c（接收公共部分）
+│   ├── tasks/               各兵种共用的任务：ins_task、detect_task（上线 / 离线）、indicator_task（灯 / 蜂鸣器 / 电池）
 │   ├── modules/             机构（各兵种复用）
 │   │   ├── chassis/         底盘（全向轮 / 麦轮 / 舵轮）
-│   │   ├── ins/             惯性导航（标定、零偏在线修正、EKF、发布姿态）和 1 kHz 的 ins_task
+│   │   ├── ins/             惯性导航（标定、零偏在线修正、EKF、发布姿态）
 │   │   └── gimbal/ shooter/ leg/ arm/   （规划）云台、发射、轮腿、机械臂
-│   └── robots/              兵种（一台车一个目录）
+│   └── robots/              兵种（一台车一个目录，本兵种特有的任务也在这里）
 │       ├── infantry/        步兵（第一版只有底盘）
 │       └── hero/ engineer/ heavy/ wheel_leg/ sentry/   （规划）其他兵种；哨兵两块板在 sentry/ 下
 │                            每个兵种目录（文件名带兵种前缀）：<兵种>_config.h、<兵种>_robot.h、<兵种>_robot.c（对象 + robot_init + 任务表）、control / comm_rx / log 三个任务

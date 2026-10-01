@@ -4,7 +4,7 @@
  */
 #include "ins_task.h"
 
-#include "ins.h"
+#include "01_applic/modules/ins/ins.h"
 
 #include "04_core/log/log.h"
 #include "04_core/os/delay.h"

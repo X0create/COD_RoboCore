@@ -750,11 +750,6 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\01_applic\modules\ins\ins.c</FilePath>
             </File>
-            <File>
-              <FileName>ins_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\modules\ins\ins_task.c</FilePath>
-            </File>
           </Files>
         </Group>
         <Group>
@@ -796,19 +791,29 @@
               <FilePath>..\..\..\01_applic\system\comm_rx_common.c</FilePath>
             </File>
             <File>
+              <FileName>safety_gate.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\01_applic\system\safety_gate.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>01_applic/tasks</GroupName>
+          <Files>
+            <File>
               <FileName>detect_task.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\system\detect_task.c</FilePath>
+              <FilePath>..\..\..\01_applic\tasks\detect_task.c</FilePath>
             </File>
             <File>
               <FileName>indicator_task.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\system\indicator_task.c</FilePath>
+              <FilePath>..\..\..\01_applic\tasks\indicator_task.c</FilePath>
             </File>
             <File>
-              <FileName>safety_gate.c</FileName>
+              <FileName>ins_task.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\system\safety_gate.c</FilePath>
+              <FilePath>..\..\..\01_applic\tasks\ins_task.c</FilePath>
             </File>
           </Files>
         </Group>

@@ -46,10 +46,10 @@ COD-H7-Template/
 | `Components/Algorithm/`、`Controller/` | `03_algorithm/`（`control/pid`、`filter/lpf`、`attitude/quat_ekf` …） | |
 | `Components/Device/` | `02_devices/`（`motor/`、`remote/dr16`、`imu/bmi088` …） | |
 | `Application/` | `01_applic/` | 各兵种共用（`system/`）、机构（`modules/chassis/`、`modules/ins/`）、兵种（`robots/infantry/`） |
-| `Application/Task/INS_Task.c` | `01_applic/modules/ins/ins_task.c` + `ins.c` | 各兵种共用 |
+| `Application/Task/INS_Task.c` | `01_applic/tasks/ins_task.c` + `ins.c` | 各兵种共用 |
 | `Application/Task/Control_Task.c` | `01_applic/robots/<兵种>/<兵种>_control_task.c` + `01_applic/modules/chassis/chassis.c` | |
 | `Application/Task/CAN_Task.c` | `<兵种>_control_task.c` 第 4 步 → `02_devices/motor/motor_group.c` | 发送与控制同一周期，不再单独一个任务 |
-| `Application/Task/Detect_Task.c` | `01_applic/system/detect_task.c` | 只报告上线 / 离线；是否停车由读数据的地方按时间戳当场判断 |
+| `Application/Task/Detect_Task.c` | `01_applic/tasks/detect_task.c` | 只报告上线 / 离线；是否停车由读数据的地方按时间戳当场判断 |
 | `Core/Src/freertos.c` 的任务列表 | `01_applic/robots/<兵种>/<兵种>_robot.c` 的 `robot_tasks[]` | 6 个任务的优先级、栈都在这一处 |
 | 全局变量 `remote_ctrl`、`Chassis_Motor[]` … | `01_applic/robots/<兵种>/<兵种>_robot.h`（定义在 `<兵种>_robot.c` 第 1 节） | 只在兵种目录内共享 |
 | `Config.h` | `01_applic/robots/<兵种>/<兵种>_config.h` | |
@@ -64,13 +64,15 @@ COD-H7-Template/
 ├── infantry_control_task.c     1 kHz：读输入 → 安全门 → 底盘 → 发送          ← Control_Task + CAN_Task
 ├── infantry_comm_rx_task.c     收到数据就运行：打开接收，CAN → 电机，UART5 → DR16 ← BSP 里的接收回调
 └── infantry_log_task.c         1 s：RTT 打印本兵种状态
-01_applic/system/（各兵种相同）
+01_applic/tasks/（各兵种相同的任务）
+├── ins_task.c         1 kHz：姿态解算（调用 modules/ins/ins.c）       ← INS_Task
+├── detect_task.c      10 ms：上线 / 离线报告                        ← Detect_Task
+└── indicator_task.c   25 ms：状态灯、蜂鸣器、低电量（照 UniC 的 app_indicator）
+01_applic/system/（各兵种相同的框架）
 ├── app_main.c         上电顺序（只有这一份）：app_main()、startup_task()
 ├── safety_gate.c      全车唯一的安全门：急停、遥控丢失、未解锁、IMU 未就绪 → 全车停
-├── indicator_task.c   25 ms：状态灯、蜂鸣器、低电量（照 UniC 的 app_indicator）
-├── detect_task.c      10 ms：上线 / 离线报告                        ← Detect_Task
-└── comm_rx_common.c          接收的公共部分：中断唤醒任务、打开接收、CAN bus-off 恢复
-01_applic/modules/ins/ins.c、ins_task.c  惯性导航与 1 kHz 任务（各兵种相同）      ← INS_Task
+└── comm_rx_common.c   接收的公共部分：中断唤醒任务、打开接收、CAN bus-off 恢复
+01_applic/modules/ins/ins.c              惯性导航：一次姿态计算 ins_step()
 01_applic/modules/chassis/chassis.c      底盘：读实测 → 算目标 → 算输出
 ```
 
@@ -118,7 +120,7 @@ for (;;)
 和老模板一一对应：`chassis_measure_update` ↔ `Control_Measure_Update`，`chassis_target_update` ↔ `Control_Target_Update`，
 `chassis_output_update` ↔ `Control_Info_Update`，`motor_group_send` ↔ `CAN_Task` 里拆字节发送。
 
-### ins_task（1 kHz）：`01_applic/modules/ins/ins_task.c:ins_task_entry`
+### ins_task（1 kHz）：`01_applic/tasks/ins_task.c:ins_task_entry`
 
 ```
 ins_start(&ins)                                 01_applic/modules/ins/ins.c      初始化 BMI088（失败每 1 s 重试）
@@ -147,11 +149,11 @@ comm_rx_task：
    └─ comm_rx_recover_bus_off()                 01_applic/system/comm_rx_common.c      bus-off 的总线每 100 ms 重启一次
 ```
 
-### detect_task（10 ms）：`01_applic/system/detect_task.c:detect_task_entry`
+### detect_task（10 ms）：`01_applic/tasks/detect_task.c:detect_task_entry`
 
 上电打印设备清单；之后 `watchdog_poll()` 打印上线 / 离线变化。只报告，不决定停车。
 
-### indicator_task（25 ms）：`01_applic/system/indicator_task.c:indicator_task_entry`
+### indicator_task（25 ms）：`01_applic/tasks/indicator_task.c:indicator_task_entry`
 
 开头打开 ADC 和蜂鸣器、放启动音；之后每 25 ms：状态灯（一长一短）、电池检查（低电量每 2 s 响一次）、读 `safety_gate.mode` 放解锁 / 上锁音。
 

@@ -113,6 +113,8 @@ void gimbal_step(Gimbal *self, ...)
 - **应该**：一个模块对应一对 `xxx.c` / `xxx.h`，文件名与模块名一致，全部小写加下划线。
 - **必须**：兵种目录（`01_applic/robots/<兵种>/`）里的文件名都带兵种前缀：`infantry_config.h`、`infantry_robot.c`、`infantry_control_task.c`，
   几个兵种同时打开时分得清（ADR 0051）。
+- **必须**：任务文件只放两处：各兵种共用的在 `01_applic/tasks/`，本兵种特有的在 `01_applic/robots/<兵种>/`（ADR 0055）。
+  任务只写“什么时候跑、按什么顺序调用谁”，计算放进 `modules/` 等其他文件。
 - **必须**：任务的文件、入口函数、任务名都以 `_task` 结尾：`detect_task.c`、`detect_task_entry`、任务名 `"detect_task"`；
   不是任务的文件不要以 `_task` 结尾（例：接收的公共函数叫 `comm_rx_common.c`，任务本身是 `<兵种>_comm_rx_task.c`）。
 - **应该**按以下顺序 include，组与组之间空一行：
