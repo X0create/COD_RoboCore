@@ -20,6 +20,7 @@ void rm_log_init(void)
     SEGGER_RTT_Init();
 }
 
+/* 日志行首的时间戳：上电以来的毫秒数 */
 uint32_t rm_log_ms(void)
 {
     return (uint32_t)(rm_time_now_us() / 1000u);

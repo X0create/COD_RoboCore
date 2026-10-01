@@ -8,6 +8,7 @@
 static const float SIGN_VY[MECANUM_WHEELS] = { -1.0f, 1.0f, -1.0f, 1.0f };
 static const float SIGN_WZ[MECANUM_WHEELS] = { -1.0f, -1.0f, 1.0f, 1.0f };
 
+/* 逆解：底盘速度 → 每个轮子的转速（自转项的力臂是半轴距 + 半轮距） */
 void mecanum_inverse(const MecanumConfig *cfg, const ChassisVel *vel,
                      float wheel_rad_s[MECANUM_WHEELS])
 {

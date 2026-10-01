@@ -11,6 +11,10 @@ void gyro_bias_reset(GyroBias *gb)
     *gb = (GyroBias){ 0 };
 }
 
+/*
+ * 加一个样本，逐个更新均值和方差（Welford 算法）：不用保存全部 2000 个样本，
+ * 也不会出现“平方和减去和的平方”那种大数相减丢精度的问题
+ */
 void gyro_bias_add(GyroBias *gb, const float gyro_rad_s[3])
 {
     gb->count++;
@@ -29,6 +33,7 @@ GyroBiasResult gyro_bias_result(const GyroBias *gb, uint32_t min_count, float ma
     {
         return GYRO_BIAS_TOO_FEW;
     }
+    /* 三个轴都要满足：抖动小（板子没在动），均值也小（零偏在正常范围）才采用 */
     for (int i = 0; i < 3; i++)
     {
         const float std = sqrtf(gb->m2[i] / (float)(gb->count - 1u));

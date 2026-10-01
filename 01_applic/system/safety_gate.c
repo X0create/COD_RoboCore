@@ -8,6 +8,7 @@
 
 SafetyGate safety_gate;
 
+/* 上电从 Init 开始：startup_task 调用 safety_gate_set_system_ready() 之前一直全车停 */
 void safety_gate_init(SafetyGate *gate, uint8_t arm_switch)
 {
     *gate = (SafetyGate){ .arm_switch = arm_switch, .mode = SAFETY_MODE_INIT };
@@ -26,6 +27,12 @@ SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, bool imu_
     const bool stop_position = inputs_ready && rc->sw[gate->arm_switch] == RC_SW_DOWN;
     SafetyDecision d = { .stop_all = true, .entered_manual = false };
 
+    /*
+     * 模式转换（每个周期最多转一次）：
+     *   Init   --启动完成-->               Safe
+     *   Safe   --先看到“下”、再拨离“下”--> Manual（解锁）
+     *   Manual --拨到“下”或输入不可用-->   Safe（之后必须重新解锁）
+     */
     switch (gate->mode)
     {
         case SAFETY_MODE_INIT:
@@ -63,10 +70,12 @@ SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, bool imu_
             break;
     }
 
+    /* 只有 Manual 能动；其他模式（含本周期刚退出 Manual）全车停 */
     d.stop_all = gate->mode != SAFETY_MODE_MANUAL;
     return d;
 }
 
+/* 解锁后输出限幅从 0 线性升到 1：避免积压的目标让车在解锁瞬间猛冲 */
 float safety_gate_output_scale(const SafetyGate *gate, uint64_t now_us)
 {
     const uint64_t ramp_us = (uint64_t)SAFETY_RAMP_MS * 1000u;

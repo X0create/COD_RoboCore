@@ -1,5 +1,5 @@
 /**
- * @file    time.c
+ * @file    time_stm32h7.c
  * @brief   STM32H7 的时间基准：DWT 周期计数器扩展成 64 位，再换算成微秒
  * @note    做法参考 COD_UniCFramework `impl_stm32_dwt.c`（Cortex-M7 的 DWT 解锁）
  */

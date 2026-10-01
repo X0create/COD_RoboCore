@@ -1,5 +1,5 @@
 /**
- * @file    spi.c
+ * @file    spi_stm32h7.c
  * @brief   SPI 的 STM32H7 实现，见 05_platform/spi/spi.h
  * @note    设备表把用途对应到 CubeMX 的 SPI 句柄和片选脚（片选标签由 CubeMX 生成在 main.h，
  *          引脚为推断值，见附录 A.1）。片选脚由 CubeMX 初始化为高电平。

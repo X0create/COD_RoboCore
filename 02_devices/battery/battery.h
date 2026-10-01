@@ -32,6 +32,7 @@ typedef struct
     uint64_t below_since_us;
 } Battery;
 
+/** 清零状态并记下配置（cfg 在整个运行期间有效）；初始为“不低” */
 void battery_init(Battery *bat, const BatteryConfig *cfg);
 
 /** 用一次 ADC 读数更新；返回是否低电量 */

@@ -10,17 +10,23 @@
 #include "04_core/util/crc.h"
 #include "05_platform/time/time.h"
 
+/*
+ * 图传链路上混着两种帧：
+ *   VT13 遥控器帧：0xA9 0x53 开头，固定 21 字节，末尾 CRC16
+ *   裁判系统格式帧：0xA5 开头（referee_frame），其中 0x0304 是操作手电脑的键鼠
+ */
 #define VT13_SOF0   0xA9u
 #define VT13_SOF1   0x53u
-#define CH_MIN      364
+#define CH_MIN      364 /* 摇杆原始值范围和中位，与 DR16 相同 */
 #define CH_MAX      1684
 #define CH_OFFSET   1024
-#define CMD_KBM     0x0304u
+#define CMD_KBM     0x0304u /* 键鼠命令 ID 和数据长度 */
 #define CMD_KBM_LEN 12u
 
 /* 缓冲区满时开头一定能判定（VT13 帧放得下；0xA5 帧的最大数据长度按缓冲区算），否则解析循环会原地打转 */
 _Static_assert(VT13_FRAME_LEN <= VT_LINK_BUF_LEN, "VT13 帧必须放得进缓冲区");
 
+/* 摇杆值超出范围：整帧丢弃 */
 static bool ch_valid(uint16_t raw)
 {
     return raw >= CH_MIN && raw <= CH_MAX;
@@ -81,6 +87,7 @@ bool vt_link_read_kbm(const VtLink *self, KbmState *out)
     return watchdog_read_data(&self->kbm_wd, &self->kbm, out, sizeof(*out));
 }
 
+/* 校验通过的 0xA5 帧：目前只处理键鼠（0x0304），其他命令只计数 */
 static void handle_referee_frame(VtLink *self, const RefereeFrame *f)
 {
     if (f->cmd_id != CMD_KBM || f->data_len != CMD_KBM_LEN)
@@ -102,9 +109,9 @@ static void handle_referee_frame(VtLink *self, const RefereeFrame *f)
 
 typedef enum
 {
-    PARSE_NEED_MORE,
-    PARSE_BAD,
-    PARSE_CONSUMED,
+    PARSE_NEED_MORE, /* 字节还不够判断，等下一段 */
+    PARSE_BAD,       /* 开头不是合法帧：丢一个字节重新找 */
+    PARSE_CONSUMED,  /* 处理了一帧，consumed 是它的长度 */
 } ParseResult;
 
 /* 看缓冲区开头：是完整的合法帧就处理，返回消耗的字节数 */
@@ -150,6 +157,7 @@ static ParseResult parse_head(VtLink *self, size_t *consumed)
     return PARSE_CONSUMED;
 }
 
+/* 收到的字节先攒进 buf，再从 buf 开头反复找帧（和 vision_link_on_bytes 同一个思路，这里有两种帧头） */
 void vt_link_on_bytes(VtLink *self, const uint8_t *data, uint32_t len)
 {
     uint32_t in = 0u;

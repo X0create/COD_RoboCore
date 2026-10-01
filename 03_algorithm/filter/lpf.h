@@ -38,9 +38,12 @@ typedef struct
 
 /** @pre 0 <= alpha < 1 */
 void lpf1_init(Lpf1 *lpf, float alpha);
+/** 输入一个新样本，返回滤波结果；第一次调用直接用输入做初值，不会从 0 慢慢爬上来 */
 float lpf1_update(Lpf1 *lpf, float input);
 
+/** @param a  三个系数，含义见 Lpf2 */
 void lpf2_init(Lpf2 *lpf, const float a[3]);
+/** 输入一个新样本，返回滤波结果；第一次调用用输入填满历史值 */
 float lpf2_update(Lpf2 *lpf, float input);
 
 #ifdef __cplusplus

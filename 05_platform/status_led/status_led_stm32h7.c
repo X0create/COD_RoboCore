@@ -1,5 +1,5 @@
 /**
- * @file    status_led.c
+ * @file    status_led_stm32h7.c
  * @brief   DM-MC02 状态灯：PA7（SPI6_MOSI）上的一颗 WS2812
  * @note    依赖 CubeMX 中 SPI6 的三项设置，任一项不对灯就会乱色或不亮，而且没有任何报错：
  *          内核时钟 HSE 24 MHz、分频 4（= 6 MHz）、Data Size 8 bit（REGEN_CHECKLIST 核对）。

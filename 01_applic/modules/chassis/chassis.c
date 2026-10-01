@@ -13,6 +13,10 @@ static void chassis_stop(Chassis *chassis);
 static void chassis_target_update(Chassis *chassis, const ChassisVel *cmd, float dt_s);
 static void chassis_output_update(Chassis *chassis, float output_scale);
 
+/*
+ * 记下配置和电机，按轮组类型初始化运动学和 PID。
+ * 底盘靠力矩控制：有电机不支持力矩指令（如 GM6020 电压模式）就在初始化时拒绝，不等解锁后才发现不动
+ */
 bool chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive[CHASSIS_WHEELS],
                   Motor *const steer[CHASSIS_WHEELS])
 {
@@ -47,6 +51,7 @@ bool chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive
 void chassis_step(Chassis *chassis, const ChassisVel *cmd, bool stop_all, float output_scale,
                   float dt_s)
 {
+    /* 一个控制周期：读实测 → 全车停就收尾返回；否则 算目标 → 算输出（三步的函数都在下面，按顺序排列） */
     chassis_measure_update(chassis);
     if (stop_all)
     {
@@ -150,6 +155,7 @@ static void ramp_translation(ChassisVel *v, const ChassisVel *goal, float step)
     v->vy_m_s += dy * (step / dist);
 }
 
+/* 目标速度 → 斜坡限加速度 → 运动学逆解，得到每个轮子的目标转速（舵轮还有目标朝向） */
 static void chassis_target_update(Chassis *chassis, const ChassisVel *cmd, float dt_s)
 {
     const ChassisConfig *cfg = chassis->cfg;
@@ -191,6 +197,7 @@ static void chassis_target_update(Chassis *chassis, const ChassisVel *cmd, float
 /* 第 3 步：算输出                                                     */
 /* ------------------------------------------------------------------ */
 
+/* 把 x 限制在 [-limit, +limit] */
 static float clamp(float x, float limit)
 {
     return (x > limit) ? limit : ((x < -limit) ? -limit : x);

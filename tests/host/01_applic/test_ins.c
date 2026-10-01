@@ -1,6 +1,6 @@
 /**
  * @file    test_ins.c
- * @brief   ins 的单元测试：标定前不发布、标定通过后发布、在动时拒绝并重试、安装旋转、坏帧处理、
+ * @brief   ins 的单元测试：标定前读不到、标定通过后读得到、在动时拒绝并重试、安装旋转、坏帧处理、
  *          静止时在线修正航向零偏
  * @note    BMI088 由假 SPI 的寄存器模型提供数据（fake_spi.h）
  */
@@ -77,7 +77,7 @@ void tearDown(void)
 {
 }
 
-/* 标定期间不发布；满 2000 个样本后采用零偏、开始发布，发布的角速度已减零偏 */
+/* 标定期间读不到；满 2000 个样本后采用零偏、开始保存，读到的角速度已减零偏 */
 static void test_publishes_only_after_calibration(void)
 {
     start(&identity);
@@ -139,7 +139,7 @@ static void test_install_rotation_applied(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 100.0f * GYRO_LSB, st.gyro_rad_s[1]);
 }
 
-/* 读失败或加速度全零：不发布、关加热；话题随之过期（安全门据此全车停） */
+/* 读失败或加速度全零：不更新、关加热；数据随之过期（ins_read 返回 false）（安全门据此全车停） */
 static void test_bad_frames_stop_publishing(void)
 {
     start(&identity);
@@ -176,7 +176,7 @@ static void test_uses_measured_dt(void)
     TEST_ASSERT_FLOAT_WITHIN(5e-3f, rate * (t_s - 0.001f), st.yaw_rad);
 }
 
-/* 静止水平时发布的姿态接近水平 */
+/* 静止水平时读到的姿态接近水平 */
 static void test_level_attitude(void)
 {
     start(&identity);

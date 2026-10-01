@@ -1,5 +1,5 @@
 /**
- * @file    uart.c
+ * @file    uart_stm32h7.c
  * @brief   STM32H7 串口接收：HAL 的 ReceiveToIdle + 循环 DMA，见 05_platform/uart/uart.h
  * @note    - 接收 DMA 必须在 CubeMX 里配置成循环模式（DMA_CIRCULAR），uart_rx_start() 会检查；
  *          - 写位置直接读 DMA 剩余计数得到，中断里不保存位置，任务与中断之间没有需要加锁的共享数据；
@@ -39,11 +39,13 @@ typedef struct
 
 static UartRx rx[UART_COUNT];
 
+/* 启动“DMA 循环接收 + 空闲中断”：DMA 不停地往 rx_buf 里循环写，空闲、半满、全满时进中断 */
 static bool start_dma(UartPort port)
 {
     return HAL_UARTEx_ReceiveToIdle_DMA(handles[port], rx_buf[port], RX_BUF_SIZE) == HAL_OK;
 }
 
+/* HAL 回调只给句柄：反查是哪个串口编号，不是本模块管理的串口返回 -1 */
 static int port_of(const UART_HandleTypeDef *huart)
 {
     for (int i = 0; i < (int)UART_COUNT; i++)
@@ -59,6 +61,7 @@ static int port_of(const UART_HandleTypeDef *huart)
 bool uart_rx_start(UartPort port, UartRxNotify notify, void *ctx)
 {
     UART_HandleTypeDef *huart = handles[port];
+    /* 板上没有这个串口、CubeMX 没给它配 RX DMA、或 DMA 不是循环模式：都打不开（循环模式是 REGEN_CHECKLIST 里的一项） */
     if (huart == NULL || huart->hdmarx == NULL || huart->hdmarx->Init.Mode != DMA_CIRCULAR)
     {
         return false;

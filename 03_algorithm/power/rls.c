@@ -4,6 +4,7 @@
  */
 #include "rls.h"
 
+/* 参数初值 w0，协方差 P 初值为 p0·I（p0 越大，开始时参数变化越快） */
 void rls_init(Rls *rls, uint8_t n, float lambda, float p0, const float w0[])
 {
     rls->n = n;
@@ -18,6 +19,7 @@ void rls_init(Rls *rls, uint8_t n, float lambda, float p0, const float w0[])
     }
 }
 
+/* 用当前参数预测：y = wᵀ x */
 float rls_predict(const Rls *rls, const float x[])
 {
     float y = 0.0f;
@@ -31,6 +33,7 @@ float rls_predict(const Rls *rls, const float x[])
 float rls_update(Rls *rls, const float x[], float y)
 {
     const uint32_t n = rls->n;
+    /* 先算 P x 和 denom = λ + xᵀ P x，增益 K = P x / denom */
     float px[RLS_MAX_N];
     float denom = rls->lambda;
 
@@ -44,7 +47,7 @@ float rls_update(Rls *rls, const float x[], float y)
         denom += x[r] * px[r];
     }
 
-    const float e = y - rls_predict(rls, x);
+    const float e = y - rls_predict(rls, x); /* 预测误差 */
     for (uint32_t r = 0u; r < n; r++)
     {
         rls->w[r] += px[r] / denom * e; /* K = P x / denom */
@@ -54,6 +57,7 @@ float rls_update(Rls *rls, const float x[], float y)
     {
         for (uint32_t c = 0u; c < n; c++)
         {
+            /* 除以遗忘因子 λ（< 1）：旧数据的权重逐渐变小，参数能跟上缓慢的变化 */
             rls->p[r * n + c] = (rls->p[r * n + c] - px[r] * px[c] / denom) / rls->lambda;
         }
     }

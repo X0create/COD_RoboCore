@@ -1,5 +1,5 @@
 /**
- * @file    adc.c
+ * @file    adc_stm32h7.c
  * @brief   ADC 的 STM32H7 实现，见 05_platform/adc/adc.h
  * @note    CubeMX 配置：ADC1 16 位、连续转换、DMA 循环；两个转换序位都是通道 4（PC4，电池分压），
  *          读数取两者平均（同 COD-H7-Template bsp_adc.c 的配置，旧代码只用第一个）。

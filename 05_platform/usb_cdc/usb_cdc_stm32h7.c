@@ -1,5 +1,5 @@
 /**
- * @file    usb_cdc.c
+ * @file    usb_cdc_stm32h7.c
  * @brief   USB 虚拟串口的 STM32H7 实现，见 05_platform/usb_cdc/usb_cdc.h
  * @note    - USB OTG HS 用内置全速 PHY、不开 DMA（CubeMX 配置），缓冲区放在哪块 RAM 都可以；
  *          - OTG_HS 中断优先级为 5，属于“RTOS 管理的中断”，可以在里面通知任务；

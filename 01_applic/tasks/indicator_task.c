@@ -96,13 +96,14 @@ void indicator_task_entry(void *arg)
         RM_LOG_E("buzzer pwm start failed");
     }
 
-    uint32_t step = 0u;
-    uint32_t tick = 0u;
+    uint32_t step = 0u; /* 一拍里的第几步（0–39），决定状态灯亮灭 */
+    uint32_t tick = 0u; /* 从任务开始累计的步数，决定低电量多久响一次 */
     SafetyMode last_mode = safety_gate.mode;
     RmTaskPeriod last_wake = rm_task_period_start();
     for (;;)
     {
-        status_led_set(0u, led_on_at(step) ? LED_GREEN_LEVEL : 0u, 0u);
+        /* 每 25 ms：状态灯 → 电池 → 模式提示音 → 推进蜂鸣器的音符 */
+        status_led_set(0u, led_on_at(step) ? LED_GREEN_LEVEL : 0u, 0u); /* R、G、B */
         check_battery(tick);
         beep_on_mode_change(&last_mode);
         buzzer_step(&buzzer, STEP_MS);

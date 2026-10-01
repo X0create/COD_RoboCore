@@ -8,6 +8,10 @@
 
 #include "04_core/util/crc.h"
 
+/*
+ * 帧格式：SOF(0x5A) | 数据长度(1) | ID(1) | CRC8(1) | 数据(n) | CRC16(2)
+ * 检查顺序和返回值的含义与 referee_frame_check() 相同
+ */
 VisionFrameStatus vision_frame_check(const uint8_t *buf, size_t len, VisionFrame *out)
 {
     if (len == 0u)
@@ -42,6 +46,7 @@ VisionFrameStatus vision_frame_check(const uint8_t *buf, size_t len, VisionFrame
     return VISION_FRAME_OK;
 }
 
+/* 组一帧：填帧头 → 算 CRC8 → 拷数据 → 算 CRC16；out 至少 data_len + VISION_FRAME_OVERHEAD 字节 */
 size_t vision_frame_encode(uint8_t id, const uint8_t *data, uint8_t data_len, uint8_t *out)
 {
     const size_t frame_len = (size_t)data_len + VISION_FRAME_OVERHEAD;

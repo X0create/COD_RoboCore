@@ -7,6 +7,7 @@
 
 #include <math.h>
 
+/* 预先算好每个轮子安装角的 sin、cos：第 i 个轮子在 first_wheel_rad + i·90° 的位置 */
 void omni_init(Omni *omni, const OmniConfig *cfg)
 {
     omni->cfg = *cfg;
@@ -18,6 +19,10 @@ void omni_init(Omni *omni, const OmniConfig *cfg)
     }
 }
 
+/*
+ * 逆解：底盘速度 → 每个轮子的转速。轮子只能沿自己的切线方向出力：
+ * 轮缘线速度 = 底盘平移速度在切线方向的分量 + 自转带来的线速度（中心距 × wz），再除以轮半径
+ */
 void omni_inverse(const Omni *omni, const ChassisVel *vel, float wheel_rad_s[OMNI_WHEELS])
 {
     const float spin_m_s = omni->cfg.center_dist_m * vel->wz_rad_s;

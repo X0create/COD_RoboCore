@@ -4,6 +4,11 @@
  */
 #include "dm_motor.h"
 
+/*
+ * 配置检查：CAN ID 1–15、方向 ±1；达妙驱动器反馈的就是输出轴，所以减速比必须是 1；
+ * 位置 / 速度 / 力矩量程（p_max、v_max、t_max）要和驱动器上位机里设置的一致，否则换算全错；
+ * Master ID（反馈帧 ID）不能和 CAN ID 相同
+ */
 bool dm_config_valid(const MotorConfig *cfg)
 {
     const DmConfig *dm = &cfg->dm;
@@ -34,6 +39,7 @@ static uint32_t float_to_uint(float x, float lo, float hi, uint32_t bits)
 
 void dm_decode_feedback(const MotorConfig *cfg, const uint8_t data[8], MotorFeedback *out)
 {
+    /* 反馈帧：[0] 高 4 位状态、低 4 位 ID | [1–2] 位置 16 位 | [3–4 高] 速度 12 位 | [4 低–5] 力矩 12 位 | [6] MOS 温度 | [7] 线圈温度 */
     const DmConfig *dm = &cfg->dm;
     const float dir = (float)cfg->direction;
     const uint8_t state = data[0] >> 4;
@@ -64,6 +70,7 @@ void dm_encode_mit(const MotorConfig *cfg, float pos_rad, float vel_rad_s, float
     const uint32_t kp_u = float_to_uint(kp, 0.0f, DM_KP_MAX, 12u);
     const uint32_t kd_u = float_to_uint(kd, 0.0f, DM_KD_MAX, 12u);
 
+    /* MIT 帧：位置 16 位 | 速度 12 位 | Kp 12 位 | Kd 12 位 | 力矩 12 位，共 64 位，按位紧挨着排 */
     out[0] = (uint8_t)(p >> 8);
     out[1] = (uint8_t)p;
     out[2] = (uint8_t)(v >> 4);
@@ -74,6 +81,7 @@ void dm_encode_mit(const MotorConfig *cfg, float pos_rad, float vel_rad_s, float
     out[7] = (uint8_t)t;
 }
 
+/* 命令帧：前 7 字节 0xFF，最后一字节是命令（使能 0xFC、失能 0xFD、清错 0xFB …，见 DmCommand） */
 void dm_encode_command(DmCommand cmd, uint8_t out[8])
 {
     for (int i = 0; i < 7; i++)

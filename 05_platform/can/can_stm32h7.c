@@ -1,5 +1,5 @@
 /**
- * @file    can.c
+ * @file    can_stm32h7.c
  * @brief   STM32H7 FDCAN 收发，见 05_platform/can/can.h
  * @note    - 接收全部标准数据帧，不用硬件滤波（同 COD-H7-Template `bsp_can.c` 的全放行，ADR 0049）；
  *          - 接收用哪个 FIFO 按 CubeMX 配置自动选：FDCAN1/3 用 FIFO0，FDCAN2 用 FIFO1（COD-H7-Template 的配置）；
@@ -45,7 +45,7 @@ bool can_start(CanBusId bus, CanRxNotify notify, void *ctx)
     const bool fifo0 = uses_fifo0(h);
 
     /* 不配置滤波器（HAL_FDCAN_Init 已把滤波器区清零，即全部停用）：不匹配任何滤波器的标准数据帧收进接收 FIFO，
-     * 扩展帧和远程帧拒收。帧交给谁由comm_rx_task.c 按 ID 显式分派 */
+     * 扩展帧和远程帧拒收。帧交给谁由 comm_rx_task.c 按 ID 显式分派 */
     const uint32_t accept = fifo0 ? FDCAN_ACCEPT_IN_RX_FIFO0 : FDCAN_ACCEPT_IN_RX_FIFO1;
     if (HAL_FDCAN_ConfigGlobalFilter(h, accept, FDCAN_REJECT, FDCAN_REJECT_REMOTE,
                                      FDCAN_REJECT_REMOTE)

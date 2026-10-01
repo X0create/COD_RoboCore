@@ -13,16 +13,22 @@
 #include "dm_motor.h"
 #include "motor_group.h"
 
+/* 达妙走 dm_motor.c，其余型号（M3508 / M2006 / GM6020）走 dji_motor.c */
 static bool is_dm(const MotorConfig *cfg)
 {
     return cfg->type == MOTOR_DM;
 }
 
+/* 这个电机的反馈帧 ID：DJI 是 0x200 + 电调 ID（GM6020 是 0x204 + ID），达妙是配置的 Master ID */
 static uint32_t feedback_id(const MotorConfig *cfg)
 {
     return is_dm(cfg) ? cfg->dm.master_id : dji_feedback_id(cfg);
 }
 
+/*
+ * comm_rx_task 把每一帧依次交给每个电机：总线和反馈 ID 都对上才是它的。
+ * 是它的 → 按品牌解码成输出轴国际单位 → 和中断里记下的接收时刻一起交给看门狗保管。
+ */
 bool motor_receive(Motor *m, CanBusId bus, const CanFrame *frame)
 {
     if (bus != m->cfg->can_bus || frame->id != feedback_id(m->cfg))
@@ -138,16 +144,19 @@ bool motor_read_feedback(const Motor *m, MotorFeedback *out)
 
 void motor_set_torque(Motor *m, float torque_nm)
 {
+    /* 只记下本周期的指令，真正发送在 motor_group_send()；发完清空，下个周期不写就发零力矩 */
     m->torque_cmd_nm = torque_nm;
     m->torque_set = true;
 }
 
 void motor_apply_stop_action(Motor *m, StopAction action)
 {
+    /* 停机动作优先于力矩指令（见 motor_group.c 的 final_output），同样只管本周期 */
     m->stop_action = action;
     m->stop_set = true;
 }
 
+/* 使能 / 失能只对达妙有意义（DJI 电调上电就能接收电流指令）；命令由 motor_group_send() 按间隔发出 */
 void motor_request_enable(Motor *m)
 {
     if (is_dm(m->cfg))

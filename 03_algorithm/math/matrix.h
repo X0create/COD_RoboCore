@@ -25,6 +25,7 @@ typedef struct
     float *data;
 } Matrix;
 
+/** 把调用方提供的 rows × cols 个 float 包装成矩阵（不分配内存、不清零） */
 void matrix_init(Matrix *m, uint8_t rows, uint8_t cols, float *data);
 
 /** 所有元素置 0 */

@@ -13,6 +13,7 @@
 #define INS_PERIOD_MS 1u
 #define INS_RETRY_MS  1000u
 
+/* 把 ins_step() 返回的事件写进日志。failing 记住“上一次是否读失败”，连续失败只打印一次，避免 1 kHz 刷屏 */
 static void log_ins_event(InsEvent ev, bool *failing)
 {
     switch (ev)
@@ -43,6 +44,7 @@ void ins_task_entry(void *arg)
 {
     Ins *ins = arg;
     Bmi088Status status;
+    /* BMI088 初始化失败（没接、片选错）就每秒重试；这期间 IMU 未就绪，安全门保持全车停 */
     while ((status = ins_start(ins)) != BMI088_OK)
     {
         RM_LOG_E("bmi088 init failed (%d), retry", (int)status);
@@ -54,7 +56,7 @@ void ins_task_entry(void *arg)
     RmTaskPeriod last_wake = rm_task_period_start();
     for (;;)
     {
-        const InsEvent ev = ins_step(ins); /* 读 BMI088 → 加热 → 标定或更新姿态 → 发布 imu_state */
+        const InsEvent ev = ins_step(ins); /* 读 BMI088 → 加热 → 标定或更新姿态 → 保存最新姿态 */
         log_ins_event(ev, &failing);
         rm_task_delay_until(&last_wake, INS_PERIOD_MS);
     }

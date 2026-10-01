@@ -11,9 +11,10 @@ void lpf1_init(Lpf1 *lpf, float alpha)
     lpf->primed = false;
 }
 
+/* y = α·y上次 + (1 − α)·x：α 越大越平滑、延迟越大 */
 float lpf1_update(Lpf1 *lpf, float input)
 {
-    if (!lpf->primed)
+    if (!lpf->primed) /* 第一个样本直接当输出，避免从 0 慢慢爬上来 */
     {
         lpf->output = input;
         lpf->primed = true;
@@ -32,9 +33,10 @@ void lpf2_init(Lpf2 *lpf, const float a[3])
     lpf->primed = false;
 }
 
+/* y = a0·y[n-1] + a1·y[n-2] + a2·x */
 float lpf2_update(Lpf2 *lpf, float input)
 {
-    if (!lpf->primed)
+    if (!lpf->primed) /* 第一个样本填满历史值 */
     {
         lpf->y1 = input;
         lpf->y2 = input;

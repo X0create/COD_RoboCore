@@ -79,11 +79,13 @@ uint8_t crc8_calc(const uint8_t *data, size_t len, uint8_t init)
     return crc;
 }
 
+/* 帧的最后 1 字节是 CRC8：算前面所有字节，写进去 */
 void crc8_append(uint8_t *frame, size_t frame_len)
 {
     frame[frame_len - 1u] = crc8_calc(frame, frame_len - 1u, CRC8_INIT);
 }
 
+/* 重新算前面所有字节的 CRC8，和最后 1 字节比较 */
 bool crc8_verify(const uint8_t *frame, size_t frame_len)
 {
     return crc8_calc(frame, frame_len - 1u, CRC8_INIT) == frame[frame_len - 1u];
@@ -100,6 +102,7 @@ uint16_t crc16_calc(const uint8_t *data, size_t len, uint16_t init)
     return crc;
 }
 
+/* 帧的最后 2 字节是 CRC16，低字节在前 */
 void crc16_append(uint8_t *frame, size_t frame_len)
 {
     const uint16_t crc = crc16_calc(frame, frame_len - 2u, CRC16_INIT);

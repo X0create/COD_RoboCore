@@ -1,12 +1,12 @@
 /**
  * @file    ins.h
- * @brief   惯性导航子系统：读 BMI088 → 上电零偏标定 → 安装旋转 → 加速度低通 → 四元数 EKF → 发布 ImuState
+ * @brief   惯性导航子系统：读 BMI088 → 上电零偏标定 → 安装旋转 → 加速度低通 → 四元数 EKF → 保存最新 ImuState（ins_read() 读）
  * @note    移植自 COD-H7-Template `INS_Task.c`（EKF 参数、加速度二阶低通系数、多圈航向不变）。与旧工程的差异：
  *          - 上电静止标定陀螺零偏（ADR 0033）：采 INS_CALIB_SAMPLES 个样本，标准差和均值都在阈值内才采用，
- *            否则报告原因并重新采样；标定完成前不发布 ImuState，安全门据此全车停；
+ *            否则报告原因并重新采样；标定完成前不保存 ImuState（ins_read() 返回 false），安全门据此全车停；
  *          - 芯片坐标系用 params.h 配置的安装旋转转到机体系（ADR 0006），旧工程用欧拉角下标重映射；
  *          - 加速度模长接近 0 的读数当作坏帧丢弃（全零会让 EKF 除零后永久变成 NaN）；
- *          - 读失败时关加热、不发布；
+ *          - 读失败时关加热、不更新姿态；
  *          - EKF 用实测的更新间隔（旧工程固定 1 ms）；
  *          - 运行中静止时在线修正航向轴零偏（ADR 0039，见下方 INS_STILL_*）。
  *          本模块不打日志：ins_step() 返回事件，由调用它的任务记录。
@@ -81,7 +81,7 @@ typedef enum
 {
     INS_EVENT_NONE,
     INS_EVENT_READ_FAILED,          /* 这次没读到有效数据（加热已关） */
-    INS_EVENT_CALIBRATED,           /* 标定完成，开始发布 */
+    INS_EVENT_CALIBRATED,           /* 标定完成，开始保存姿态 */
     INS_EVENT_CALIB_NOT_STILL,      /* 标定被拒：在动，重新采样 */
     INS_EVENT_CALIB_BIAS_TOO_LARGE, /* 标定被拒：均值过大，重新采样 */
 } InsEvent;

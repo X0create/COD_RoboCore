@@ -81,11 +81,16 @@ void kalman_init(KalmanFilter *kf, uint8_t n, uint8_t m, uint8_t u, float *stora
 /** 按顺序执行下面五步 */
 void kalman_update(KalmanFilter *kf);
 
+/** 1. 预测状态：x⁻ = A x（+ B u） */
 void kalman_predict_state(KalmanFilter *kf);
+/** 2. 预测协方差：P⁻ = A P Aᵀ + Q */
 void kalman_predict_cov(KalmanFilter *kf);
+/** 3. 增益：S = H P⁻ Hᵀ + R，K = P⁻ Hᵀ S⁻¹ */
 /** @pre R 正定（这样 S 一定可逆） */
 void kalman_compute_gain(KalmanFilter *kf);
+/** 4. 更新状态：y = z − H x⁻，x = x⁻ + K y */
 void kalman_update_state(KalmanFilter *kf);
+/** 5. 更新协方差：P = (I − K H) P⁻ */
 void kalman_update_cov(KalmanFilter *kf);
 
 #ifdef __cplusplus

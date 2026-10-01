@@ -6,6 +6,7 @@
 
 #include <math.h>
 
+/* 把 x 限制在 [-limit, +limit] */
 static float clamp(float x, float limit)
 {
     if (x > limit)
@@ -19,6 +20,7 @@ static float clamp(float x, float limit)
     return x;
 }
 
+/* d_alpha 在 (0, 1) 之间才对微分项做一阶低通；0 表示不滤波 */
 static bool d_filter_enabled(const PidParam *param)
 {
     return param->d_alpha > 0.0f && param->d_alpha < 1.0f;
@@ -31,6 +33,7 @@ void pid_init(Pid *pid, PidType type, const PidParam *param)
     pid_reset(pid);
 }
 
+/* 清掉历史误差、积分和输出（解锁、停机时调用，避免带着旧积分重新开始） */
 void pid_reset(Pid *pid)
 {
     pid->target = 0.0f;
@@ -50,17 +53,19 @@ float pid_step(Pid *pid, float target, float measure)
 {
     const PidParam *p = &pid->param;
 
+    /* 误差历史：err[0] 本次、err[1] 上次、err[2] 上上次（增量式要用到三次） */
     pid->target = target;
     pid->measure = measure;
     pid->err[2] = pid->err[1];
     pid->err[1] = pid->err[0];
     pid->err[0] = target - measure;
 
-    if (fabsf(pid->err[0]) < p->deadband)
+    if (fabsf(pid->err[0]) < p->deadband) /* 误差在死区内：保持上次输出不变 */
     {
         return pid->output;
     }
 
+    /* 位置式：输出 = Kp·e + Ki·Σe + Kd·(e − e上次)，积分带限幅和抗饱和 */
     if (pid->type == PID_POSITION)
     {
         pid->p_out = p->kp * pid->err[0];
@@ -93,6 +98,7 @@ float pid_step(Pid *pid, float target, float measure)
         return pid->output;
     }
 
+    /* 增量式：每次只算输出的变化量 Δu = Kp·Δe + Ki·e + Kd·Δ²e，累加到上次输出上 */
     pid->p_out = p->kp * (pid->err[0] - pid->err[1]);
     pid->i_out = p->ki * pid->err[0];
     pid->d_out = p->kd * (pid->err[0] - 2.0f * pid->err[1] + pid->err[2]);

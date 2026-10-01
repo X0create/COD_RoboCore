@@ -52,7 +52,7 @@ void matrix_mul(const Matrix *a, const Matrix *b, Matrix *out)
     {
         for (uint32_t c = 0u; c < b->cols; c++)
         {
-            float sum = 0.0f;
+            float sum = 0.0f; /* out[r][c] = a 的第 r 行 · b 的第 c 列 */
             for (uint32_t k = 0u; k < a->cols; k++)
             {
                 sum += a->data[r * a->cols + k] * b->data[k * b->cols + c];
@@ -75,6 +75,7 @@ void matrix_trans(const Matrix *a, Matrix *out)
     }
 }
 
+/* 交换第 r1、r2 两行（求逆时选主元用） */
 static void swap_rows(Matrix *m, uint32_t r1, uint32_t r2)
 {
     for (uint32_t c = 0u; c < m->cols; c++)
@@ -107,7 +108,7 @@ bool matrix_inv(Matrix *a, Matrix *out)
                 pivot = r;
             }
         }
-        if (a->data[pivot * n + col] == 0.0f)
+        if (a->data[pivot * n + col] == 0.0f) /* 整列都是 0：矩阵奇异，没有逆 */
         {
             return false;
         }
@@ -117,6 +118,7 @@ bool matrix_inv(Matrix *a, Matrix *out)
             swap_rows(out, pivot, col);
         }
 
+        /* 主元所在行除以主元，让对角线上的这个元素变成 1 */
         const float inv_pivot = 1.0f / a->data[col * n + col];
         for (uint32_t c = 0u; c < n; c++)
         {
@@ -124,6 +126,7 @@ bool matrix_inv(Matrix *a, Matrix *out)
             out->data[col * n + c] *= inv_pivot;
         }
 
+        /* 用这一行把其他行在这一列上的元素消成 0 */
         for (uint32_t r = 0u; r < n; r++)
         {
             const float factor = a->data[r * n + col];

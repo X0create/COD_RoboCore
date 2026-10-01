@@ -10,8 +10,10 @@
 #include "04_core/os/critical.h"
 #include "05_platform/time/time.h"
 
-static Watchdog *registered;
+static Watchdog
+    *registered; /* 登记过的看门狗组成的单向链表（新登记的放在表头），detect_task 遍历它 */
 
+/* 只在初始化阶段调用：此时还没有别的任务，链表操作不用加锁 */
 void watchdog_register(Watchdog *wd, const char *name, uint32_t timeout_ms)
 {
     wd->name = name;
@@ -68,6 +70,7 @@ bool watchdog_read_data(const Watchdog *wd, const void *slot, void *out, size_t 
     return online_at(wd, fed, last_us, now_us);
 }
 
+/* 和上次报告的状态比较，变了才回调；reported_online 只由这里读写，所以只能有一个任务调用 */
 void watchdog_poll(WatchdogChangeFn fn, void *ctx)
 {
     for (Watchdog *wd = registered; wd != NULL; wd = wd->next)

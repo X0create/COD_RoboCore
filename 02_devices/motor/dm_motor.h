@@ -50,6 +50,7 @@ void dm_decode_feedback(const MotorConfig *cfg, const uint8_t data[8], MotorFeed
 void dm_encode_mit(const MotorConfig *cfg, float pos_rad, float vel_rad_s, float kp, float kd,
                    float torque_nm, uint8_t out[8]);
 
+/** 编码命令帧（使能 / 失能 / 清错）：前 7 字节 0xFF，最后一字节是 cmd */
 void dm_encode_command(DmCommand cmd, uint8_t out[8]);
 
 #ifdef __cplusplus

@@ -14,6 +14,7 @@ uint32_t byte_ring_push(ByteRing *ring, const uint8_t *data, uint32_t len)
     uint32_t head = ring->head;
     const uint32_t tail = ring->tail;
     uint32_t n = 0u;
+    /* 单生产者（USB 中断）写 head、单消费者（任务）写 tail，不用加锁；留一个空位区分满和空，满了多出来的字节丢弃并计数 */
     while (n < len && ((head + 1u) & RING_MASK) != tail)
     {
         ring->data[head] = data[n++];

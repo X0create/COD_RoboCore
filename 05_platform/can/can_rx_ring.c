@@ -13,7 +13,7 @@ bool can_rx_ring_push(CanRxRing *ring, const CanFrame *frame)
 {
     const uint32_t head = ring->head;
     const uint32_t next = (head + 1u) & RING_MASK;
-    if (next == ring->tail)
+    if (next == ring->tail) /* 满了：丢弃新帧并计数（单生产者写 head、单消费者写 tail，不用加锁） */
     {
         ring->dropped++;
         return false;

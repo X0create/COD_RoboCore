@@ -12,6 +12,7 @@ uint8_t can_dlc_to_len(uint8_t dlc)
     return dlc_len[(dlc > 15u) ? 15u : dlc];
 }
 
+/* 反查：只有表里的长度（0–8、12、16、20、24、32、48、64）能发，其他长度返回 false */
 bool can_len_to_dlc(uint8_t len, uint8_t *dlc)
 {
     for (uint8_t code = 0u; code < 16u; code++)

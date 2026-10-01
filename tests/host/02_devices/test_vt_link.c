@@ -166,7 +166,7 @@ static void test_recovers_after_corrupt_frame(void)
     TEST_ASSERT_EQUAL_INT(VT_MODE_C, rc.mode);
 }
 
-/* 校验通过但不处理的命令（如 0x0302）：计数，不发布 */
+/* 校验通过但不处理的命令（如 0x0302）：计数，不保存 */
 static void test_other_commands_ignored(void)
 {
     uint8_t f[32];

@@ -5,7 +5,7 @@
  */
 #include "dji_motor.h"
 
-#define ENCODER_COUNTS 8192
+#define ENCODER_COUNTS 8192 /* 转子编码器一圈 8192 个计数 */
 #define ENCODER_HALF   4096
 #define RPM_TO_RAD_S   (RM_TWO_PI / 60.0f)
 #define RAD_PER_COUNT  (RM_TWO_PI / (float)ENCODER_COUNTS)
@@ -31,11 +31,13 @@ static const DjiTypeParams type_params[] = {
     [MOTOR_GM6020] = { 3.0f / 16384.0f, 0, 0.741f, true },
 };
 
+/* 接 C620 / C610 电调的型号（M3508、M2006）；GM6020 电调集成在电机里，ID 和帧分配不同 */
 static bool is_c6x0(MotorType type)
 {
     return type == MOTOR_M3508 || type == MOTOR_M2006;
 }
 
+/* 配置检查：ID 在拨码范围内、方向 ±1、减速比为正；DJI 电调做不了阻尼，停机动作只能零力矩或失能 */
 bool dji_config_valid(const MotorConfig *cfg)
 {
     const uint8_t max_id = is_c6x0(cfg->type) ? 8u : 7u;
@@ -45,6 +47,7 @@ bool dji_config_valid(const MotorConfig *cfg)
                || cfg->stop_action == STOP_ACTION_DISABLE);
 }
 
+/* 反馈帧 ID：C6x0 为 0x200 + ID（0x201–0x208），GM6020 为 0x204 + ID（0x205–0x20B） */
 uint32_t dji_feedback_id(const MotorConfig *cfg)
 {
     return (is_c6x0(cfg->type) ? 0x200u : 0x204u) + cfg->id;
@@ -72,6 +75,7 @@ MotorCaps dji_caps(MotorType type)
                         .needs_enable = false };
 }
 
+/* 两个字节按大端（高字节在前）拼成有符号 16 位：DJI 协议的数据都是大端 */
 static int16_t be16(const uint8_t *p)
 {
     return (int16_t)(((uint16_t)p[0] << 8) | p[1]);
@@ -80,6 +84,7 @@ static int16_t be16(const uint8_t *p)
 void dji_decode_feedback(const MotorConfig *cfg, DjiMotorState *state, const uint8_t data[8],
                          MotorFeedback *out)
 {
+    /* 反馈帧：[0–1] 编码器 0–8191 | [2–3] 转速 rpm | [4–5] 实际电流原始值 | [6] 温度 °C（转子侧的值） */
     const DjiTypeParams *tp = &type_params[cfg->type];
     const uint16_t encoder = (uint16_t)be16(&data[0]) % ENCODER_COUNTS;
     const int16_t rpm = be16(&data[2]);
@@ -115,6 +120,7 @@ void dji_decode_feedback(const MotorConfig *cfg, DjiMotorState *state, const uin
     const int32_t signed_count =
         (encoder >= ENCODER_HALF) ? (int32_t)encoder - ENCODER_COUNTS : encoder;
 
+    /* 换算到输出轴国际单位：角度、转速除以减速比，力矩 = 电流 × 转子力矩常数 × 减速比；乘 direction 统一正方向 */
     out->angle_rad = dir * rotor_rad / cfg->gear_ratio;
     out->single_angle_rad = (float)signed_count * RAD_PER_COUNT;
     out->raw_encoder = encoder;
@@ -126,6 +132,7 @@ void dji_decode_feedback(const MotorConfig *cfg, DjiMotorState *state, const uin
     out->enabled = true; /* DJI 电调没有使能概念 */
 }
 
+/* 输出轴力矩 → 电调电流原始值（上面反馈换算的逆运算），超出量程就截断 */
 int16_t dji_torque_to_raw(const MotorConfig *cfg, float torque_nm)
 {
     const DjiTypeParams *tp = &type_params[cfg->type];

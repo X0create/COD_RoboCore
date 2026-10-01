@@ -183,6 +183,7 @@ typedef struct Motor
 RM_NODISCARD bool motor_init(Motor *m, const MotorConfig *cfg, MotorGroup *group,
                              const Motor **conflict);
 
+/** 这台电机支持什么（能否力矩控制、力矩反馈是否精确、是否需要使能），按型号查表 */
 MotorCaps motor_caps(const Motor *m);
 
 /** 子系统在 xxx_init() 里检查一次，运行时不再检查 */

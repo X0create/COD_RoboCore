@@ -12,6 +12,7 @@ static void take(Matrix *m, uint8_t rows, uint8_t cols, float **storage)
     *storage += (uint32_t)rows * cols;
 }
 
+/* 所有矩阵都从调用方给的一块 storage 里按顺序切出来：不用动态内存，大小由 KALMAN_STORAGE_FLOATS 算好 */
 void kalman_init(KalmanFilter *kf, uint8_t n, uint8_t m, uint8_t u, float *storage)
 {
     const uint8_t big = KALMAN_MAX2(n, m);
@@ -40,6 +41,7 @@ void kalman_init(KalmanFilter *kf, uint8_t n, uint8_t m, uint8_t u, float *stora
     take(&kf->vec, big, 1u, &storage);
 }
 
+/* 1. x⁻ = A x（+ B u） */
 void kalman_predict_state(KalmanFilter *kf)
 {
     matrix_mul(&kf->A, &kf->x, &kf->x_minus);
@@ -50,6 +52,7 @@ void kalman_predict_state(KalmanFilter *kf)
     }
 }
 
+/* 2. P⁻ = A P Aᵀ + Q */
 void kalman_predict_cov(KalmanFilter *kf)
 {
     matrix_mul(&kf->A, &kf->P, &kf->tmp_a);
@@ -58,6 +61,7 @@ void kalman_predict_cov(KalmanFilter *kf)
     matrix_add(&kf->P_minus, &kf->Q, &kf->P_minus);
 }
 
+/* 3. S = H P⁻ Hᵀ + R，K = P⁻ Hᵀ S⁻¹ */
 void kalman_compute_gain(KalmanFilter *kf)
 {
     matrix_trans(&kf->H, &kf->Ht);
@@ -70,6 +74,7 @@ void kalman_compute_gain(KalmanFilter *kf)
     matrix_mul(&kf->tmp_a, &kf->S_inv, &kf->K);
 }
 
+/* 4. y = z − H x⁻（新息），x = x⁻ + K y */
 void kalman_update_state(KalmanFilter *kf)
 {
     matrix_mul(&kf->H, &kf->x_minus, &kf->vec);
@@ -78,6 +83,7 @@ void kalman_update_state(KalmanFilter *kf)
     matrix_add(&kf->x_minus, &kf->vec, &kf->x);
 }
 
+/* 5. P = P⁻ − K H P⁻ = (I − K H) P⁻ */
 void kalman_update_cov(KalmanFilter *kf)
 {
     matrix_mul(&kf->K, &kf->H, &kf->tmp_a);

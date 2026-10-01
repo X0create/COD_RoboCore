@@ -38,6 +38,7 @@ bool ins_read(const Ins *ins, ImuState *out)
     return watchdog_read_data(&ins->wd, &ins->state, out, sizeof(*out));
 }
 
+/* 初始化 BMI088（复位、检查芯片 ID、配置量程和输出频率），在 ins_task 开始时调用 */
 Bmi088Status ins_start(Ins *ins)
 {
     return bmi088_init(&ins->imu);
@@ -51,7 +52,7 @@ static ImuState update_attitude(Ins *ins, const Bmi088Sample *s, uint64_t now_us
 /* 每 1 ms 一次的完整流程（相当于老模板 INS_Task 的循环体），各步骤的细节在下面 */
 InsEvent ins_step(Ins *ins)
 {
-    /* 1. 读 BMI088；坏帧时关加热、不发布 */
+    /* 1. 读 BMI088；坏帧时关加热、不更新姿态 */
     Bmi088Sample s;
     if (!read_sample(ins, &s))
     {
@@ -63,7 +64,7 @@ InsEvent ins_step(Ins *ins)
     /* 2. 恒温加热：芯片温度 → 加热 PID（每 1280 ms 算一次，ADR 0042，见 bmi088.c） */
     bmi088_heater_step(&ins->imu, s.temperature_c);
 
-    /* 3. 上电先标定陀螺零偏；标定完成前不发布，安全门据此全车停 */
+    /* 3. 上电先标定陀螺零偏；标定完成前不保存姿态（ins_read 返回 false），安全门据此全车停 */
     if (ins->phase == INS_PHASE_CALIBRATING)
     {
         return calibrate_gyro(ins, &s);
@@ -82,6 +83,7 @@ InsEvent ins_step(Ins *ins)
 /* 以下是各步骤的细节                                                    */
 /* ================================================================== */
 
+/* out = R · in：用安装旋转矩阵把芯片坐标系的向量转到机体坐标系 */
 static void rotate(const float r[9], const float in[3], float out[3])
 {
     for (int i = 0; i < 3; i++)

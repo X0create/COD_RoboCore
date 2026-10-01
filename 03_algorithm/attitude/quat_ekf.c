@@ -8,6 +8,11 @@
 
 #include <math.h>
 
+/*
+ * 状态 x（N = 6）：[q0 q1 q2 q3 bx by]，四元数 + x、y 轴陀螺零偏（z 轴零偏加速度计看不出来，不估计）。
+ * 测量 z（M = 3）：归一化的加速度，静止时就是重力方向。
+ * 每次更新：陀螺积分预测姿态 → 用加速度测到的重力方向修正 roll、pitch 和 x、y 零偏。
+ */
 #define N 6u
 #define M 3u
 
@@ -45,6 +50,7 @@ void quat_ekf_init(QuatEkf *ekf, float q_quat, float q_bias, float r_accel)
     ekf->gyro_bias[0] = ekf->gyro_bias[1] = ekf->gyro_bias[2] = 0.0f;
 }
 
+/* 把 x 限制在 [-limit, +limit] */
 static float clampf(float x, float limit)
 {
     return (x > limit) ? limit : ((x < -limit) ? -limit : x);
@@ -269,6 +275,7 @@ void quat_ekf_update(QuatEkf *ekf, const float gyro_rad_s[3], const float accel_
     ekf->gyro_bias[2] = 0.0f;
 }
 
+/* 四元数 → ZYX 欧拉角（只用于显示和调试，控制用四元数） */
 void quat_ekf_to_euler(const float q[4], float *yaw_rad, float *pitch_rad, float *roll_rad)
 {
     float s = 2.0f * (q[0] * q[2] - q[1] * q[3]);

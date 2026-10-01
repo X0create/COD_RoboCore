@@ -66,6 +66,7 @@
                  .integral_limit = HEATER_DUTY_CAP / HEATER_KI_STEP,                               \
                  .output_limit = HEATER_DUTY_CAP })
 
+/* 配置表的一行：往哪个寄存器写什么值 */
 typedef struct
 {
     uint8_t reg;
@@ -119,6 +120,7 @@ static bool read_regs(SpiDevice dev, uint8_t reg, uint8_t *out, uint8_t len)
     return ok;
 }
 
+/* 写一个寄存器：地址（最高位为 0 表示写）+ 值，同样是一个完整事务 */
 static bool write_reg(SpiDevice dev, uint8_t reg, uint8_t value)
 {
     const uint8_t tx[2] = { reg, value };
@@ -143,6 +145,7 @@ static uint8_t read_chip_id(SpiDevice dev)
     return id;
 }
 
+/* 软复位后读芯片 ID：读到预期值才说明芯片在、SPI 通了（片选接错、没焊好都会在这里失败） */
 static bool reset_and_check(SpiDevice dev, uint8_t reset_reg, uint8_t expect_id)
 {
     (void)read_chip_id(dev);
@@ -151,6 +154,7 @@ static bool reset_and_check(SpiDevice dev, uint8_t reset_reg, uint8_t expect_id)
     return read_chip_id(dev) == expect_id;
 }
 
+/* 按表逐项写入并读回核对；有一项对不上就失败（芯片没进正常模式、写入被干扰） */
 static bool configure(SpiDevice dev, const RegValue *table, uint32_t count)
 {
     for (uint32_t i = 0u; i < count; i++)
@@ -170,6 +174,7 @@ static bool configure(SpiDevice dev, const RegValue *table, uint32_t count)
 
 Bmi088Status bmi088_init(Bmi088 *imu)
 {
+    /* 顺序：加速度计复位 → 配置 → 陀螺仪复位 → 配置 → 打开加热 PWM；哪一步失败就返回对应的错误码 */
     const PidParam heater_param = HEATER_PID_PARAM;
     *imu = (Bmi088){ 0 };
     pid_init(&imu->heater_pid, PID_POSITION, &heater_param);
@@ -197,6 +202,7 @@ Bmi088Status bmi088_init(Bmi088 *imu)
     return BMI088_OK;
 }
 
+/* 两个字节按小端（低字节在前）拼成有符号 16 位：BMI088 的数据寄存器是小端 */
 static int16_t le16(const uint8_t *p)
 {
     return (int16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
@@ -220,6 +226,7 @@ bool bmi088_read(Bmi088 *imu, Bmi088Sample *out)
         return false;
     }
 
+    /* 原始值 × 量程系数 = 国际单位；角速度同时减去零偏（上电标定和静止时在线修正得到的） */
     for (int i = 0; i < 3; i++)
     {
         out->accel_m_s2[i] = ACCEL_6G_M_S2_PER_LSB * (float)le16(&acc[2 * i]);
@@ -244,6 +251,7 @@ void bmi088_set_gyro_offset(Bmi088 *imu, const float offset_rad_s[3])
     }
 }
 
+/* 每 1 ms 调用一次，数满 HEATER_PERIOD_MS 次才算一次 PID（和温度寄存器的更新周期同步） */
 void bmi088_heater_step(Bmi088 *imu, float temperature_c)
 {
     if (++imu->heater_tick < HEATER_PERIOD_MS)
@@ -255,6 +263,7 @@ void bmi088_heater_step(Bmi088 *imu, float temperature_c)
     pwm_set_duty(PWM_IMU_HEATER, pid_step(&imu->heater_pid, BMI088_HEATER_TARGET_C, temperature_c));
 }
 
+/* 读不到温度时关掉加热：没有温度反馈还继续加热会过热 */
 void bmi088_heater_off(Bmi088 *imu)
 {
     (void)imu;

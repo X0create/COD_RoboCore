@@ -4,15 +4,18 @@
  */
 #include "dr16.h"
 
+/* 摇杆原始值的合法范围和中位（DBUS 协议，附录 A.4）：减去中位后是 -660 ~ +660 */
 #define CH_MIN    364
 #define CH_MAX    1684
 #define CH_OFFSET 1024
 
+/* 摇杆值超出范围说明这一帧错位或受了干扰：整帧丢弃，不让错误数据进系统 */
 static bool ch_valid(uint16_t raw)
 {
     return raw >= CH_MIN && raw <= CH_MAX;
 }
 
+/* 拨杆只有 1（上）、3（中）、2（下）三个合法值 */
 static bool sw_valid(uint8_t raw)
 {
     return raw >= 1u && raw <= 3u;
@@ -45,6 +48,7 @@ bool dr16_decode(const uint8_t frame[DR16_FRAME_LEN], RcState *out)
         return false;
     }
 
+    /* 校验通过才写 out：摇杆减去中位，键鼠字节原样搬过来 */
     for (int i = 0; i < 5; i++)
     {
         out->ch[i] = (int16_t)(ch[i] - CH_OFFSET);

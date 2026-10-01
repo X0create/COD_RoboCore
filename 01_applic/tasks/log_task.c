@@ -16,6 +16,7 @@
 
 #define LOG_PERIOD_MS 1000u
 
+/* 遥控：在线时打印 5 个通道和两个拨杆；丢失时打印坏帧数（排查接线、波特率时看它是否在涨） */
 static void log_rc(void)
 {
     RcState rc;
@@ -28,6 +29,7 @@ static void log_rc(void)
              (int)rc.sw[0], (int)rc.sw[1]);
 }
 
+/* 每个轮子一行：实测转速 / 目标转速 / 力矩 / 温度；最后一行是底盘目标速度 */
 static void log_chassis(void)
 {
     const Chassis *c = &chassis;
@@ -50,6 +52,7 @@ static void log_chassis(void)
              c->measure.all_online ? "" : " (motor offline: stopping)");
 }
 
+/* 姿态（欧拉角只用于显示）和 IMU 温度；标定完成前打印 not ready */
 static void log_imu(void)
 {
     ImuState st;
