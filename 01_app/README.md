@@ -4,7 +4,7 @@
 
 | 目录 | 类别 | 内容 |
 | --- | --- | --- |
-| `common/` | 各兵种共用 | `comm_rx_task.c`（收 CAN 帧、串口和 USB 字节，交给设备解析）、`daemon_task.c`（设备上线 / 离线报告、CAN bus-off 恢复）、`safety_gate.c`（安全门与模式，全车停） |
+| `common/` | 各兵种共用 | `comm_rx.c`（接收的公共部分：中断唤醒任务、分发 CAN、打开接收）、`daemon_task.c`（设备上线 / 离线报告、CAN bus-off 恢复）、`safety_gate.c`（安全门与模式，全车停） |
 | `chassis/` | 机构 | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮，读实测 → 算目标 → 算输出（ADR 0043） |
 | `ins/` | 机构 | 惯性导航：BMI088 → 零偏标定 → EKF → 发布 `imu_state` |
 | `infantry/` | 兵种 | 步兵（预设 `h723-infantry-debug`）。第一版只有底盘：四轮全向轮，遥控直接给底盘速度 |
@@ -19,6 +19,7 @@ infantry/
 ├── robot.c           ① 对象定义 ② init_objects() ③ 任务表（5 个任务的优先级、栈）
 │                     ④ app_main()：调度器启动前 ⑤ startup_task()：打开接收、允许解锁
 ├── control_task.c    1 kHz：读输入 → 安全门 → 底盘 → 发送
+├── comm_rx_task.c    收到数据就运行：打开接收；CAN → 电机反馈，UART5 → DR16（接线写在这里）
 ├── ins_task.c        1 kHz：姿态解算
 └── heartbeat_task.c  25 ms：状态灯、蜂鸣器、电池、每秒 RTT 打印
 ```

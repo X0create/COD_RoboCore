@@ -20,22 +20,39 @@ void motor_group_apply_stop_all(MotorGroup *group)
 }
 
 /*
- * 一个电调本周期的电流原始值。
- * DJI 的零力矩和失能都发 0（区别在整帧是否继续发送，见 motor_group_flush）；
- * 没写指令、或反馈离线，填零力矩，不保持上一帧。
+ * 第 1 步：本周期这个电机最终发什么。全部规则只写在这里，按优先级从上往下：
+ *   1. 有停机动作（子系统的机构停，或 motor_group_apply_stop_all() 的全车停）→ 执行停机动作
+ *   2. 本周期没写力矩指令                                                → 零力矩，不保持上一帧
+ *   3. 反馈离线（20 ms 没收到）                                          → 零力矩
+ *   4. 否则                                                              → 发写入的力矩
  */
-static int16_t slot_value(const Motor *m, bool *disabled)
+static MotorOutput final_output(const Motor *m)
 {
-    *disabled = m->safe_set && m->safe_action == SAFE_ACTION_DISABLE;
-    if (m->safe_set || !m->torque_set || !watchdog_is_online(&m->wd))
+    if (m->safe_set)
     {
-        return 0;
+        switch (m->safe_action)
+        {
+            case SAFE_ACTION_ZERO_TORQUE:
+                break;
+            case SAFE_ACTION_DAMP:
+                return (MotorOutput){ .kind = MOTOR_OUT_DAMP };
+            case SAFE_ACTION_DISABLE:
+                return (MotorOutput){ .kind = MOTOR_OUT_DISABLE };
+        }
+        return (MotorOutput){ .kind = MOTOR_OUT_ZERO_TORQUE };
     }
-    /* 不支持力矩指令的型号（GM6020）量程为 0，结果恒为 0 */
-    return dji_torque_to_raw(m->cfg, m->torque_cmd_nm);
+    if (!m->torque_set || !watchdog_is_online(&m->wd))
+    {
+        return (MotorOutput){ .kind = MOTOR_OUT_ZERO_TORQUE };
+    }
+    return (MotorOutput){ .kind = MOTOR_OUT_TORQUE, .torque_nm = m->torque_cmd_nm };
 }
 
-static void flush_frame(MotorGroup *group, CanBusId bus, uint8_t frame_index)
+/*
+ * 第 2、3 步（DJI）：一条总线上同一控制帧（0x200 / 0x1FF …）的电调共用一帧，每台占 2 字节电流原始值。
+ * 力矩以外的输出都发 0；不支持力矩指令的型号（GM6020）量程为 0，结果恒为 0。
+ */
+static void send_dji_frame(MotorGroup *group, CanBusId bus, uint8_t frame_index)
 {
     CanFrame frame = { .id = dji_ctrl_frame_id(frame_index), .len = 8u, .is_fd = false };
     bool used = false;
@@ -45,7 +62,7 @@ static void flush_frame(MotorGroup *group, CanBusId bus, uint8_t frame_index)
     {
         if (m->cfg->type == MOTOR_DM)
         {
-            continue; /* 达妙每台一帧，见 flush_dm */
+            continue; /* 达妙每台一帧，见 send_dm_frame */
         }
         uint8_t f, slot;
         dji_ctrl_slot(m->cfg, &f, &slot);
@@ -53,10 +70,10 @@ static void flush_frame(MotorGroup *group, CanBusId bus, uint8_t frame_index)
         {
             continue;
         }
-        bool disabled;
-        const int16_t raw = slot_value(m, &disabled);
+        const int16_t raw =
+            m->out.kind == MOTOR_OUT_TORQUE ? dji_torque_to_raw(m->cfg, m->out.torque_nm) : 0;
         used = true;
-        all_disabled = all_disabled && disabled;
+        all_disabled = all_disabled && m->out.kind == MOTOR_OUT_DISABLE;
         frame.data[2u * slot] = (uint8_t)((uint16_t)raw >> 8);
         frame.data[2u * slot + 1u] = (uint8_t)((uint16_t)raw & 0xFFu);
     }
@@ -78,10 +95,11 @@ static void flush_frame(MotorGroup *group, CanBusId bus, uint8_t frame_index)
 }
 
 /*
- * 达妙电机这个周期发哪一帧（每个周期必发一帧：驱动器只在收到帧时回反馈，不发就判断不了在不在线）。
- * 使能按“期望状态”对齐：期望与反馈不一致时发命令，两条命令至少间隔 DM_CMD_INTERVAL_US（等确认或超时）。
+ * 第 2、3 步（达妙）：每台每个周期必发一帧（驱动器只在收到帧时回反馈，不发就判断不了在不在线）。
+ * 使能按“期望状态”对齐：期望与反馈不一致时先发命令（清错 / 使能 / 失能），两条命令至少间隔 DM_CMD_INTERVAL_US；
+ * 不发命令的周期按第 1 步的输出发 MIT 帧。
  */
-static void flush_dm(MotorGroup *group, Motor *m, uint64_t now_us)
+static void send_dm_frame(MotorGroup *group, Motor *m, uint64_t now_us)
 {
     DmMotorState *st = &m->brand.dm;
     const MotorConfig *cfg = m->cfg;
@@ -92,7 +110,7 @@ static void flush_dm(MotorGroup *group, Motor *m, uint64_t now_us)
     rm_critical_exit();
     const bool online = watchdog_is_online(&m->wd);
 
-    if (!online || (m->safe_set && m->safe_action == SAFE_ACTION_DISABLE))
+    if (!online || m->out.kind == MOTOR_OUT_DISABLE)
     {
         st->want_enabled = false; /* 离线后重新上线不自动使能；失能停机同样放弃使能 */
     }
@@ -122,13 +140,13 @@ static void flush_dm(MotorGroup *group, Motor *m, uint64_t now_us)
         st->cmd_sent = true;
         st->last_cmd_us = now_us;
     }
-    else if (m->safe_set && m->safe_action == SAFE_ACTION_DAMP)
+    else if (m->out.kind == MOTOR_OUT_DAMP)
     {
         dm_encode_mit(cfg, 0.0f, 0.0f, 0.0f, cfg->dm.damp_kd, 0.0f, frame.data);
     }
-    else if (!m->safe_set && m->torque_set && online)
+    else if (m->out.kind == MOTOR_OUT_TORQUE)
     {
-        dm_encode_mit(cfg, 0.0f, 0.0f, 0.0f, 0.0f, m->torque_cmd_nm, frame.data);
+        dm_encode_mit(cfg, 0.0f, 0.0f, 0.0f, 0.0f, m->out.torque_nm, frame.data);
     }
     else
     {
@@ -143,11 +161,18 @@ static void flush_dm(MotorGroup *group, Motor *m, uint64_t now_us)
 
 void motor_group_flush(MotorGroup *group)
 {
+    /* 1. 确定指令：每个电机本周期最终发什么（停机动作 > 没写指令 > 离线 > 力矩，见 final_output） */
+    for (Motor *m = group->head; m != NULL; m = m->next)
+    {
+        m->out = final_output(m);
+    }
+
+    /* 2. 编码 → 3. 发送：DJI 按控制帧打包，达妙每台一帧 */
     for (int bus = 0; bus < (int)CAN_BUS_COUNT; bus++)
     {
         for (uint8_t f = 0u; f < DJI_CTRL_FRAMES; f++)
         {
-            flush_frame(group, (CanBusId)bus, f);
+            send_dji_frame(group, (CanBusId)bus, f);
         }
     }
     const uint64_t now_us = rm_time_now_us();
@@ -155,9 +180,11 @@ void motor_group_flush(MotorGroup *group)
     {
         if (m->cfg->type == MOTOR_DM)
         {
-            flush_dm(group, m, now_us);
+            send_dm_frame(group, m, now_us);
         }
     }
+
+    /* 4. 清理：本周期的指令只用一次，下个周期不再写就发零力矩 */
     for (Motor *m = group->head; m != NULL; m = m->next)
     {
         m->torque_set = false;

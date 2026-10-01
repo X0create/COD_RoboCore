@@ -48,8 +48,8 @@ RM_NODISCARD bool uart_rx_start(UartPort port, UartRxNotify notify, void *ctx);
 
 /**
  * @brief   取出上次调用以来收到的新字节
- * @return  取出的字节数，最多 max_len；新数据更多时剩下的留到下次
- * @pre     uart_rx_start() 已成功；只由一个任务调用；两次调用间隔内收到的数据不超过接收缓冲区（256 字节），
+ * @return  取出的字节数，最多 max_len；新数据更多时剩下的留到下次；串口没有成功打开时返回 0
+ * @pre     只由一个任务调用；两次调用间隔内收到的数据不超过接收缓冲区（256 字节），
  *          否则旧数据被覆盖、取出的内容会乱（由设备层的帧检查丢弃）
  */
 uint32_t uart_read(UartPort port, uint8_t *out, uint32_t max_len);

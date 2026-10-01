@@ -97,7 +97,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 ```text
 COD_RoboCore/
 ├── 01_app/                  业务（≈ 老模板 Application/）：机构 + 兵种
-│   ├── common/              各兵种共用：comm_rx_task.c（收 CAN / 串口 / USB）、daemon_task.c（上线 / 离线）、安全门
+│   ├── common/              各兵种共用：comm_rx.c（接收公共部分）、daemon_task.c（上线 / 离线）、安全门
 │   ├── chassis/             机构：底盘（全向轮 / 麦轮 / 舵轮）
 │   ├── ins/                 机构：惯性导航（标定、零偏在线修正、EKF、发布姿态）
 │   ├── gimbal/ shoot/ …     （规划）云台、发射、轮腿

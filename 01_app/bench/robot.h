@@ -56,7 +56,10 @@ extern Buzzer buzzer;
 extern SafetyGate gate;
 extern Ins ins;
 
-/* ---------------- 任务入口（一个任务一个文件；comm_rx、daemon 在 01_app/common/） ---------------- */
+/* ---------------- 任务入口（一个任务一个文件；daemon 各兵种相同，在 01_app/common/） ---------------- */
+
+/** comm_rx_task.c：收到数据就运行，打开接收，然后把 CAN、串口、USB 的数据交给对应解析器（接线写在这个文件里） */
+void comm_rx_task_entry(void *arg);
 
 /** control_task.c：1 kHz，读输入 → 安全门 → 速度环 → 发送 */
 void control_task_entry(void *arg);
@@ -77,7 +80,7 @@ void heartbeat_task_entry(void *arg);
 void app_main(void);
 
 /**
- * @brief   启动任务：调度器启动后第一个运行，打开接收、允许解锁，然后删除自己
+ * @brief   启动任务：调度器启动后第一个运行，打开 ADC、蜂鸣器，允许解锁，然后删除自己
  * @note    CubeMX 以最高优先级静态创建它（ADR 0025 修订），生成的是弱定义，robot.c 里是真正的实现
  */
 void startup_task(void *argument);

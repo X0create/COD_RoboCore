@@ -5,23 +5,21 @@
  *          2. init_objects()：设备 → 底盘 → IMU → 安全门
  *          3. 任务表：5 个任务的优先级、栈、入口（相当于老模板 Core/Src/freertos.c 里的任务列表）
  *          4. app_main()：调度器启动前，由 CubeMX 的 freertos.c 调用
- *          5. startup_task()：调度器启动后第一个运行，打开接收、允许解锁
- *          任务本身一个任务一个文件：control_task.c、ins_task.c、heartbeat_task.c 在本目录，
- *          comm_rx_task.c、daemon_task.c 各兵种相同，在 01_app/common/。调用关系总图见 docs/CALL_FLOW.md。
+ *          5. startup_task()：调度器启动后第一个运行，打开 ADC、蜂鸣器，允许解锁
+ *          任务本身一个任务一个文件：control_task.c、comm_rx_task.c、ins_task.c、heartbeat_task.c 在本目录；
+ *          接线（哪个串口交给哪个解析器）在本目录的 comm_rx_task.c；daemon_task.c 各兵种相同，在 01_app/common/。调用关系总图见 docs/CALL_FLOW.md。
  *          startup_task 必须和 app_main 放在同一个文件里：它在 CubeMX 生成代码里已有弱定义，
  *          单独放进静态库的另一个 .o 时链接器不会去取，弱定义的空函数就会被悄悄用上。
  */
 #include "robot.h"
 
-#include "01_app/common/comm_rx_task.h"
+#include "01_app/common/comm_rx.h"
 #include "01_app/common/daemon_task.h"
 #include "04_core/log/log.h"
 #include "04_core/os/os.h"
 #include "05_platform/adc.h"
 #include "05_platform/time.h"
 #include "config.h"
-
-#define DBUS_UART UART_5 /* DR16 接收机（接线沿用 COD-H7-Template） */
 
 /* ================================================================== */
 /* 1. 对象                                                             */
@@ -50,17 +48,10 @@ Ins ins;
 /* 2. 初始化对象（调度器启动前）                                         */
 /* ================================================================== */
 
-/* comm_rx 任务把 UART5 收到的字节交给这里 */
-static void on_dbus_bytes(const uint8_t *data, uint32_t len, uint64_t now_us, void *ctx)
-{
-    (void)ctx;
-    dr16_on_bytes(&dr16, data, len, now_us);
-}
-
 /** @return false：必需的设备或子系统初始化失败，原因已记日志 */
 static bool init_objects(void)
 {
-    if (!dr16_init(&dr16, &rc_state) || !comm_rx_add_uart(DBUS_UART, on_dbus_bytes, NULL))
+    if (!dr16_init(&dr16, &rc_state))
     {
         RM_LOG_E("dr16 init failed");
         return false;
@@ -103,7 +94,7 @@ static bool init_objects(void)
  * | 任务      | 文件                      | 优先级 | 栈    | 周期                  |
  * | --------- | ------------------------- | ------ | ----- | --------------------- |
  * | ins       | ins_task.c                | 5 最高 | 4 KB  | 1 ms                  |
- * | comm_rx   | 01_app/common/comm_rx_task.c | 4      | 2 KB  | 收到 CAN / 串口就运行 |
+ * | comm_rx   | comm_rx_task.c               | 4      | 2 KB  | 收到 CAN / 串口就运行 |
  * | control   | control_task.c            | 3      | 4 KB  | 1 ms                  |
  * | daemon    | 01_app/common/daemon_task.c  | 2      | 1 KB  | 10 ms                 |
  * | heartbeat | heartbeat_task.c          | 1      | 1 KB  | 25 ms                 |
@@ -113,7 +104,7 @@ static bool init_objects(void)
  * startup 任务由 CubeMX 创建，不在这张表里。
  */
 static RmTask ins_task, control_task, daemon_task,
-    heartbeat_task; /* comm_rx_task 在 comm_rx_task.c */
+    heartbeat_task; /* comm_rx_task 在 01_app/common/comm_rx.c（中断要用它唤醒任务） */
 static StackType_t ins_stack[1024], comm_rx_stack[512], control_stack[1024], daemon_stack[256],
     heartbeat_stack[256];
 
@@ -180,7 +171,6 @@ void startup_task(void *argument)
 {
     (void)argument;
 
-    comm_rx_start(); /* 打开 CAN、串口接收，收到数据由中断唤醒 comm_rx 任务 */
     if (!adc_start())
     {
         RM_LOG_E("adc start failed"); /* 只影响低电量提示，不阻止解锁 */

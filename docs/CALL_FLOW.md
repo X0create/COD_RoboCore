@@ -62,10 +62,11 @@ COD-H7-Template/
 ├── robot.h            全部对象 + 各任务入口的声明                 ← 相当于老模板的全局变量
 ├── robot.c            从上往下：① 对象定义 ② init_objects() ③ 任务表 ④ app_main() ⑤ startup_task()
 ├── control_task.c     1 kHz：读输入 → 安全门 → 底盘 → 发送        ← Control_Task + CAN_Task
+├── comm_rx_task.c     收到数据就运行：打开接收，CAN → 电机，UART5 → DR16 ← BSP 里的接收回调
 ├── ins_task.c         1 kHz：IMU 姿态解算                         ← INS_Task
 └── heartbeat_task.c   25 ms：状态灯、蜂鸣器、电池、每秒 RTT 打印
 01_app/common/（各兵种相同）
-├── comm_rx_task.c     comm_rx 任务：收 CAN、串口、USB             ← BSP 里的接收回调
+├── comm_rx.c          接收的公共部分：中断唤醒任务、分发 CAN、打开接收
 ├── daemon_task.c      daemon 任务：上线 / 离线报告、CAN bus-off 恢复 ← Detect_Task
 └── safety_gate.c      安全门：急停、遥控丢失、未解锁、IMU 未就绪 → 全车停
 01_app/chassis/chassis.c  底盘：读实测 → 算目标 → 算输出
@@ -82,7 +83,6 @@ main()（CubeMX）→ MX_FREERTOS_Init()（freertos.c 的 USER CODE 区）
    └─ create_tasks()                            ③ 按任务表创建 5 个任务（任何一步失败都停在 halt_on_init_failure）
 （调度器启动）
 startup_task()                                  ⑤ 最高优先级，第一个运行
-├─ comm_rx_start()                              01_app/common/comm_rx_task.c：打开每路 CAN、登记过的串口和 USB 接收
 ├─ adc_start()、buzzer_init() + 启动音
 ├─ safety_gate_set_system_ready(&gate)          允许解锁
 └─ rm_task_delete_self()
@@ -106,7 +106,11 @@ for (;;)
 │     └─ chassis_output_update()                每轮速度环 pid_calc → motor_set_torque
 └─ 4. 发送
    ├─ （全车停）motor_group_apply_stop_all()    02_devices/motor/motor_group.c   每个电机改写成它的停机动作
-   └─ motor_group_flush(&motors)                02_devices/motor/motor_group.c   打包 0x200 / 0x1FF 帧 → can_send
+   └─ motor_group_flush(&motors)                02_devices/motor/motor_group.c
+      ├─ 1. 确定指令：final_output()             每个电机最终发什么：停机动作 > 没写指令 > 离线 > 力矩
+      ├─ 2. 编码 → 3. 发送：send_dji_frame()    四台电调共用一帧（0x200 / 0x1FF）→ can_send
+      │                     send_dm_frame()     达妙每台一帧：先对齐使能（清错 / 使能 / 失能命令），否则 MIT 帧
+      └─ 4. 清理                               清空本周期指令：下个周期不写就发零力矩
 ```
 
 和老模板一一对应：`chassis_measure_update` ↔ `Control_Measure_Update`，`chassis_target_update` ↔ `Control_Target_Update`，
@@ -125,19 +129,20 @@ for (;;)
       └─ imu_state_publish(&imu_state, ...)     control、heartbeat 读
 ```
 
-### comm_rx 任务（收到数据就运行）：`01_app/common/comm_rx_task.c:comm_rx_task_entry`
+### comm_rx 任务（收到数据就运行）：`01_app/infantry/comm_rx_task.c:comm_rx_task_entry`
 
 ```
 中断：HAL_FDCAN_RxFifo0/1Callback               05_platform/stm32h7/can.c    帧放进环形缓冲
       HAL_UARTEx_RxEventCallback                05_platform/stm32h7/uart.c   DMA 收到的字节留在缓冲区
-      └─ ⚡函数指针 notify → notify_from_isr()（comm_rx_task.c）  唤醒 comm_rx 任务
+      └─ ⚡函数指针 notify → notify_from_isr()（01_app/common/comm_rx.c）  唤醒 comm_rx 任务
 comm_rx 任务：
-├─ can_dispatch(每路)                           05_platform/stm32h7/can.c    按 CAN ID 找订阅者
-│  └─ ⚡函数指针 → on_feedback()                 02_devices/motor/motor.c     解码（dji_decode_feedback / dm_decode_feedback）→ 存反馈、喂狗
-│     （订阅在 motor_init() 里：每个电机订阅自己的反馈 ID，ID 冲突在初始化时报错）
-└─ drain_uart(每个登记的串口)
-   └─ ⚡函数指针 → on_dbus_bytes()               01_app/infantry/robot.c
-      └─ dr16_on_bytes(&dr16, ...)              02_devices/remote/dr16.c     凑满 18 字节 → dr16_decode → rc_state_publish
+├─ comm_rx_start_can()、comm_rx_start_uart(UART_5)   任务开头打开接收（接线就写在这个文件里）
+└─ for (;;)
+   ├─ comm_rx_wait()                            等中断通知，最多 10 ms
+   ├─ comm_rx_can_all() → can_dispatch(每路)    05_platform/stm32h7/can.c    按 CAN ID 找订阅者
+   │  └─ ⚡函数指针 → on_feedback()              02_devices/motor/motor.c     解码（dji_decode_feedback / dm_decode_feedback）→ 存反馈、喂狗
+   │     （订阅在 motor_init() 里：每个电机订阅自己的反馈 ID，ID 冲突在初始化时报错）
+   └─ uart_read(UART_5) → dr16_on_bytes()       02_devices/remote/dr16.c     凑满 18 字节 → dr16_decode → rc_state_publish
 ```
 
 ### daemon 任务（10 ms）：`01_app/common/daemon_task.c:daemon_task_entry`

@@ -17,10 +17,10 @@ if(NOT RM_BOARD)
     return()
 endif()
 
-# 兵种目录下的全部 .c（robot.c 和每个任务一个文件：control_task.c、ins_task.c、heartbeat_task.c）
+# 兵种目录下的全部 .c（robot.c 和每个任务一个文件：control_task.c、comm_rx_task.c、ins_task.c、heartbeat_task.c）
 file(GLOB rm_robot_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${RM_ROBOT}/*.c)
 add_library(rm_app STATIC
-    common/comm_rx_task.c
+    common/comm_rx.c
     common/daemon_task.c
     ${rm_robot_sources}
 )

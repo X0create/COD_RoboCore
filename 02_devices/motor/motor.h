@@ -4,7 +4,8 @@
  * @note    - 单位全部是输出轴上的国际单位：rad、rad/s、N·m（ADR 0031）；
  *          - 品牌分支只出现在 02_devices/motor/ 内部，子系统只调用 motor_*()；
  *          - 反馈由 comm_rx 任务写、control 任务读，motor_read_feedback() 在临界区里拷贝完整快照；
- *          - 指令只写入槽位，control 任务周期末尾由 motor_group_flush() 统一打包发送（motor_group.h）；
+ *          - motor_set_torque() / motor_apply_safe_action() 只记下本周期的指令；离线、停机动作、达妙使能
+ *            都在 control 任务周期末尾的 motor_group_flush() 里统一处理并发送（motor_group.c 的 final_output()）；
  *          - 设备层不做任何闭环（ADR 0016）。
  *          品牌：DJI（M3508 / M2006 / GM6020）、达妙（MIT 模式，ADR 0035）。
  */
@@ -117,6 +118,21 @@ typedef struct
 
 typedef struct MotorGroup MotorGroup;
 
+/** 本周期一个电机最终发什么：motor_group_flush() 第 1 步由 final_output() 算出，第 2 步按它编码 */
+typedef enum
+{
+    MOTOR_OUT_TORQUE,      /* 发 MotorOutput.torque_nm */
+    MOTOR_OUT_ZERO_TORQUE, /* 不出力 */
+    MOTOR_OUT_DAMP,        /* 阻尼（只有达妙支持；DJI 按零力矩发） */
+    MOTOR_OUT_DISABLE,     /* 失能：DJI 发一次 0 后停发；达妙发失能命令 */
+} MotorOutputKind;
+
+typedef struct
+{
+    MotorOutputKind kind;
+    float torque_nm; /* kind 为 MOTOR_OUT_TORQUE 时有效 */
+} MotorOutput;
+
 /** 运行状态：只由 02_devices/motor/ 内部读写，其他文件不要直接访问 */
 typedef struct Motor
 {
@@ -134,6 +150,7 @@ typedef struct Motor
     bool torque_set;
     SafeAction safe_action;
     bool safe_set;
+    MotorOutput out; /* motor_group_flush() 第 1 步写、第 2 步读 */
 
     struct Motor *next; /* 所属电机组的链表 */
 } Motor;
@@ -160,12 +177,13 @@ bool motor_supports_torque(const Motor *m);
 RM_NODISCARD bool motor_read_feedback(const Motor *m, MotorFeedback *out);
 
 /**
- * @brief   写入本周期的力矩指令（输出轴 N·m），超出电调量程时截到量程
+ * @brief   记下本周期的力矩指令（输出轴 N·m），motor_group_flush() 时才编码发送，超出电调量程时截到量程
+ * @note    本周期没调用的电机发零力矩；电机离线或有停机动作时，这个指令不会发出（motor_group.c 的 final_output()）
  * @pre     motor_supports_torque(m)；只在 control 任务里调用
  */
 void motor_set_torque(Motor *m, float torque_nm);
 
-/** 本周期执行停机动作，覆盖 motor_set_torque()；只在 control 任务里调用 */
+/** 本周期执行停机动作，优先于 motor_set_torque()；motor_group_flush() 时才发出。只在 control 任务里调用 */
 void motor_apply_safe_action(Motor *m, SafeAction action);
 
 /**

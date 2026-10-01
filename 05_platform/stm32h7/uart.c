@@ -72,6 +72,10 @@ bool uart_rx_start(UartPort port, UartRxNotify notify, void *ctx)
 uint32_t uart_read(UartPort port, uint8_t *out, uint32_t max_len)
 {
     UartRx *self = &rx[port];
+    if (!self->started)
+    {
+        return 0u; /* 没有打开（板上没有这个串口或 CubeMX 配置不对，打开时已报错）：句柄可能为空，不能读 */
+    }
 
     /* 中断里重新启动过接收：DMA 从缓冲区开头重新写，读位置跟着归零 */
     const uint32_t restarts = self->restart_count;

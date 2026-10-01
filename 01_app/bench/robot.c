@@ -5,32 +5,22 @@
  *          2. init_objects()：遥控 → 视觉 / 图传链路 → 电机 → IMU → 安全门
  *          3. 任务表：5 个任务的优先级、栈、入口（相当于老模板 Core/Src/freertos.c 里的任务列表）
  *          4. app_main()：调度器启动前，由 CubeMX 的 freertos.c 调用
- *          5. startup_task()：调度器启动后第一个运行，打开接收、允许解锁
- *          control（遥控控制一台 M3508 的转速 + 一台达妙）、ins、heartbeat 一个任务一个文件在本目录，
- *          comm_rx_task.c、daemon_task.c 各兵种相同，在 01_app/common/。
- *          图传链路（VT13 遥控器、键鼠）接 USART10，只解析和发布，暂不参与控制（ADR 0036）。
- *          USB 虚拟串口接上位机：vision_link 找 0x5A 帧并计数；收到的字节原样回发，用电脑串口助手验证通道
- *          （视觉协议确定后去掉回发，ADR 0037）。调用关系总图见 docs/CALL_FLOW.md。
+ *          5. startup_task()：调度器启动后第一个运行，打开 ADC、蜂鸣器，允许解锁
+ *          control（遥控控制一台 M3508 的转速 + 一台达妙）、comm_rx、ins、heartbeat 一个任务一个文件在本目录；
+ *          接线（哪个串口交给哪个解析器）在本目录的 comm_rx_task.c；daemon_task.c 各兵种相同，在 01_app/common/。
+ *          图传链路只解析和发布，暂不参与控制（ADR 0036）。调用关系总图见 docs/CALL_FLOW.md。
  *          startup_task 必须和 app_main 放在同一个文件里：它在 CubeMX 生成代码里已有弱定义，
  *          单独放进静态库的另一个 .o 时链接器不会去取，弱定义的空函数就会被悄悄用上。
  */
 #include "robot.h"
 
-#include "01_app/common/comm_rx_task.h"
+#include "01_app/common/comm_rx.h"
 #include "01_app/common/daemon_task.h"
 #include "04_core/log/log.h"
 #include "04_core/os/os.h"
 #include "05_platform/adc.h"
-#include "05_platform/can.h"
 #include "05_platform/time.h"
-#include "05_platform/uart.h"
-#include "05_platform/usb_cdc.h"
 #include "config.h"
-
-/* DR16 接收机接 UART5（接线沿用 COD-H7-Template，《架构设计》“阶段 1 清单”） */
-#define DBUS_UART UART_5
-/* 图传链路接 USART10（921600，ADR 0036） */
-#define VT_LINK_UART UART_10
 
 /* ================================================================== */
 /* 1. 对象                                                             */
@@ -65,33 +55,6 @@ Ins ins;
 /* 2. 初始化对象（调度器启动前）                                         */
 /* ================================================================== */
 
-/* 以下三个由 comm_rx 任务调用：UART5、USB、USART10 收到的字节交给对应设备 */
-static void on_dbus_bytes(const uint8_t *data, uint32_t len, uint64_t now_us, void *ctx)
-{
-    (void)ctx;
-    dr16_on_bytes(&dr16, data, len, now_us);
-}
-
-/* USB 收到的数据：交给视觉链路找帧，并原样回发（验证通道用；发送忙时丢弃） */
-static void on_usb_bytes(const uint8_t *data, uint32_t len, uint64_t now_us, void *ctx)
-{
-    (void)now_us;
-    (void)ctx;
-    vision_link_on_bytes(&vision_link, data, len);
-    usb_rx_bytes += len;
-    if (!usb_cdc_write(data, len))
-    {
-        usb_echo_dropped++; /* 上一包还没发完：这段不回发 */
-    }
-}
-
-static void on_vt_link_bytes(const uint8_t *data, uint32_t len, uint64_t now_us, void *ctx)
-{
-    (void)now_us;
-    (void)ctx;
-    vt_link_on_bytes(&vt_link, data, len);
-}
-
 static bool init_motor(Motor *m, const MotorConfig *cfg)
 {
     const Motor *conflict;
@@ -108,15 +71,13 @@ static bool init_motor(Motor *m, const MotorConfig *cfg)
 /** @return false：必需的设备或子系统初始化失败，原因已记日志 */
 static bool init_objects(void)
 {
-    if (!dr16_init(&dr16, &rc_state) || !comm_rx_add_uart(DBUS_UART, on_dbus_bytes, NULL))
+    if (!dr16_init(&dr16, &rc_state))
     {
         RM_LOG_E("dr16 init failed");
         return false;
     }
     vision_link_init(&vision_link);
-    comm_rx_set_usb(on_usb_bytes, NULL);
-    if (!vt_link_init(&vt_link, &vt_rc_state, &kbm_state)
-        || !comm_rx_add_uart(VT_LINK_UART, on_vt_link_bytes, NULL))
+    if (!vt_link_init(&vt_link, &vt_rc_state, &kbm_state))
     {
         RM_LOG_E("vt_link init failed");
         return false;
@@ -144,7 +105,7 @@ static bool init_objects(void)
  * | 任务      | 文件                      | 优先级 | 栈    | 周期                         |
  * | --------- | ------------------------- | ------ | ----- | ---------------------------- |
  * | ins       | ins_task.c                | 5 最高 | 4 KB  | 1 ms                         |
- * | comm_rx   | 01_app/common/comm_rx_task.c | 4      | 2 KB  | 收到 CAN / 串口 / USB 就运行 |
+ * | comm_rx   | comm_rx_task.c               | 4      | 2 KB  | 收到 CAN / 串口 / USB 就运行 |
  * | control   | control_task.c            | 3      | 4 KB  | 1 ms                         |
  * | daemon    | 01_app/common/daemon_task.c  | 2      | 1 KB  | 10 ms                        |
  * | heartbeat | heartbeat_task.c          | 1      | 1 KB  | 25 ms                        |
@@ -154,7 +115,7 @@ static bool init_objects(void)
  * startup 任务由 CubeMX 创建，不在这张表里。
  */
 static RmTask ins_task, control_task, daemon_task,
-    heartbeat_task; /* comm_rx_task 在 comm_rx_task.c */
+    heartbeat_task; /* comm_rx_task 在 01_app/common/comm_rx.c（中断要用它唤醒任务） */
 static StackType_t ins_stack[1024], comm_rx_stack[512], control_stack[1024], daemon_stack[256],
     heartbeat_stack[256];
 
@@ -221,7 +182,6 @@ void startup_task(void *argument)
 {
     (void)argument;
 
-    comm_rx_start(); /* 打开 CAN、串口、USB 接收，收到数据由中断唤醒 comm_rx 任务 */
     if (!adc_start())
     {
         RM_LOG_E("adc start failed"); /* 只影响低电量提示，不阻止解锁 */
