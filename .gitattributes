@@ -15,3 +15,7 @@
 *.bin binary
 *.axf binary
 
+
+# Keil 工程文件：Keil 保存时总是写 CRLF，保持 CRLF 免得每次保存都产生改动（ADR 0052）
+*.uvprojx text eol=crlf
+*.uvoptx text eol=crlf

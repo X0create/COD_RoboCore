@@ -497,6 +497,15 @@ RTT 控制块、变量地址都是旧版的内存布局，所以 CLion 的 RTT �
 - **判断板上是不是新固件**：RTT 里有没有新加的字样；或 GDB `p _SEGGER_RTT.acID` 应为 `"SEGGER RTT"`（地址取自当前 ELF）。
 - **目前做法**：烧录用 Ozone；CLion 只连接调试（Segger 配置文件的下载选“从不”）、看实时监视和 RTT。
 
+## 11.3 用 Keil 烧录和调试（2026-10-01，编译流程已验证，上板未验证）
+
+Keil 只负责烧录和调试，F7 实际调用 WSL 里的 CMake 编译（ADR 0052）。打开 `06_boards/dm_mc02_h723/mdk/dm_mc02.uvprojx`，
+选 Target（`bench` / `infantry`）→ F7 → F8 烧录 / Ctrl+F5 调试。前提、注意事项和原理见 `06_boards/dm_mc02_h723/mdk/README.md`。
+
+- 本机 Keil：MDK Plus 5.41（Arm Compiler 6.22），装在 `D:\RoboMaster\CODSoftware\Keil`，`Keil.STM32H7xx_DFP` 4.1.3。
+- 命令行验证：`UV4.exe -b dm_mc02.uvprojx -t bench -j0 -o log.txt`。
+- 调试信息为 DWARF 4（GCC 15 默认 5，Keil 不一定能读），见 `cmake/board-dm_mc02.cmake`。
+
 ## 12. 推送到 GitHub 和 Gitee（GitHub 已验证 2026-09-28，Gitee 2026-09-30）
 
 仓库：<https://github.com/X0create/COD_RoboCore>（公开）。以下设置只写在本仓库的 `.git/config`，不影响其他仓库：

@@ -91,7 +91,7 @@
 | 日期 | 项目 | COD-H7-Template | 本模板 | 原因 | 验证 |
 | --- | --- | --- | --- | --- | --- |
 | 2026-09-28 | NVIC 代码生成 | 各中断都调用 HAL 处理函数 | 同左（重新启用 FreeRTOS 后 CubeMX 把 18 个中断的 “Call HAL handler” 关掉了，已勾回） | 否则 TIM2 时基、DMA、SPI2 中断函数为空 | 生成：31 / 31 调用 HAL（`REGEN_CHECKLIST.md` 第 1 条） |
-| 2026-09-27 | 构建 | Keil MDK（AC6） | **CMake + Ninja + arm-none-eabi-gcc 15.2.1**；Keil 以后再加 | 一套构建同时出固件和电脑测试（ADR 0019） | 编译：2026-09-28 固件编译通过，0 警告，FLASH 91384 B、DTCM 42400 B（只含 CubeMX 生成代码） |
+| 2026-09-27 | 构建 | Keil MDK（AC6） | **CMake + Ninja + arm-none-eabi-gcc 15.2.1**；Keil 只用来烧录调试（2026-10-01，ADR 0052：F7 调 CMake 编译，`06_boards/dm_mc02_h723/mdk/`） | 一套构建同时出固件和电脑测试（ADR 0019） | 编译：2026-09-28 固件编译通过，0 警告，FLASH 91384 B、DTCM 42400 B（只含 CubeMX 生成代码） |
 | 2026-09-27 | 编译警告 | —— | 手写代码开 `-Wall -Wextra … -Werror`，有警告即失败 | 0 警告要求由编译器保证 | 编译 |
 | 2026-09-27 | 单元测试 | 无 | Unity v2.7.0，电脑上运行 | 算法和协议解析能在电脑上测 | 主机测试 |
 | 2026-09-27 | 文件编码 | 源码注释为 GBK | **UTF-8 + LF** | GBK 在 gcc、Git、clang-format 下乱码（ADR 0002） | —— |

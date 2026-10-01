@@ -24,3 +24,9 @@ __pycache__/
 Thumbs.db
 desktop.ini
 
+
+# ---- Keil（只用来烧录调试，06_boards/<板>/mdk/，ADR 0052）----
+*.uvguix.*
+DebugConfig/
+RTE/
+keil_build_*.txt

@@ -17,7 +17,7 @@ Copyright (c) 2025 GrassFan_Wang
 
 完成的修改同时记入 `docs/CHANGES_FROM_COD_H7_TEMPLATE.md`（新旧对照、原因和验证层级）。
 
-- [x] 工具链：MDK-ARM → CMake（ADR 0019）。CubeMX 中已确认（`d1c2b45`）
+- [x] 工具链：MDK-ARM → CMake（ADR 0019）。CubeMX 中已确认（`d1c2b45`）。想用 Keil 烧录调试见 `mdk/README.md`（ADR 0052）
 - [x] FreeRTOS：原 4 个任务已随迁移删除；CubeMX 只保留一个启动任务 `startup`（静态、512 字、`osPriorityRealtime7`、
   入口 `startup_task` 选 As weak，由框架实现）。不定义队列（ADR 0025 修订）。CubeMX 中已确认（`d1c2b45`）
 - [x] CubeMX 6.12.1 → 6.18.1 迁移（FW_H7 V1.13.0）。**迁移时 FreeRTOS 被移除**：6.18.1 不再提供 CMSIS_V1，

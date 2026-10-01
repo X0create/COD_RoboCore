@@ -9,7 +9,8 @@ set(RM_CPU_FLAGS
     -mfloat-abi=hard
 )
 
-add_compile_options(${RM_CPU_FLAGS} -ffunction-sections -fdata-sections)
+# -gdwarf-4：调试信息用 DWARF 4（GCC 15 默认 5），Keil 和 Ozone 都能读（ADR 0052）；只影响 ELF 里的调试段，不进 Flash
+add_compile_options(${RM_CPU_FLAGS} -ffunction-sections -fdata-sections -gdwarf-4)
 add_link_options(${RM_CPU_FLAGS}
     # 本项目自己的链接脚本（由 CubeMX 的 STM32H723xG_flash.ld 派生，重新生成不会覆盖它）
     -T${RM_BOARD_DIR}/dm_mc02.ld

@@ -196,6 +196,8 @@ cmake --preset h723-bench-debug && cmake --build --preset h723-bench-debug
 **3. 烧录并看日志**：Ozone 打开这个 ELF → **Download & Reset** → F5 运行 → **View → Terminal** 看 RTT 日志。
 上电后约 2 s 内不要动板子（陀螺零偏标定）。看到 `startup done`、每秒一行 `alive N, mode safe` 就是跑起来了。
 
+> 习惯 Keil 的可以用 Keil 烧录调试：打开 `06_boards/dm_mc02_h723/mdk/dm_mc02.uvprojx`，F7 会调用上面的 CMake 编译（见该目录 `README.md`）。
+
 > 目前请用 Ozone 烧录：经 J-Link GDB 服务器（CLion）烧录会显示成功但实际没写入，原因还在查，见 `docs/DEV_ENVIRONMENT.md` 11.2 节。
 
 ## 新建一个兵种
