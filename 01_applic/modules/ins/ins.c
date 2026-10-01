@@ -30,7 +30,7 @@ void ins_init(Ins *ins, const InsConfig *cfg)
     {
         lpf2_init(&ins->accel_lpf[i], accel_lpf_coef);
     }
-    watchdog_register(&ins->wd, "ins", IMU_STALE_MS);
+    watchdog_register(&ins->wd, "ins", INS_TIMEOUT_MS);
 }
 
 bool ins_read(const Ins *ins, ImuState *out)
@@ -168,7 +168,7 @@ static ImuState update_attitude(Ins *ins, const Bmi088Sample *s, uint64_t now_us
     {
         st.q[i] = ins->ekf.q[i];
     }
-    quat_to_euler(st.q, &st.yaw_rad, &st.pitch_rad, &st.roll_rad);
+    quat_ekf_to_euler(st.q, &st.yaw_rad, &st.pitch_rad, &st.roll_rad);
 
     /* 多圈航向：相邻两次跨过 ±π 就计一圈（旧工程同样做法，单位由度改为弧度） */
     if (ins->have_yaw)

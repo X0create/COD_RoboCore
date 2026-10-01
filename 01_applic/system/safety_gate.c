@@ -10,7 +10,7 @@ SafetyGate safety_gate;
 
 void safety_gate_init(SafetyGate *gate, uint8_t arm_switch)
 {
-    *gate = (SafetyGate){ .arm_switch = arm_switch, .mode = ROBOT_MODE_INIT };
+    *gate = (SafetyGate){ .arm_switch = arm_switch, .mode = SAFETY_MODE_INIT };
 }
 
 void safety_gate_set_system_ready(SafetyGate *gate)
@@ -28,15 +28,15 @@ SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, bool imu_
 
     switch (gate->mode)
     {
-        case ROBOT_MODE_INIT:
+        case SAFETY_MODE_INIT:
             if (gate->system_ready)
             {
-                gate->mode = ROBOT_MODE_SAFE;
+                gate->mode = SAFETY_MODE_SAFE;
                 gate->saw_stop_position = false;
             }
             break;
 
-        case ROBOT_MODE_SAFE:
+        case SAFETY_MODE_SAFE:
             if (!inputs_ready)
             {
                 /* 遥控丢失（或 IMU 未就绪）期间的拨杆位置不作数，恢复后重新拨一次 */
@@ -48,22 +48,22 @@ SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, bool imu_
             }
             else if (gate->saw_stop_position)
             {
-                gate->mode = ROBOT_MODE_MANUAL; /* 从“下”拨上来：解锁 */
+                gate->mode = SAFETY_MODE_MANUAL; /* 从“下”拨上来：解锁 */
                 gate->manual_since_us = now_us;
                 d.entered_manual = true;
             }
             break;
 
-        case ROBOT_MODE_MANUAL:
+        case SAFETY_MODE_MANUAL:
             if (!inputs_ready || stop_position)
             {
-                gate->mode = ROBOT_MODE_SAFE;
+                gate->mode = SAFETY_MODE_SAFE;
                 gate->saw_stop_position = stop_position; /* 急停时已在“下”，拨上即可重新解锁 */
             }
             break;
     }
 
-    d.stop_all = gate->mode != ROBOT_MODE_MANUAL;
+    d.stop_all = gate->mode != SAFETY_MODE_MANUAL;
     return d;
 }
 
@@ -71,22 +71,22 @@ float safety_gate_output_scale(const SafetyGate *gate, uint64_t now_us)
 {
     const uint64_t ramp_us = (uint64_t)SAFETY_RAMP_MS * 1000u;
     const uint64_t elapsed_us = now_us - gate->manual_since_us;
-    if (gate->mode != ROBOT_MODE_MANUAL || elapsed_us >= ramp_us)
+    if (gate->mode != SAFETY_MODE_MANUAL || elapsed_us >= ramp_us)
     {
         return 1.0f;
     }
     return (float)elapsed_us / (float)ramp_us;
 }
 
-const char *safety_gate_mode_name(RobotMode mode)
+const char *safety_gate_mode_name(SafetyMode mode)
 {
     switch (mode)
     {
-        case ROBOT_MODE_INIT:
+        case SAFETY_MODE_INIT:
             return "init";
-        case ROBOT_MODE_SAFE:
+        case SAFETY_MODE_SAFE:
             return "safe";
-        case ROBOT_MODE_MANUAL:
+        case SAFETY_MODE_MANUAL:
             return "manual";
     }
     return "?";

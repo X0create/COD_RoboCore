@@ -6,7 +6,7 @@
 
 #include <string.h>
 
-#include "02_devices/referee/ref_frame.h"
+#include "02_devices/referee/referee_frame.h"
 #include "04_core/util/crc.h"
 #include "05_platform/time/time.h"
 
@@ -26,7 +26,7 @@ static bool ch_valid(uint16_t raw)
     return raw >= CH_MIN && raw <= CH_MAX;
 }
 
-bool vt13_decode(const uint8_t frame[VT13_FRAME_LEN], VtRcState *out)
+bool vt_link_decode_vt13(const uint8_t frame[VT13_FRAME_LEN], VtRcState *out)
 {
     const uint8_t *b = frame;
     if (!crc16_verify(b, VT13_FRAME_LEN))
@@ -81,7 +81,7 @@ bool vt_link_read_kbm(const VtLink *self, KbmState *out)
     return watchdog_read_data(&self->kbm_wd, &self->kbm, out, sizeof(*out));
 }
 
-static void handle_ref_frame(VtLink *self, const RefFrame *f)
+static void handle_referee_frame(VtLink *self, const RefereeFrame *f)
 {
     if (f->cmd_id != CMD_KBM || f->data_len != CMD_KBM_LEN)
     {
@@ -126,7 +126,7 @@ static ParseResult parse_head(VtLink *self, size_t *consumed)
             return PARSE_NEED_MORE;
         }
         VtRcState rc;
-        if (!vt13_decode(b, &rc))
+        if (!vt_link_decode_vt13(b, &rc))
         {
             return PARSE_BAD;
         }
@@ -135,17 +135,17 @@ static ParseResult parse_head(VtLink *self, size_t *consumed)
         return PARSE_CONSUMED;
     }
 
-    RefFrame f;
-    switch (ref_frame_check(b, self->len, VT_LINK_BUF_LEN - REF_FRAME_OVERHEAD, &f))
+    RefereeFrame f;
+    switch (referee_frame_check(b, self->len, VT_LINK_BUF_LEN - REFEREE_FRAME_OVERHEAD, &f))
     {
-        case REF_FRAME_NEED_MORE:
+        case REFEREE_FRAME_NEED_MORE:
             return PARSE_NEED_MORE;
-        case REF_FRAME_BAD:
+        case REFEREE_FRAME_BAD:
             return PARSE_BAD;
-        case REF_FRAME_OK:
+        case REFEREE_FRAME_OK:
             break;
     }
-    handle_ref_frame(self, &f);
+    handle_referee_frame(self, &f);
     *consumed = f.frame_len;
     return PARSE_CONSUMED;
 }

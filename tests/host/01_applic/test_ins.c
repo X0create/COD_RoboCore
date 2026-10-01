@@ -146,7 +146,7 @@ static void test_bad_frames_stop_publishing(void)
     sensor(0, 0, 0);
     steps(INS_CALIB_SAMPLES + 1u);
     set16(SPI_DEV_IMU_ACCEL, 0x16, 0); /* 加速度全零 */
-    TEST_ASSERT_EQUAL_INT(INS_EVENT_READ_FAILED, steps(IMU_STALE_MS + 1u));
+    TEST_ASSERT_EQUAL_INT(INS_EVENT_READ_FAILED, steps(INS_TIMEOUT_MS + 1u));
     ImuState st;
     TEST_ASSERT_FALSE(ins_read(ins, &st));
     TEST_ASSERT_EQUAL_FLOAT(0.0f, fake_pwm_duty(PWM_IMU_HEATER));

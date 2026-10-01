@@ -252,7 +252,7 @@ void bmi088_heater_step(Bmi088 *imu, float temperature_c)
     }
     imu->heater_tick = 0u;
     /* PID 输出在 ±上限之间；负数（过热）由 pwm_set_duty 截到 0，不会变成满占空比 */
-    pwm_set_duty(PWM_IMU_HEATER, pid_calc(&imu->heater_pid, BMI088_HEATER_TARGET_C, temperature_c));
+    pwm_set_duty(PWM_IMU_HEATER, pid_step(&imu->heater_pid, BMI088_HEATER_TARGET_C, temperature_c));
 }
 
 void bmi088_heater_off(Bmi088 *imu)

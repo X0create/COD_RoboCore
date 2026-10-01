@@ -59,7 +59,7 @@ void quat_ekf_update(QuatEkf *ekf, const float gyro_rad_s[3], const float accel_
                      float dt_s);
 
 /** 由 q 算 ZYX 欧拉角（航向、俯仰、横滚），只用于显示和调试 */
-void quat_to_euler(const float q[4], float *yaw_rad, float *pitch_rad, float *roll_rad);
+void quat_ekf_to_euler(const float q[4], float *yaw_rad, float *pitch_rad, float *roll_rad);
 
 #ifdef __cplusplus
 }

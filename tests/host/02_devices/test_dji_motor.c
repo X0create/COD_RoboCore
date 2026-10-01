@@ -24,7 +24,7 @@ static MotorConfig cfg_of(MotorType type, uint8_t id, int8_t dir, float gear)
                           .id = id,
                           .direction = dir,
                           .gear_ratio = gear,
-                          .stop_action = SAFE_ACTION_ZERO_TORQUE };
+                          .stop_action = STOP_ACTION_ZERO_TORQUE };
 }
 
 /* 反馈帧：编码器、rpm、电流原始值大端，温度在第 6 字节 */
@@ -57,9 +57,9 @@ static void test_config_valid(void)
     c = cfg_of(MOTOR_M2006, 1, 1, 0.0f);
     TEST_ASSERT_FALSE(dji_config_valid(&c));
     c = cfg_of(MOTOR_M2006, 1, 1, DJI_M2006_GEAR_RATIO);
-    c.stop_action = SAFE_ACTION_DAMP; /* DJI 不支持阻尼（ADR 0031） */
+    c.stop_action = STOP_ACTION_DAMP; /* DJI 不支持阻尼（ADR 0031） */
     TEST_ASSERT_FALSE(dji_config_valid(&c));
-    c.stop_action = SAFE_ACTION_DISABLE;
+    c.stop_action = STOP_ACTION_DISABLE;
     TEST_ASSERT_TRUE(dji_config_valid(&c));
 }
 

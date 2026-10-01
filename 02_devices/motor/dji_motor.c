@@ -41,8 +41,8 @@ bool dji_config_valid(const MotorConfig *cfg)
     const uint8_t max_id = is_c6x0(cfg->type) ? 8u : 7u;
     return cfg->id >= 1u && cfg->id <= max_id && (cfg->direction == 1 || cfg->direction == -1)
            && cfg->gear_ratio > 0.0f
-           && (cfg->stop_action == SAFE_ACTION_ZERO_TORQUE
-               || cfg->stop_action == SAFE_ACTION_DISABLE);
+           && (cfg->stop_action == STOP_ACTION_ZERO_TORQUE
+               || cfg->stop_action == STOP_ACTION_DISABLE);
 }
 
 uint32_t dji_feedback_id(const MotorConfig *cfg)

@@ -242,7 +242,7 @@ void quat_ekf_update(QuatEkf *ekf, const float gyro_rad_s[3], const float accel_
         }
 
         /* 7. 后验：x = x⁻ + K·y；零偏修正限幅；四元数 z 分量不修正 */
-        mat_mul(&kf->K, &kf->y, &kf->vec);
+        matrix_mul(&kf->K, &kf->y, &kf->vec);
         float *corr = kf->vec.data;
         if (ekf->chi_result)
         {
@@ -269,7 +269,7 @@ void quat_ekf_update(QuatEkf *ekf, const float gyro_rad_s[3], const float accel_
     ekf->gyro_bias[2] = 0.0f;
 }
 
-void quat_to_euler(const float q[4], float *yaw_rad, float *pitch_rad, float *roll_rad)
+void quat_ekf_to_euler(const float q[4], float *yaw_rad, float *pitch_rad, float *roll_rad)
 {
     float s = 2.0f * (q[0] * q[2] - q[1] * q[3]);
     s = (s > 1.0f) ? 1.0f : ((s < -1.0f) ? -1.0f : s); /* 舍入可能略超 ±1，asinf 会得 NaN */

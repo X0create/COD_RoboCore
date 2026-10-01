@@ -17,10 +17,10 @@ typedef struct
 {
     uint64_t total;    /* 扩展后的 64 位计数 */
     uint32_t last_raw; /* 上一次读到的 32 位原始值 */
-} CycleExtender;
+} CycleExtend;
 
 /** 以当前原始值为起点：64 位计数从 raw 开始，与上电后的 CYCCNT 一致。 */
-void cycle_extend_init(CycleExtender *ext, uint32_t raw);
+void cycle_extend_init(CycleExtend *ext, uint32_t raw);
 
 /**
  * @brief   用新读到的原始值推进 64 位计数
@@ -28,7 +28,7 @@ void cycle_extend_init(CycleExtender *ext, uint32_t raw);
  * @pre     两次调用之间原始计数前进不足 2^32 个周期，否则会少算整圈；
  *          任务和中断都会调用时，由调用方放进临界区。
  */
-uint64_t cycle_extend_update(CycleExtender *ext, uint32_t raw);
+uint64_t cycle_extend_update(CycleExtend *ext, uint32_t raw);
 
 #ifdef __cplusplus
 }

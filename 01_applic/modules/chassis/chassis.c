@@ -211,7 +211,7 @@ static void chassis_output_update(Chassis *chassis, float output_scale)
         if (m->drive_online[i])
         {
             const float torque_nm =
-                pid_calc(&chassis->drive_pid[i], t->drive_speed_rad_s[i], m->drive_speed_rad_s[i]);
+                pid_step(&chassis->drive_pid[i], t->drive_speed_rad_s[i], m->drive_speed_rad_s[i]);
             motor_set_torque(chassis->drive[i], clamp(torque_nm, drive_limit_nm));
         }
         else
@@ -227,9 +227,9 @@ static void chassis_output_update(Chassis *chassis, float output_scale)
         if (m->steer_online[i])
         {
             const float rate_rad_s =
-                pid_calc(&chassis->steer_angle_pid[i], t->heading_rad[i], m->heading_rad[i]);
+                pid_step(&chassis->steer_angle_pid[i], t->heading_rad[i], m->heading_rad[i]);
             const float torque_nm =
-                pid_calc(&chassis->steer_speed_pid[i], rate_rad_s, m->steer_speed_rad_s[i]);
+                pid_step(&chassis->steer_speed_pid[i], rate_rad_s, m->steer_speed_rad_s[i]);
             motor_set_torque(chassis->steer[i], clamp(torque_nm, steer_limit_nm));
         }
         else

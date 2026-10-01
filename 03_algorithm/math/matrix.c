@@ -6,14 +6,14 @@
 
 #include <math.h>
 
-void mat_init(Mat *m, uint8_t rows, uint8_t cols, float *data)
+void matrix_init(Matrix *m, uint8_t rows, uint8_t cols, float *data)
 {
     m->rows = rows;
     m->cols = cols;
     m->data = data;
 }
 
-void mat_zero(Mat *m)
+void matrix_zero(Matrix *m)
 {
     const uint32_t count = (uint32_t)m->rows * m->cols;
     for (uint32_t i = 0u; i < count; i++)
@@ -22,7 +22,7 @@ void mat_zero(Mat *m)
     }
 }
 
-void mat_add(const Mat *a, const Mat *b, Mat *out)
+void matrix_add(const Matrix *a, const Matrix *b, Matrix *out)
 {
     const uint32_t count = (uint32_t)a->rows * a->cols;
     out->rows = a->rows;
@@ -33,7 +33,7 @@ void mat_add(const Mat *a, const Mat *b, Mat *out)
     }
 }
 
-void mat_sub(const Mat *a, const Mat *b, Mat *out)
+void matrix_sub(const Matrix *a, const Matrix *b, Matrix *out)
 {
     const uint32_t count = (uint32_t)a->rows * a->cols;
     out->rows = a->rows;
@@ -44,7 +44,7 @@ void mat_sub(const Mat *a, const Mat *b, Mat *out)
     }
 }
 
-void mat_mul(const Mat *a, const Mat *b, Mat *out)
+void matrix_mul(const Matrix *a, const Matrix *b, Matrix *out)
 {
     out->rows = a->rows;
     out->cols = b->cols;
@@ -62,7 +62,7 @@ void mat_mul(const Mat *a, const Mat *b, Mat *out)
     }
 }
 
-void mat_trans(const Mat *a, Mat *out)
+void matrix_trans(const Matrix *a, Matrix *out)
 {
     out->rows = a->cols;
     out->cols = a->rows;
@@ -75,7 +75,7 @@ void mat_trans(const Mat *a, Mat *out)
     }
 }
 
-static void swap_rows(Mat *m, uint32_t r1, uint32_t r2)
+static void swap_rows(Matrix *m, uint32_t r1, uint32_t r2)
 {
     for (uint32_t c = 0u; c < m->cols; c++)
     {
@@ -85,7 +85,7 @@ static void swap_rows(Mat *m, uint32_t r1, uint32_t r2)
     }
 }
 
-bool mat_inv(Mat *a, Mat *out)
+bool matrix_inv(Matrix *a, Matrix *out)
 {
     const uint32_t n = a->rows;
     out->rows = a->rows;

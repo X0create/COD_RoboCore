@@ -15,7 +15,7 @@
 /* 自检时至少要走过这么多周期，才认为计数器在工作（远小于下面空循环实际消耗的周期数） */
 #define SELF_TEST_MIN_CYCLES 100u
 
-static CycleExtender cycles;
+static CycleExtend cycles;
 static uint32_t cycles_per_us;
 
 bool rm_time_init(void)

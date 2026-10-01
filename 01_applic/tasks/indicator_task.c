@@ -62,16 +62,16 @@ static void check_battery(uint32_t tick)
 }
 
 /* 模式变化时的提示音：进入 Manual 为解锁音，离开为上锁音 */
-static void beep_on_mode_change(RobotMode *last)
+static void beep_on_mode_change(SafetyMode *last)
 {
-    const RobotMode mode = safety_gate.mode;
+    const SafetyMode mode = safety_gate.mode;
     if (mode != *last)
     {
-        if (mode == ROBOT_MODE_MANUAL)
+        if (mode == SAFETY_MODE_MANUAL)
         {
             buzzer_play(&buzzer, BUZZER_ARM);
         }
-        else if (*last == ROBOT_MODE_MANUAL)
+        else if (*last == SAFETY_MODE_MANUAL)
         {
             buzzer_play(&buzzer, BUZZER_DISARM);
         }
@@ -98,11 +98,11 @@ void indicator_task_entry(void *arg)
 
     uint32_t step = 0u;
     uint32_t tick = 0u;
-    RobotMode last_mode = safety_gate.mode;
+    SafetyMode last_mode = safety_gate.mode;
     RmTaskPeriod last_wake = rm_task_period_start();
     for (;;)
     {
-        rm_status_led_set(0u, led_on_at(step) ? LED_GREEN_LEVEL : 0u, 0u);
+        status_led_set(0u, led_on_at(step) ? LED_GREEN_LEVEL : 0u, 0u);
         check_battery(tick);
         beep_on_mode_change(&last_mode);
         buzzer_step(&buzzer, STEP_MS);

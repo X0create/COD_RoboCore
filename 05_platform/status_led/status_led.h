@@ -16,7 +16,7 @@ extern "C"
  * @pre     只由一个任务调用（阶段 0 为心跳任务）；不在中断里调用
  * @note    MC02 上是约 165 µs 的阻塞发送；发送失败时忽略，状态灯不影响控制
  */
-void rm_status_led_set(uint8_t red, uint8_t green, uint8_t blue);
+void status_led_set(uint8_t red, uint8_t green, uint8_t blue);
 
 #ifdef __cplusplus
 }

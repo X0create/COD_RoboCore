@@ -114,7 +114,7 @@ bool motor_init(Motor *m, const MotorConfig *cfg, MotorGroup *group, const Motor
     }
 
     *m = (Motor){ .cfg = cfg };
-    watchdog_register(&m->wd, cfg->name, MOTOR_OFFLINE_TIMEOUT_MS);
+    watchdog_register(&m->wd, cfg->name, MOTOR_TIMEOUT_MS);
     m->next = group->head;
     group->head = m;
     return true;
@@ -142,10 +142,10 @@ void motor_set_torque(Motor *m, float torque_nm)
     m->torque_set = true;
 }
 
-void motor_apply_safe_action(Motor *m, SafeAction action)
+void motor_apply_stop_action(Motor *m, StopAction action)
 {
-    m->safe_action = action;
-    m->safe_set = true;
+    m->stop_action = action;
+    m->stop_set = true;
 }
 
 void motor_request_enable(Motor *m)

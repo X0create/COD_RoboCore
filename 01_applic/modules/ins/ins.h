@@ -46,7 +46,7 @@ extern "C"
 #define INS_STILL_GAIN     0.1f /* 每个静止窗口修掉残余的 10%，时间常数约 10 s */
 
 /** 超过这么久没有新姿态就算 IMU 未就绪（ins 1 kHz，20 ms 即连续 20 次没有更新） */
-#define IMU_STALE_MS 20u
+#define INS_TIMEOUT_MS 20u
 
 typedef struct
 {
@@ -113,7 +113,7 @@ void ins_init(Ins *ins, const InsConfig *cfg);
 
 /**
  * @brief   读最新姿态（在临界区里整份拷贝）
- * @return  false：IMU 未就绪（还没标定完，或超过 IMU_STALE_MS 没有更新）；这时 out 是旧数据，只能用来打印
+ * @return  false：IMU 未就绪（还没标定完，或超过 INS_TIMEOUT_MS 没有更新）；这时 out 是旧数据，只能用来打印
  */
 RM_NODISCARD bool ins_read(const Ins *ins, ImuState *out);
 

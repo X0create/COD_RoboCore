@@ -15,7 +15,7 @@ void motor_group_apply_stop_all(MotorGroup *group)
 {
     for (Motor *m = group->head; m != NULL; m = m->next)
     {
-        motor_apply_safe_action(m, m->cfg->stop_action);
+        motor_apply_stop_action(m, m->cfg->stop_action);
     }
 }
 
@@ -28,15 +28,15 @@ void motor_group_apply_stop_all(MotorGroup *group)
  */
 static MotorOutput final_output(const Motor *m)
 {
-    if (m->safe_set)
+    if (m->stop_set)
     {
-        switch (m->safe_action)
+        switch (m->stop_action)
         {
-            case SAFE_ACTION_ZERO_TORQUE:
+            case STOP_ACTION_ZERO_TORQUE:
                 break;
-            case SAFE_ACTION_DAMP:
+            case STOP_ACTION_DAMP:
                 return (MotorOutput){ .kind = MOTOR_OUT_DAMP };
-            case SAFE_ACTION_DISABLE:
+            case STOP_ACTION_DISABLE:
                 return (MotorOutput){ .kind = MOTOR_OUT_DISABLE };
         }
         return (MotorOutput){ .kind = MOTOR_OUT_ZERO_TORQUE };
@@ -188,6 +188,6 @@ void motor_group_send(MotorGroup *group)
     for (Motor *m = group->head; m != NULL; m = m->next)
     {
         m->torque_set = false;
-        m->safe_set = false;
+        m->stop_set = false;
     }
 }

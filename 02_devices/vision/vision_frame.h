@@ -36,7 +36,7 @@ typedef struct
     size_t frame_len; /* 整帧字节数 */
 } VisionFrame;
 
-/** 检查 buf 开头是否为一帧（用法同 ref_frame_check：OK 取走、BAD 丢一字节、NEED_MORE 等） */
+/** 检查 buf 开头是否为一帧（用法同 referee_frame_check：OK 取走、BAD 丢一字节、NEED_MORE 等） */
 VisionFrameStatus vision_frame_check(const uint8_t *buf, size_t len, VisionFrame *out);
 
 /**

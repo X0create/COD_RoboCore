@@ -45,7 +45,7 @@ void tearDown(void)
 {
 }
 
-static MotorConfig cfg_of(MotorType type, CanBusId bus, uint8_t id, SafeAction stop)
+static MotorConfig cfg_of(MotorType type, CanBusId bus, uint8_t id, StopAction stop)
 {
     const float gear = (type == MOTOR_GM6020) ? 1.0f : DJI_M3508_GEAR_RATIO;
     return (MotorConfig){ .name = "m",
@@ -77,13 +77,13 @@ static void test_id_conflicts_rejected(void)
 {
     /* 电机保存配置指针，所以配置放在静态存储里 */
     static MotorConfig a, same, other_bus, c5, g1, g5, bad;
-    a = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
-    same = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
-    other_bus = cfg_of(MOTOR_M3508, CAN_BUS_2, 1, SAFE_ACTION_ZERO_TORQUE);
-    c5 = cfg_of(MOTOR_M3508, CAN_BUS_1, 5, SAFE_ACTION_ZERO_TORQUE);
-    g1 = cfg_of(MOTOR_GM6020, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
-    g5 = cfg_of(MOTOR_GM6020, CAN_BUS_1, 5, SAFE_ACTION_ZERO_TORQUE);
-    bad = cfg_of(MOTOR_M3508, CAN_BUS_1, 9, SAFE_ACTION_ZERO_TORQUE);
+    a = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_ZERO_TORQUE);
+    same = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_ZERO_TORQUE);
+    other_bus = cfg_of(MOTOR_M3508, CAN_BUS_2, 1, STOP_ACTION_ZERO_TORQUE);
+    c5 = cfg_of(MOTOR_M3508, CAN_BUS_1, 5, STOP_ACTION_ZERO_TORQUE);
+    g1 = cfg_of(MOTOR_GM6020, CAN_BUS_1, 1, STOP_ACTION_ZERO_TORQUE);
+    g5 = cfg_of(MOTOR_GM6020, CAN_BUS_1, 5, STOP_ACTION_ZERO_TORQUE);
+    bad = cfg_of(MOTOR_M3508, CAN_BUS_1, 9, STOP_ACTION_ZERO_TORQUE);
     const Motor *conflict;
 
     Motor *ma = add(&a);
@@ -101,7 +101,7 @@ static void test_id_conflicts_rejected(void)
 
 static void test_feedback_online_and_timeout(void)
 {
-    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
+    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_ZERO_TORQUE);
     Motor *m = add(&c);
     MotorFeedback fb;
     TEST_ASSERT_FALSE(motor_read_feedback(m, &fb)); /* 还没收到帧 */
@@ -115,7 +115,7 @@ static void test_feedback_online_and_timeout(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, 5.4533f, fb.speed_rad_s);
     TEST_ASSERT_FLOAT_WITHIN(1e-4f, 3.0f, fb.torque_nm);
 
-    fake_time_advance_ms(MOTOR_OFFLINE_TIMEOUT_MS);
+    fake_time_advance_ms(MOTOR_TIMEOUT_MS);
     TEST_ASSERT_TRUE(motor_read_feedback(m, &fb)); /* 正好 20 ms 还算在线 */
     fake_time_advance_ms(1u);
     TEST_ASSERT_FALSE(motor_read_feedback(m, &fb));      /* 超过 20 ms 算离线 */
@@ -125,7 +125,7 @@ static void test_feedback_online_and_timeout(void)
 /* comm_rx_task 被耽误：30 ms 前收到的帧现在才处理，按接收时刻算已超过 20 ms，电机仍离线 */
 static void test_stale_frame_stays_offline(void)
 {
-    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
+    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_ZERO_TORQUE);
     Motor *m = add(&c);
     CanFrame frame = { .id = 0x201, .len = 8, .stamp_us = rm_time_now_us() };
     fake_time_advance_ms(30u);
@@ -137,7 +137,7 @@ static void test_stale_frame_stays_offline(void)
 /* 同一个反馈 ID 出现在另一路总线上：不是这个电机的帧，不收、不喂狗 */
 static void test_frame_on_other_bus_ignored(void)
 {
-    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
+    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_ZERO_TORQUE);
     Motor *m = add(&c);
     const uint8_t d[8] = { 0 };
     TEST_ASSERT_FALSE(deliver(CAN_BUS_2, 0x201, d, 8));
@@ -149,7 +149,7 @@ static void test_frame_on_other_bus_ignored(void)
 
 static void test_short_frame_ignored(void)
 {
-    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 2, SAFE_ACTION_ZERO_TORQUE);
+    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 2, STOP_ACTION_ZERO_TORQUE);
     Motor *m = add(&c);
     const uint8_t d[8] = { 0 };
     TEST_ASSERT_TRUE(deliver(CAN_BUS_1, 0x202, d, 7));
@@ -160,8 +160,8 @@ static void test_short_frame_ignored(void)
 /* 1、2 号在同一帧 0x200：3 N·m → 0x2000，-1.5 N·m → 0xF000，未用的槽位为 0 */
 static void test_flush_packs_frame(void)
 {
-    const MotorConfig c1 = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
-    const MotorConfig c2 = cfg_of(MOTOR_M3508, CAN_BUS_1, 2, SAFE_ACTION_ZERO_TORQUE);
+    const MotorConfig c1 = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_ZERO_TORQUE);
+    const MotorConfig c2 = cfg_of(MOTOR_M3508, CAN_BUS_1, 2, STOP_ACTION_ZERO_TORQUE);
     Motor *m1 = add(&c1);
     Motor *m2 = add(&c2);
     feed(m1);
@@ -183,8 +183,8 @@ static void test_flush_packs_frame(void)
 /* 没写指令、或离线，填零力矩；发送后槽位清空，下个周期不重复旧指令 */
 static void test_unset_offline_and_cleared_slots_are_zero(void)
 {
-    const MotorConfig c1 = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
-    const MotorConfig c2 = cfg_of(MOTOR_M3508, CAN_BUS_1, 2, SAFE_ACTION_ZERO_TORQUE);
+    const MotorConfig c1 = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_ZERO_TORQUE);
+    const MotorConfig c2 = cfg_of(MOTOR_M3508, CAN_BUS_1, 2, STOP_ACTION_ZERO_TORQUE);
     Motor *m1 = add(&c1);
     Motor *m2 = add(&c2);
     feed(m1); /* m2 从未在线 */
@@ -202,7 +202,7 @@ static void test_unset_offline_and_cleared_slots_are_zero(void)
 
 static void test_stop_all_overrides_torque(void)
 {
-    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
+    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_ZERO_TORQUE);
     Motor *m = add(&c);
     feed(m);
     motor_set_torque(m, 3.0f);
@@ -215,8 +215,8 @@ static void test_stop_all_overrides_torque(void)
 /* 失能：发一次 0 后不再发；恢复后重新发送 */
 static void test_disable_sends_zero_once(void)
 {
-    const MotorConfig c1 = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_DISABLE);
-    const MotorConfig c2 = cfg_of(MOTOR_M3508, CAN_BUS_1, 2, SAFE_ACTION_DISABLE);
+    const MotorConfig c1 = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_DISABLE);
+    const MotorConfig c2 = cfg_of(MOTOR_M3508, CAN_BUS_1, 2, STOP_ACTION_DISABLE);
     Motor *m1 = add(&c1);
     add(&c2);
     feed(m1);
@@ -236,8 +236,8 @@ static void test_disable_sends_zero_once(void)
 /* 同一帧里有一个是零力矩，就继续每周期发送 */
 static void test_mixed_disable_keeps_sending(void)
 {
-    const MotorConfig c1 = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_DISABLE);
-    const MotorConfig c2 = cfg_of(MOTOR_M3508, CAN_BUS_1, 2, SAFE_ACTION_ZERO_TORQUE);
+    const MotorConfig c1 = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_DISABLE);
+    const MotorConfig c2 = cfg_of(MOTOR_M3508, CAN_BUS_1, 2, STOP_ACTION_ZERO_TORQUE);
     add(&c1);
     add(&c2);
     for (int i = 0; i < 3; i++)
@@ -251,8 +251,8 @@ static void test_mixed_disable_keeps_sending(void)
 /* 每路总线各自一帧；5 号在 0x1FF */
 static void test_frames_per_bus_and_frame_id(void)
 {
-    const MotorConfig a = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
-    const MotorConfig b = cfg_of(MOTOR_M3508, CAN_BUS_2, 5, SAFE_ACTION_ZERO_TORQUE);
+    const MotorConfig a = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_ZERO_TORQUE);
+    const MotorConfig b = cfg_of(MOTOR_M3508, CAN_BUS_2, 5, STOP_ACTION_ZERO_TORQUE);
     add(&a);
     Motor *mb = add(&b);
     feed(mb);
@@ -269,7 +269,7 @@ static void test_frames_per_bus_and_frame_id(void)
 
 static void test_send_failure_counted(void)
 {
-    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
+    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_ZERO_TORQUE);
     add(&c);
     fake_can_set_send_fail(true);
     motor_group_send(&group);
@@ -278,8 +278,8 @@ static void test_send_failure_counted(void)
 
 static void test_caps_through_motor(void)
 {
-    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, SAFE_ACTION_ZERO_TORQUE);
-    const MotorConfig g = cfg_of(MOTOR_GM6020, CAN_BUS_1, 5, SAFE_ACTION_ZERO_TORQUE);
+    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_ZERO_TORQUE);
+    const MotorConfig g = cfg_of(MOTOR_GM6020, CAN_BUS_1, 5, STOP_ACTION_ZERO_TORQUE);
     TEST_ASSERT_TRUE(motor_supports_torque(add(&c)));
     TEST_ASSERT_FALSE(motor_supports_torque(add(&g)));
 }
@@ -293,7 +293,7 @@ static const MotorConfig dm_config = {
     .id = 1u,
     .direction = 1,
     .gear_ratio = 1.0f,
-    .stop_action = SAFE_ACTION_DAMP,
+    .stop_action = STOP_ACTION_DAMP,
     .dm = { .master_id = 0x11u,
             .p_max = 3.141593f,
             .v_max = 45.0f,
@@ -400,7 +400,7 @@ static void test_dm_offline_cancels_enable(void)
     Motor *m = add(&dm_config);
     feed_dm(0x0);
     motor_request_enable(m);
-    fake_time_advance_ms(MOTOR_OFFLINE_TIMEOUT_MS + 1u);
+    fake_time_advance_ms(MOTOR_TIMEOUT_MS + 1u);
     motor_group_send(&group);
     TEST_ASSERT_EQUAL_HEX8_ARRAY(zero_mit, last_sent()->data, 8);
 
@@ -433,7 +433,7 @@ static void test_dm_stop_all_damp(void)
 static void test_dm_stop_all_disable(void)
 {
     MotorConfig c = dm_config;
-    c.stop_action = SAFE_ACTION_DISABLE;
+    c.stop_action = STOP_ACTION_DISABLE;
     static MotorConfig cfg;
     cfg = c;
     Motor *m = add(&cfg);
@@ -458,7 +458,7 @@ static void test_dm_unrequested_enable_is_disabled(void)
 static void test_dm_conflicts(void)
 {
     static MotorConfig dji;
-    dji = cfg_of(MOTOR_M3508, CAN_BUS_2, 1, SAFE_ACTION_ZERO_TORQUE);
+    dji = cfg_of(MOTOR_M3508, CAN_BUS_2, 1, STOP_ACTION_ZERO_TORQUE);
     static MotorConfig dm_clash;
     dm_clash = dm_config;
     dm_clash.id = 2u;

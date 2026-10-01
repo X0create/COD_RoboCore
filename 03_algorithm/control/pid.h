@@ -58,7 +58,7 @@ typedef struct
 void pid_init(Pid *pid, PidType type, const PidParam *param);
 
 /** 计算一次，返回输出（同时存在 pid->output） */
-float pid_calc(Pid *pid, float target, float measure);
+float pid_step(Pid *pid, float target, float measure);
 
 /** 清零误差历史、积分、各项输出和微分滤波器状态，参数不变。机构停下或切换模式时调用，防止恢复时猛冲 */
 void pid_reset(Pid *pid);

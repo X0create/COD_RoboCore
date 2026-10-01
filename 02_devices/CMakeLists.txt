@@ -7,7 +7,7 @@ add_library(rm_devices STATIC
     motor/dm_motor.c
     motor/motor.c
     motor/motor_group.c
-    referee/ref_frame.c
+    referee/referee_frame.c
     remote/dr16.c
     remote/vt_link.c
     vision/vision_frame.c

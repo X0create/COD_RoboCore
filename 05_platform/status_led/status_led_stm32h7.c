@@ -17,7 +17,7 @@
  * 阻塞发送由 CPU 逐字节写 SPI，缓冲区放在默认内存（DTCM）即可。 */
 static uint8_t frame[WS2812_BYTES_PER_LED + WS2812_LATCH_BYTES];
 
-void rm_status_led_set(uint8_t red, uint8_t green, uint8_t blue)
+void status_led_set(uint8_t red, uint8_t green, uint8_t blue)
 {
     /* 复位段在 .bss 里本来就是 0，这里只改颜色部分 */
     ws2812_encode(frame, red, green, blue);

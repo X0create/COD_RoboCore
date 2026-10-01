@@ -6,6 +6,7 @@
  */
 #include "app_main.h"
 
+#include "01_applic/config/objects.h"
 #include "01_applic/system/safety_gate.h"
 #include "04_core/log/log.h"
 #include "05_platform/time/time.h"
@@ -24,7 +25,7 @@ static bool create_tasks(void)
 {
     for (uint32_t i = 0u; i < task_table_count; i++)
     {
-        const AppTask *t = &task_table[i];
+        const TaskTableEntry *t = &task_table[i];
         if (!rm_task_create(t->task, t->name, t->entry, t->arg, t->priority, t->stack,
                             t->stack_words))
         {

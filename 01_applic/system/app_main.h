@@ -4,7 +4,7 @@
  * @note    上电顺序（app_main.c）：
  *            调度器启动前  app_main()：DWT 计时 → RTT 日志 → objects_init() → 按 task_table[] 创建全部任务
  *            调度器启动后  startup_task()：允许解锁，然后删除自己
- *          01_applic/config/ 提供：objects.c 的 objects_init()、task_table.c 的 task_table[]。
+ *          01_applic/config/ 提供：objects.h 的 objects_init()、task_table.c 的 task_table[]（声明在下面）。
  *          任何一步失败都停在 halt_on_init_failure()（app_main.c），此时没有任务运行，不会给电机发指令。
  */
 #pragma once
@@ -30,18 +30,12 @@ typedef struct
     uint32_t priority; /* 数字越大优先级越高 */
     StackType_t *stack;
     uint32_t stack_words;
-} AppTask;
+} TaskTableEntry;
 
-/* ---------------- 01_applic/config/ 提供 ---------------- */
-
-/**
- * @brief   objects.c：初始化这台车的全部对象（设备 → 机构 → 安全门），调度器启动前调用
- * @return  false：必需的设备或机构初始化失败，原因已记日志
- */
-RM_NODISCARD bool objects_init(void);
+/* ---------------- 01_applic/config/task_table.c 提供 ---------------- */
 
 /** task_table.c：这台车的全部任务（startup_task 除外，它由 CubeMX 创建） */
-extern const AppTask task_table[];
+extern const TaskTableEntry task_table[];
 extern const uint32_t task_table_count;
 
 /* ---------------- 本文件提供，由 CubeMX 生成的 freertos.c 调用 ---------------- */

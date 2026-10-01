@@ -46,7 +46,7 @@ void pid_reset(Pid *pid)
     lpf1_init(&pid->d_lpf, pid->param.d_alpha);
 }
 
-float pid_calc(Pid *pid, float target, float measure)
+float pid_step(Pid *pid, float target, float measure)
 {
     const PidParam *p = &pid->param;
 

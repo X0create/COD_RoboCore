@@ -63,7 +63,7 @@ bool dr16_decode(const uint8_t frame[DR16_FRAME_LEN], RcState *out)
 void dr16_init(Dr16 *self)
 {
     *self = (Dr16){ 0 };
-    watchdog_register(&self->wd, "dr16", RC_LOST_TIMEOUT_MS);
+    watchdog_register(&self->wd, "dr16", DR16_TIMEOUT_MS);
 }
 
 bool dr16_read(const Dr16 *self, RcState *out)

@@ -60,9 +60,9 @@ config/
 | EKF 噪声（Q、R）、加速度低通系数 | `modules/ins/ins.c` 开头 | 沿用旧工程 INS_Task.c |
 | 陀螺零偏标定、静止时在线修正的阈值 | `modules/ins/ins.h` 的 `INS_CALIB_*`、`INS_STILL_*` | ADR 0033、0039 |
 | IMU 加热：目标温度、周期、PID、占空比上限 | `02_devices/imu/bmi088.h` 的 `BMI088_HEATER_TARGET_C`、`bmi088.c` 的 `HEATER_*` | 按本板实测（ADR 0042） |
-| 遥控丢失超时 200 ms | `02_devices/remote/dr16.h` 的 `RC_LOST_TIMEOUT_MS` | 安全约定（ADR 0030） |
-| IMU 就绪判定 20 ms | `01_applic/modules/ins/ins.h` 的 `IMU_STALE_MS` | 安全约定（ADR 0034） |
-| 电机离线超时 20 ms | `02_devices/motor/motor.h` 的 `MOTOR_OFFLINE_TIMEOUT_MS` | 安全约定（ADR 0031） |
+| 遥控丢失超时 200 ms | `02_devices/remote/dr16.h` 的 `DR16_TIMEOUT_MS` | 安全约定（ADR 0030） |
+| IMU 就绪判定 20 ms | `01_applic/modules/ins/ins.h` 的 `INS_TIMEOUT_MS` | 安全约定（ADR 0034） |
+| 电机离线超时 20 ms | `02_devices/motor/motor.h` 的 `MOTOR_TIMEOUT_MS` | 安全约定（ADR 0031） |
 | 解锁后输出斜坡 300 ms | `system/safety_gate.h` 的 `SAFETY_RAMP_MS` | |
 | 达妙命令间隔 | `02_devices/motor/dm_motor.h` 的 `DM_CMD_INTERVAL_US` | |
 

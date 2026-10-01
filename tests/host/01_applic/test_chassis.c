@@ -92,7 +92,7 @@ void setUp(void)
                                       .id = (uint8_t)(i + 1u),
                                       .direction = 1,
                                       .gear_ratio = DJI_M3508_GEAR_RATIO,
-                                      .stop_action = SAFE_ACTION_ZERO_TORQUE };
+                                      .stop_action = STOP_ACTION_ZERO_TORQUE };
         wheel[i] = &pool[pool_used++];
         const Motor *conflict;
         TEST_ASSERT_TRUE(motor_init(wheel[i], &wheel_cfg[i], &group, &conflict));
@@ -115,7 +115,7 @@ static void add_steer_motors(void)
                                             .id = (uint8_t)(i + 5u),
                                             .direction = 1,
                                             .gear_ratio = DJI_M2006_GEAR_RATIO,
-                                            .stop_action = SAFE_ACTION_ZERO_TORQUE };
+                                            .stop_action = STOP_ACTION_ZERO_TORQUE };
         steer[i] = &pool[pool_used++];
         const Motor *conflict;
         TEST_ASSERT_TRUE(motor_init(steer[i], &steer_motor_cfg[i], &group, &conflict));
@@ -160,7 +160,7 @@ static MotorConfig gm6020_cfg(void)
                           .id = 1u,
                           .direction = 1,
                           .gear_ratio = 1.0f,
-                          .stop_action = SAFE_ACTION_ZERO_TORQUE };
+                          .stop_action = STOP_ACTION_ZERO_TORQUE };
 }
 
 static void test_rejects_motor_without_torque_command(void)
@@ -252,7 +252,7 @@ static void test_wheel_offline_decelerates_under_control(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, 1.0f, chassis.target.velocity.vx_m_s);
 
     /* 轮 2 不再有反馈，超过离线时间 */
-    for (int k = 0; k <= (int)MOTOR_OFFLINE_TIMEOUT_MS; k++)
+    for (int k = 0; k <= (int)MOTOR_TIMEOUT_MS; k++)
     {
         feed(0, 0.0f);
         feed(1, 0.0f);
@@ -345,7 +345,7 @@ static void test_steer_motor_offline_is_mechanism_stop(void)
         motor_group_send(&group);
         fake_time_advance_ms(1u);
     }
-    for (int k = 0; k <= (int)MOTOR_OFFLINE_TIMEOUT_MS; k++)
+    for (int k = 0; k <= (int)MOTOR_TIMEOUT_MS; k++)
     {
         feed_all(0.0f);
         feed_id(5u, DJI_M2006_GEAR_RATIO, 0.0f);

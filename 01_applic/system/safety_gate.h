@@ -27,16 +27,16 @@ extern "C"
 
 typedef enum
 {
-    ROBOT_MODE_INIT,   /* 启动未完成：全车停，不能解锁 */
-    ROBOT_MODE_SAFE,   /* 全车停，等待解锁 */
-    ROBOT_MODE_MANUAL, /* 允许动作 */
-} RobotMode;
+    SAFETY_MODE_INIT,   /* 启动未完成：全车停，不能解锁 */
+    SAFETY_MODE_SAFE,   /* 全车停，等待解锁 */
+    SAFETY_MODE_MANUAL, /* 允许动作 */
+} SafetyMode;
 
 typedef struct
 {
     uint8_t arm_switch; /* 解锁 / 急停用哪个拨杆：RcState.sw 的下标（params.h 配置，ADR 0032） */
     volatile bool system_ready; /* startup_task 写、control_task 读；单字节读写是原子的 */
-    RobotMode mode;
+    SafetyMode mode;
     bool saw_stop_position;   /* Safe 模式下、遥控在线时看到过拨杆在“下” */
     uint64_t manual_since_us; /* 进入 Manual 的时刻，用于输出斜坡 */
 } SafetyGate;
@@ -68,7 +68,7 @@ SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, bool imu_
                                   uint64_t now_us);
 
 /** 模式的名字（"init" / "safe" / "manual"），用于日志 */
-const char *safety_gate_mode_name(RobotMode mode);
+const char *safety_gate_mode_name(SafetyMode mode);
 
 /** 输出限幅的比例：进入 Manual 后 SAFETY_RAMP_MS 内从 0 升到 1，其余时间为 1 */
 float safety_gate_output_scale(const SafetyGate *gate, uint64_t now_us);

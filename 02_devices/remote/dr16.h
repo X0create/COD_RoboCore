@@ -23,7 +23,7 @@ extern "C"
 #endif
 
 /** 超过这么久没有合法帧就算遥控丢失（ADR 0030：用户 2026-09-28 决定沿用旧工程的 200 ms） */
-#define RC_LOST_TIMEOUT_MS 200u
+#define DR16_TIMEOUT_MS 200u
 
 /** 摇杆减去中位后的最大幅度（原始值 364–1684，中位 1024） */
 #define RC_CH_MAX 660
@@ -93,7 +93,7 @@ void dr16_init(Dr16 *self);
 
 /**
  * @brief   读最新一帧遥控数据（在临界区里整份拷贝）
- * @return  false：遥控丢失（从未收到，或超过 RC_LOST_TIMEOUT_MS 没有合法帧）；这时 out 是旧数据，只能用来打印
+ * @return  false：遥控丢失（从未收到，或超过 DR16_TIMEOUT_MS 没有合法帧）；这时 out 是旧数据，只能用来打印
  */
 RM_NODISCARD bool dr16_read(const Dr16 *self, RcState *out);
 

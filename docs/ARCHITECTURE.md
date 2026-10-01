@@ -322,7 +322,7 @@ bool imu_ready = ins_read(&ins, &imu);
 如果等 100 Hz 的 detect_task 去标记离线，最坏还要再多 10 ms。detect_task 只负责**报告**：在 RTT 打上线 / 离线日志（以后驱动 LED 或蜂鸣器）。
 
 ```c
-watchdog_register(&self->wd, "dr16", RC_LOST_TIMEOUT_MS);          // xxx_init() 里登记：名字和超时
+watchdog_register(&self->wd, "dr16", DR16_TIMEOUT_MS);          // xxx_init() 里登记：名字和超时
 watchdog_feed_data(&self->wd, &self->rc, &state, sizeof(state), now_us);   // 收到合法帧，now_us = 读出这段字节的时刻
 return watchdog_read_data(&self->wd, &self->rc, out, sizeof(*out)); // dr16_read()
 ```
@@ -385,7 +385,7 @@ typedef struct {                // 这种型号支持什么，由 motor.c 按型
 } MotorCaps;
 
 typedef enum { MOTOR_M3508, MOTOR_M2006, MOTOR_GM6020, MOTOR_DM } MotorType;  // 达妙各型号（DM4310、DM8009…）共用 MOTOR_DM，差异在配置里
-typedef enum { SAFE_ACTION_ZERO_TORQUE, SAFE_ACTION_DAMP, SAFE_ACTION_DISABLE } SafeAction;
+typedef enum { STOP_ACTION_ZERO_TORQUE, STOP_ACTION_DAMP, STOP_ACTION_DISABLE } StopAction;
 
 /* 配置：本车固定参数，写成 objects.c / params.h 里的 const 对象，运行中不变 */
 typedef struct {
@@ -394,7 +394,7 @@ typedef struct {
     uint8_t   id;
     int8_t    direction;        // +1 / -1：使输出轴正方向符合坐标系约定
     float     gear_ratio;       // 转子 : 输出轴，直驱填 1
-    SafeAction stop_action;     // 全车停时发送出口改写成的动作（运行时契约第 5 节）
+    StopAction stop_action;     // 全车停时发送出口改写成的动作（运行时契约第 5 节）
 } MotorConfig;
 
 /* 运行状态：只由 02_devices/motor/ 内部读写，其他文件不要直接访问 */
@@ -413,7 +413,7 @@ MotorCaps motor_caps(const Motor *m);
 bool      motor_supports_torque(const Motor *m);                 // 子系统在 xxx_init() 里检查
 RM_NODISCARD bool motor_read_feedback(const Motor *m, MotorFeedback *out);  // 临界区内拷贝完整快照；离线返回 false
 void      motor_set_torque(Motor *m, float torque_nm);               // @pre 已在 init 时确认支持力矩指令；只写槽位
-void motor_apply_safe_action(Motor *m, SafeAction action);        // 本周期执行安全动作，覆盖 motor_set_torque
+void motor_apply_stop_action(Motor *m, StopAction action);        // 本周期执行安全动作，覆盖 motor_set_torque
 void motor_request_enable(Motor *m);                              // 只由安全门调用；进按顺序执行的操作队列
 void motor_request_disable(Motor *m);
 void motor_request_clear_error(Motor *m);
@@ -998,7 +998,7 @@ UniC 最早照搬了 5 / 14 / 5，但它的时钟是 96 MHz，结果实际只有
 
 **电机组打包。**
 
-- 子系统在周期里调用 `motor_set_torque()` 或 `motor_apply_safe_action()`，只是写入电机组里的槽位。
+- 子系统在周期里调用 `motor_set_torque()` 或 `motor_apply_stop_action()`，只是写入电机组里的槽位。
 - control_task 周期末尾统一调用一次 `motor_group_send_all()`：按组打包、入队，然后清空所有槽位。
 - 本周期没有被设置的槽位和离线电机的槽位，填该电机的零力矩指令（DJI 为 0 电流，达妙为 Kp = Kd = 力矩 = 0）。不“保持上一帧”：哪个子系统忘了输出，结果是零力矩，而不是一直重复旧指令。
 - 达妙电机每台一帧，规则相同。离线后重新上线不自动使能：全车停期间不使能，解锁后由所属子系统重新请求使能。
@@ -1326,6 +1326,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0059 | 用户 2026-10-01 评审“同种数据东一块西一块”：① **在线状态只有一个来源**：`Snapshot` 并入 `Watchdog`（新增 `watchdog_feed_data()` / `watchdog_read_data()`，数据和接收时刻在同一临界区写入），删除 `04_core/util/snapshot`；dr16、vt_link（`vt13`、`vt_kbm` 各一个）、ins、电机反馈的读取函数和 detect 日志都看同一个看门狗；超时边界统一为“≤ 超时算在线”（电机原为 < 20 ms）；`MotorFeedback.stamp_us` 删除（接收时刻只在看门狗里）；读取失败时仍拷出旧数据（只能用来打印）；② **任务声明归位**：每个任务一对 `tasks/xxx_task.{h,c}`，`robot.h` 只声明车上的对象；③ **接收流程一个文件**：`system/comm_rx_common.{h,c}` 并入 `tasks/comm_rx_task.c`（中断回调、打开接收、分派、bus-off 恢复），未使用的 `comm_rx_start_usb` 删除（接视觉时再加）；④ `04_core/msg/` 规划条目删除，事件队列、环形队列以后放 `util/` | 一个状态一个权威来源；找任务入口、看接收流程都只有一个文件 |
 | 0060 | 用户 2026-10-01 确认修复“旧 CAN 帧刷新在线状态”：`watchdog_feed_data()` 增加参数 `rx_us`（数据的接收时刻），`motor_receive` 传中断里记下的 `CanFrame.stamp_us`，不再用解析时刻；DR16 传读出字节的时刻（串口没有逐字节时刻），VT 链路、ins 传当时的时刻 | comm_rx_task 被耽误时，积压的旧帧不会让离线的电机“复活” |
 | 0061 | 用户 2026-10-01：“robot 这个名字不唯一，什么都能叫 robot”，选**按内容命名**：`01_applic/robot/` → **`01_applic/config/`**（≈ 老模板 Config.h），`robot_config.h` → `params.h`（全部参数），`robot.h` → `objects.h`（车上对象的声明），`robot.c` 拆成 `objects.c`（对象定义 + `objects_init()`，原 `robot_init()`）和 `task_table.c`（任务表 `task_table[]`，原 `robot_tasks[]`）；测试 `test_robot_config` → `test_params` | 看文件名就知道里面是什么；改任务优先级只开任务表 |
+| 0062 | 用户 2026-10-01 要求检查全部命名，选 A、B 两组全改（只改名）：① `ref_frame` → `referee_frame`（`ref` 在缩写表里是 reference）；② 停机动作只叫 stop：`SafeAction`/`SAFE_ACTION_*`/`motor_apply_safe_action` → `StopAction`/`STOP_ACTION_*`/`motor_apply_stop_action`；③ 超时统一 `模块_TIMEOUT_MS`：`RC_LOST_TIMEOUT_MS` → `DR16_TIMEOUT_MS`、`IMU_STALE_MS` → `INS_TIMEOUT_MS`、`MOTOR_OFFLINE_TIMEOUT_MS` → `MOTOR_TIMEOUT_MS`；④ `RobotMode`/`ROBOT_MODE_*` → `SafetyMode`/`SAFETY_MODE_*`；⑤ `rm_` 只用于会和 C 库或 FreeRTOS 重名的模块（time、log、task、delay、critical），`rm_status_led_set` → `status_led_set`，规则写进编码规范第 4 节；⑥ `objects_init()` 声明移到 `config/objects.h`；⑦ `AppTask` → `TaskTableEntry`；⑧ `Mat`/`mat_*` → `Matrix`/`matrix_*`；⑨ `quat_to_euler` → `quat_ekf_to_euler`、`vt13_decode` → `vt_link_decode_vt13`、`CycleExtender` → `CycleExtend`；⑩ `pid_calc` → `pid_step`。不改：`04_core/os/os.h`（改名 task.h 会和 FreeRTOS 的 task.h 冲突）、CubeMX 的 `startup_task`（要在 CubeMX 界面改） | 一个概念一个词；函数前缀就是文件名 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
@@ -1537,7 +1538,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 7 | `BSP/bsp_spi.c`、`bsp_gpio.c`、`bsp_pwm.c`、`Device/Bmi088.c` | `05_platform/…/spi`、`gpio`、`pwm`，`02_devices/imu/bmi088`（含加热恒温） | 代码完成（2026-09-28）：spi、pwm、bmi088、加热（UniC 参数）、`gyro_bias`；gpio 推迟到第 8 步（ADR 0033）；主机测试 15 项；上板待 V5、V6 |
 | 8 | `Algorithm/Quaternion.c`、`Task/INS_Task.c` | `03_algorithm/attitude/quat_ekf`、`01_applic/modules/ins`、`04_core/msg/imu_state` | 代码完成（2026-09-28）：EKF（卡方公式改正、实测 dt）、上电零偏标定、安装旋转、IMU 未就绪全车停；轮询驱动（ADR 0034）；主机测试 16 项；上板待 V7–V9 |
 | 9 | `Device/Motor.c`（达妙部分） | `02_devices/motor/dm_motor`（含 FDCAN2 的 FD 总线） | 代码完成（2026-09-28）：MIT、使能按期望状态对齐、FD 帧、跨品牌 ID 查重（ADR 0035）；样板接一台 DM8009；主机测试 18 项；上板待 V39–V42 |
-| 10 | `Device/Referee_System.c`、`Image_Transmission.c` | `02_devices/referee/referee`（协议 v2.0.0）、`02_devices/remote/vt_link` | 图传完成（2026-09-28）：`ref_frame`（0xA5 帧检查）、`vt_link`（VT13、0x0304），主机测试 11 项，上板待 V13、V14；**裁判系统等官方 V2.0.0 文档**（ADR 0036） |
+| 10 | `Device/Referee_System.c`、`Image_Transmission.c` | `02_devices/referee/referee`（协议 v2.0.0）、`02_devices/remote/vt_link` | 图传完成（2026-09-28）：`referee_frame`（0xA5 帧检查）、`vt_link`（VT13、0x0304），主机测试 11 项，上板待 V13、V14；**裁判系统等官方 V2.0.0 文档**（ADR 0036） |
 | 11 | `Device/MiniPC.c`、USB CDC | `05_platform/…/usb_cdc`、`02_devices/vision/vision_link` | 通道和帧层完成（2026-09-28，ADR 0037）：usb_cdc、byte_ring、vision_frame、vision_link；主机测试 8 项；上板待 V15；**消息字段等视觉组协议** |
 | 12 | `BSP/bsp_adc.c`、`Algorithm/RLS.c`、蜂鸣器 | `05_platform/…/adc`、`02_devices/battery`、`03_algorithm/power/rls`、`02_devices/buzzer` | 代码完成（2026-09-28，ADR 0038）：adc、battery（6S / 21.0 V）、buzzer（启动 / 解锁 / 上锁 / 低电量）、rls（标准公式重写，暂未接入）；主机测试 12 项；上板待 V16–V18 |
 | 13 | （旧工程只有一台电机的速度环） | `03_algorithm/kinematics/{omni,mecanum,steer}`、`01_applic/modules/chassis`、`01_applic/config` | 代码完成（2026-09-30，ADR 0043）：三种运动学 + 底盘子系统 + 固件（四轮全向轮）；主机测试 26 项；上板待 V45–V49（车架空） |

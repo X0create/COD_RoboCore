@@ -47,7 +47,7 @@ static void test_cannot_arm_before_system_ready(void)
 {
     TEST_ASSERT_TRUE(step(true, RC_SW_DOWN).stop_all);
     TEST_ASSERT_TRUE(step(true, RC_SW_UP).stop_all);
-    TEST_ASSERT_EQUAL_INT(ROBOT_MODE_INIT, gate.mode);
+    TEST_ASSERT_EQUAL_INT(SAFETY_MODE_INIT, gate.mode);
 }
 
 /* 上电时拨杆已经在上方：不会直接开动，必须先拨下 */
@@ -56,7 +56,7 @@ static void test_needs_down_then_up(void)
     safety_gate_set_system_ready(&gate);
     TEST_ASSERT_TRUE(step(true, RC_SW_UP).stop_all);
     TEST_ASSERT_TRUE(step(true, RC_SW_UP).stop_all);
-    TEST_ASSERT_EQUAL_INT(ROBOT_MODE_SAFE, gate.mode);
+    TEST_ASSERT_EQUAL_INT(SAFETY_MODE_SAFE, gate.mode);
     TEST_ASSERT_TRUE(step(true, RC_SW_DOWN).stop_all);
     const SafetyDecision d = step(true, RC_SW_MID); /* 拨到中也算解锁 */
     TEST_ASSERT_FALSE(d.stop_all);
@@ -70,7 +70,7 @@ static void test_estop_then_rearm(void)
     step(true, RC_SW_UP);
     arm();
     TEST_ASSERT_TRUE(step(true, RC_SW_DOWN).stop_all); /* 急停 */
-    TEST_ASSERT_EQUAL_INT(ROBOT_MODE_SAFE, gate.mode);
+    TEST_ASSERT_EQUAL_INT(SAFETY_MODE_SAFE, gate.mode);
     TEST_ASSERT_TRUE(step(true, RC_SW_DOWN).stop_all);
     TEST_ASSERT_FALSE(step(true, RC_SW_UP).stop_all); /* 拨下再拨上：重新解锁 */
 }

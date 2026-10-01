@@ -40,8 +40,8 @@ static void test_si_pid_matches_old_raw_pid(void)
         /* 目标转子转速：正转 → 停 → 反转（单位 rpm，两边按同一比例换算） */
         const float target_rpm = (k < 1000) ? 3300.0f : ((k < 2000) ? 0.0f : -1650.0f);
 
-        const float out_old = pid_calc(&old_pid, target_rpm, rpm_old);
-        const float out_si = pid_calc(&si_pid, target_rpm / DJI_M3508_RPM_PER_RAD_S,
+        const float out_old = pid_step(&old_pid, target_rpm, rpm_old);
+        const float out_si = pid_step(&si_pid, target_rpm / DJI_M3508_RPM_PER_RAD_S,
                                       rpm_si / DJI_M3508_RPM_PER_RAD_S);
         const float out_si_raw = out_si * DJI_M3508_RAW_PER_NM;
 

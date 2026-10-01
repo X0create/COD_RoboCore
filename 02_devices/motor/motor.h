@@ -8,7 +8,7 @@
  *          一个电机怎么用（和老模板 SendValue → CAN_Task 的顺序相同）：
  *            收：comm_rx_task  can_read() 取一帧 → motor_receive(&电机, 总线, &帧)，是它的反馈就解码、存下、喂狗
  *            读：control_task  motor_read_feedback()，在临界区里拷贝完整快照（带在线判断）
- *            写：control_task  motor_set_torque() / motor_apply_safe_action()  —— 只记下本周期的指令，还没有发送
+ *            写：control_task  motor_set_torque() / motor_apply_stop_action()  —— 只记下本周期的指令，还没有发送
  *            发：control_task  周期末尾 motor_group_send()：确定最终指令（停机动作 > 没写指令 > 离线 > 力矩）
  *                              → 编码 → 发送 → 清空本周期指令（motor_group.c）
  *          品牌：DJI（M3508 / M2006 / GM6020）、达妙（MIT 模式，ADR 0035）。
@@ -30,7 +30,7 @@ extern "C"
 #endif
 
 /** 反馈多久收不到就算离线（ADR 0031：每 1 ms 一帧，20 ms 即连续丢 20 帧；达妙每收到一帧指令回一帧反馈） */
-#define MOTOR_OFFLINE_TIMEOUT_MS 20u
+#define MOTOR_TIMEOUT_MS 20u
 
 /* 常用减速比（转子 : 输出轴），给 MotorConfig.gear_ratio 用；拆掉减速箱时填 1 */
 #define DJI_M3508_GEAR_RATIO (3591.0f / 187.0f)
@@ -60,10 +60,10 @@ typedef enum
 /** 停机动作（运行时契约第 5 节）。DJI 电机只支持零力矩和失能，配置成阻尼时 motor_init() 拒绝 */
 typedef enum
 {
-    SAFE_ACTION_ZERO_TORQUE, /* 不出力：DJI 发 0 电流；达妙 MIT 的 Kp、Kd、力矩全为 0 */
-    SAFE_ACTION_DAMP, /* 只阻碍运动：达妙 MIT 只给 Kd（DmConfig.damp_kd），驱动器自己闭环 */
-    SAFE_ACTION_DISABLE, /* 驱动器不输出：DJI 发 0 后停止发送；达妙发失能帧 */
-} SafeAction;
+    STOP_ACTION_ZERO_TORQUE, /* 不出力：DJI 发 0 电流；达妙 MIT 的 Kp、Kd、力矩全为 0 */
+    STOP_ACTION_DAMP, /* 只阻碍运动：达妙 MIT 只给 Kd（DmConfig.damp_kd），驱动器自己闭环 */
+    STOP_ACTION_DISABLE, /* 驱动器不输出：DJI 发 0 后停止发送；达妙发失能帧 */
+} StopAction;
 
 /**
  * 达妙电机的参数。P_MAX / V_MAX / T_MAX 必须与驱动器里用上位机配置的完全一致，
@@ -88,7 +88,7 @@ typedef struct
     int8_t direction; /* +1 / -1：使输出轴正方向符合坐标系约定 */
     float
         gear_ratio; /* 转子 : 输出轴，如 DJI_M3508_GEAR_RATIO；直驱填 1。达妙反馈已是输出轴，必须填 1 */
-    SafeAction stop_action; /* 全车停时发送出口改写成的动作 */
+    StopAction stop_action; /* 全车停时发送出口改写成的动作 */
     DmConfig dm;            /* 只有 MOTOR_DM 使用 */
 } MotorConfig;
 
@@ -104,7 +104,7 @@ typedef struct
     float temperature_c;     /* C610 不报温度，恒为 0 */
     uint8_t error_code; /* 驱动器上报的错误码，0 = 正常（DJI 没有；达妙为状态码 0x8–0xE） */
     bool enabled; /* 驱动器已使能（DJI 电调没有使能概念，恒为 true） */
-    bool online;  /* 读取时按 MOTOR_OFFLINE_TIMEOUT_MS 计算 */
+    bool online;  /* 读取时按 MOTOR_TIMEOUT_MS 计算 */
 } MotorFeedback;
 
 /** 这种型号支持什么 */
@@ -166,8 +166,8 @@ typedef struct Motor
     /* 本周期的指令槽位：只在 control_task 里读写，motor_group_send() 发送后清空 */
     float torque_cmd_nm;
     bool torque_set;
-    SafeAction safe_action;
-    bool safe_set;
+    StopAction stop_action;
+    bool stop_set;
     MotorOutput out; /* motor_group_send() 第 1 步写、第 2 步读 */
 
     struct Motor *next; /* 所属电机组的链表 */
@@ -209,7 +209,7 @@ RM_NODISCARD bool motor_read_feedback(const Motor *m, MotorFeedback *out);
 void motor_set_torque(Motor *m, float torque_nm);
 
 /** 记下本周期的停机动作，优先于 motor_set_torque()；motor_group_send() 时才发出。只在 control_task 里调用 */
-void motor_apply_safe_action(Motor *m, SafeAction action);
+void motor_apply_stop_action(Motor *m, StopAction action);
 
 /**
  * @brief   请求使能（达妙；DJI 无操作）。电机报错时先清错一次再使能

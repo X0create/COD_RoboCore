@@ -140,13 +140,15 @@ void gimbal_step(Gimbal *self, ...)
 
 | 对象 | 规则 | 例子 |
 | --- | --- | --- |
-| 类型（结构体、枚举、typedef） | **必须** `PascalCase` | `Motor`、`RobotCmd`、`SafeAction` |
-| 函数 | **必须** `模块_动作`，全小写加下划线 | `motor_set_torque()`、`robot_cmd_read()` |
+| 类型（结构体、枚举、typedef） | **必须** `PascalCase` | `Motor`、`RobotCmd`、`StopAction` |
+| 函数 | **必须** `模块_动作`，全小写加下划线；模块名就是文件名 | `motor_set_torque()`、`dr16_read()` |
 | 变量、结构体成员、参数 | **必须** `snake_case` | `yaw_err_rad`、`feedback` |
-| 宏、枚举常量 | **必须**全大写，并带模块前缀 | `SAFE_ACTION_DAMP`、`ERR_CAN_BUS_OFF` |
+| 宏、枚举常量 | **必须**全大写，并带模块前缀 | `STOP_ACTION_DAMP`、`ERR_CAN_BUS_OFF` |
 | 文件内的私有函数和变量 | **必须**加 `static`；名字可以不带模块前缀 | `static void parse_frame(...)` |
 | 布尔变量和返回 bool 的查询函数 | **应该**读起来是一句判断 | `is_online`、`has_error`、`motor_is_enabled()` |
 
+- `rm_` 前缀**只**用于会和 C 库或 FreeRTOS 重名的基础模块：`rm_time_*`、`rm_log_*`、`rm_task_*`、`rm_delay_*`、`rm_critical_*`（以及 `RM_` 开头的宏，如 `RM_ASSERT`、`RM_NODISCARD`）。其他模块**不加**（`can_send()`、`watchdog_feed()`、`status_led_set()`）。
+- 同一个概念全仓库只用一个词（例：急停时电机的动作只叫 stop action，`StopAction`、`stop_action`、`motor_apply_stop_action()`）；超时常量统一写成 `模块_TIMEOUT_MS`。
 - 从旧工程迁移的模块，第一版**可以**保留原函数名，第二步再改名（先搬代码、再改行为）。
 - **应该**只用附录 A 里的缩写。其他单词写全称。
 

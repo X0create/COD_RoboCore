@@ -34,7 +34,7 @@ static void run(int steps, const float gyro[3], const float accel[3])
 
 static void euler(float *yaw, float *pitch, float *roll)
 {
-    quat_to_euler(ekf.q, yaw, pitch, roll);
+    quat_ekf_to_euler(ekf.q, yaw, pitch, roll);
 }
 
 static const float zero[3] = { 0.0f, 0.0f, 0.0f };
@@ -123,13 +123,13 @@ static void test_euler_of_known_quaternions(void)
     const float h = 0.70710678f;
     float yaw, pitch, roll;
     const float yaw90[4] = { h, 0.0f, 0.0f, h };
-    quat_to_euler(yaw90, &yaw, &pitch, &roll);
+    quat_ekf_to_euler(yaw90, &yaw, &pitch, &roll);
     TEST_ASSERT_FLOAT_WITHIN(1e-5f, 1.5707963f, yaw);
     const float roll90[4] = { h, h, 0.0f, 0.0f };
-    quat_to_euler(roll90, &yaw, &pitch, &roll);
+    quat_ekf_to_euler(roll90, &yaw, &pitch, &roll);
     TEST_ASSERT_FLOAT_WITHIN(1e-5f, 1.5707963f, roll);
     const float pitch90[4] = { h, 0.0f, h, 0.0f }; /* 奇异点：asin 的参数被截到 1，不是 NaN */
-    quat_to_euler(pitch90, &yaw, &pitch, &roll);
+    quat_ekf_to_euler(pitch90, &yaw, &pitch, &roll);
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, 1.5707963f, pitch);
 }
 

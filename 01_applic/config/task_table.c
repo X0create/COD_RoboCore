@@ -31,7 +31,7 @@ static RmTask ins_task, control_task, detect_task, indicator_task,
 #define STACK_WORDS(stack) ((uint32_t)(sizeof(stack) / sizeof((stack)[0])))
 
 /* clang-format off */
-const AppTask task_table[] = {
+const TaskTableEntry task_table[] = {
     /* 任务             名字              入口                  参数   优先级  栈                                          周期 */
     { &ins_task,       "ins_task",       ins_task_entry,        &ins,  6u,  ins_stack,       STACK_WORDS(ins_stack)       }, /* 1 ms */
     { &comm_rx_task,   "comm_rx_task",   comm_rx_task_entry,    NULL,  5u,  comm_rx_stack,   STACK_WORDS(comm_rx_stack)   }, /* 收到 CAN / 串口就运行 */

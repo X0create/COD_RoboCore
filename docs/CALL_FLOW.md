@@ -109,7 +109,7 @@ for (;;)
 │     ├─ chassis_measure_update()               读 4 个电机实测（motor_read_feedback）→ 正解出底盘速度
 │     ├─ （全车停）chassis_stop()               清积分，目标对齐实测，不写指令
 │     ├─ chassis_target_update()                斜坡限加速度 → 逆解出每个轮子的目标转速（omni_inverse）
-│     └─ chassis_output_update()                每轮速度环 pid_calc → motor_set_torque
+│     └─ chassis_output_update()                每轮速度环 pid_step → motor_set_torque
 └─ 4. 发送
    ├─ （全车停）motor_group_apply_stop_all()    02_devices/motor/motor_group.c   每个电机改写成它的停机动作
    └─ motor_group_send(&motors)                02_devices/motor/motor_group.c

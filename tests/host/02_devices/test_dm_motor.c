@@ -23,7 +23,7 @@ static MotorConfig dm_cfg(int8_t dir)
                           .id = 1u,
                           .direction = dir,
                           .gear_ratio = 1.0f,
-                          .stop_action = SAFE_ACTION_DAMP,
+                          .stop_action = STOP_ACTION_DAMP,
                           .dm = { .master_id = 0x11u,
                                   .p_max = 3.141593f,
                                   .v_max = 45.0f,

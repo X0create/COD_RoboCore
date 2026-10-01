@@ -91,7 +91,7 @@ RM_NODISCARD bool vt_link_read_kbm(const VtLink *self, KbmState *out);
 void vt_link_on_bytes(VtLink *self, const uint8_t *data, uint32_t len);
 
 /** 解析一帧 VT13（纯计算） @return false：CRC 错或摇杆超范围 */
-bool vt13_decode(const uint8_t frame[VT13_FRAME_LEN], VtRcState *out);
+bool vt_link_decode_vt13(const uint8_t frame[VT13_FRAME_LEN], VtRcState *out);
 
 #ifdef __cplusplus
 }

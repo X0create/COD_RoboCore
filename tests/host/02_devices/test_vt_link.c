@@ -6,7 +6,7 @@
 
 #include <string.h>
 
-#include "02_devices/referee/ref_frame.h"
+#include "02_devices/referee/referee_frame.h"
 #include "04_core/util/crc.h"
 #include "fake_time.h"
 #include "unity.h"
@@ -74,13 +74,13 @@ static size_t kbm_frame(uint8_t *out, uint16_t cmd, uint16_t keys)
     return 21u;
 }
 
-static void test_vt13_decode_fields(void)
+static void test_decode_vt13_fields(void)
 {
     uint8_t f[VT13_FRAME_LEN];
     const uint16_t ch[4] = { 364, 1684, 1024, 1000 };
     vt13_frame(f, ch, VT_MODE_S, true, true, false, 1100, true);
     VtRcState rc;
-    TEST_ASSERT_TRUE(vt13_decode(f, &rc));
+    TEST_ASSERT_TRUE(vt_link_decode_vt13(f, &rc));
     TEST_ASSERT_EQUAL_INT16(-660, rc.ch[0]);
     TEST_ASSERT_EQUAL_INT16(660, rc.ch[1]);
     TEST_ASSERT_EQUAL_INT16(0, rc.ch[2]);
@@ -104,11 +104,11 @@ static void test_vt13_rejects_bad_crc_and_range(void)
     VtRcState rc;
     centered(f);
     f[5] ^= 0x01u;
-    TEST_ASSERT_FALSE(vt13_decode(f, &rc));
+    TEST_ASSERT_FALSE(vt_link_decode_vt13(f, &rc));
 
     const uint16_t ch[4] = { 1024, 100, 1024, 1024 };
     vt13_frame(f, ch, VT_MODE_N, false, false, false, 1024, false);
-    TEST_ASSERT_FALSE(vt13_decode(f, &rc));
+    TEST_ASSERT_FALSE(vt_link_decode_vt13(f, &rc));
 }
 
 static void test_kbm_frame_published(void)
@@ -191,7 +191,7 @@ static void test_valid_frame_feeds_watchdog(void)
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_vt13_decode_fields);
+    RUN_TEST(test_decode_vt13_fields);
     RUN_TEST(test_vt13_rejects_bad_crc_and_range);
     RUN_TEST(test_kbm_frame_published);
     RUN_TEST(test_stream_with_garbage_and_splits);

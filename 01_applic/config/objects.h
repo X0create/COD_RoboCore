@@ -17,6 +17,7 @@
 #include "02_devices/motor/motor.h"
 #include "02_devices/motor/motor_group.h"
 #include "02_devices/remote/dr16.h"
+#include "05_platform/compiler.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -31,6 +32,12 @@ extern MotorGroup motors;                 /* 全部电机，control_task 最后�
 
 extern Chassis chassis;
 extern Ins ins;
+
+/**
+ * @brief   初始化这台车的全部对象（设备 → 机构 → 安全门），由 app_main() 在调度器启动前调用
+ * @return  false：必需的设备或机构初始化失败，原因已记日志
+ */
+RM_NODISCARD bool objects_init(void);
 
 #ifdef __cplusplus
 }

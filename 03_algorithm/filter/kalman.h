@@ -47,29 +47,29 @@ typedef struct
     uint8_t u; /* 控制量维数，0 表示没有 */
 
     /* 模型与输入：调用者填写 */
-    Mat A;     /* n×n 状态转移 */
-    Mat B;     /* n×u 控制矩阵（u 为 0 时不用） */
-    Mat H;     /* m×n 测量矩阵 */
-    Mat Q;     /* n×n 过程噪声协方差 */
-    Mat R;     /* m×m 测量噪声协方差 */
-    Mat z;     /* m×1 本次测量 */
-    Mat u_vec; /* u×1 本次控制量 */
+    Matrix A;     /* n×n 状态转移 */
+    Matrix B;     /* n×u 控制矩阵（u 为 0 时不用） */
+    Matrix H;     /* m×n 测量矩阵 */
+    Matrix Q;     /* n×n 过程噪声协方差 */
+    Matrix R;     /* m×m 测量噪声协方差 */
+    Matrix z;     /* m×1 本次测量 */
+    Matrix u_vec; /* u×1 本次控制量 */
 
     /* 状态：x、P 需要调用者给初值 */
-    Mat x;       /* n×1 后验估计（滤波结果） */
-    Mat P;       /* n×n 后验协方差 */
-    Mat x_minus; /* n×1 先验估计 */
-    Mat P_minus; /* n×n 先验协方差 */
-    Mat K;       /* n×m 卡尔曼增益 */
-    Mat y;       /* m×1 新息 z - H x⁻（第 4 步算出，EKF 的卡方检验会用） */
-    Mat S;       /* m×m H P⁻ Hᵀ + R（求逆时被破坏） */
-    Mat S_inv;   /* m×m S 的逆（第 3 步算出） */
+    Matrix x;       /* n×1 后验估计（滤波结果） */
+    Matrix P;       /* n×n 后验协方差 */
+    Matrix x_minus; /* n×1 先验估计 */
+    Matrix P_minus; /* n×n 先验协方差 */
+    Matrix K;       /* n×m 卡尔曼增益 */
+    Matrix y;       /* m×1 新息 z - H x⁻（第 4 步算出，EKF 的卡方检验会用） */
+    Matrix S;       /* m×m H P⁻ Hᵀ + R（求逆时被破坏） */
+    Matrix S_inv;   /* m×m S 的逆（第 3 步算出） */
 
     /* 计算用的临时存储，各步骤之间不保留内容 */
-    Mat tmp_a; /* max(n,m)² */
-    Mat tmp_b; /* n×n */
-    Mat Ht;    /* n×m */
-    Mat vec;   /* max(n,m)×1 */
+    Matrix tmp_a; /* max(n,m)² */
+    Matrix tmp_b; /* n×n */
+    Matrix Ht;    /* n×m */
+    Matrix vec;   /* max(n,m)×1 */
 } KalmanFilter;
 
 /**

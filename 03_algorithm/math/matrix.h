@@ -23,24 +23,24 @@ typedef struct
     uint8_t rows;
     uint8_t cols;
     float *data;
-} Mat;
+} Matrix;
 
-void mat_init(Mat *m, uint8_t rows, uint8_t cols, float *data);
+void matrix_init(Matrix *m, uint8_t rows, uint8_t cols, float *data);
 
 /** 所有元素置 0 */
-void mat_zero(Mat *m);
+void matrix_zero(Matrix *m);
 
 /** out = a + b；out 可以就是 a 或 b */
-void mat_add(const Mat *a, const Mat *b, Mat *out);
+void matrix_add(const Matrix *a, const Matrix *b, Matrix *out);
 
 /** out = a - b；out 可以就是 a 或 b */
-void mat_sub(const Mat *a, const Mat *b, Mat *out);
+void matrix_sub(const Matrix *a, const Matrix *b, Matrix *out);
 
 /** out = a * b；@pre a->cols == b->rows，out 与 a、b 不是同一块存储 */
-void mat_mul(const Mat *a, const Mat *b, Mat *out);
+void matrix_mul(const Matrix *a, const Matrix *b, Matrix *out);
 
 /** out = aᵀ；@pre out 与 a 不是同一块存储 */
-void mat_trans(const Mat *a, Mat *out);
+void matrix_trans(const Matrix *a, Matrix *out);
 
 /**
  * @brief   out = a⁻¹（带列主元的高斯-约当消元）
@@ -48,7 +48,7 @@ void mat_trans(const Mat *a, Mat *out);
  * @pre     a 是方阵，out 与 a 不是同一块存储
  * @return  false：a 奇异（某一列找不到非零主元），out 内容无意义
  */
-bool mat_inv(Mat *a, Mat *out);
+bool matrix_inv(Matrix *a, Matrix *out);
 
 #ifdef __cplusplus
 }

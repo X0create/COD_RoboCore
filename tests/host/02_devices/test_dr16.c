@@ -181,14 +181,14 @@ static void test_two_frames_in_one_chunk(void)
     TEST_ASSERT_EQUAL_UINT32(0, dr16->bad_frames);
 }
 
-/* 超过 RC_LOST_TIMEOUT_MS 没有合法帧：dr16_read 返回 false，即遥控丢失（ADR 0030） */
+/* 超过 DR16_TIMEOUT_MS 没有合法帧：dr16_read 返回 false，即遥控丢失（ADR 0030） */
 static void test_lost_after_timeout(void)
 {
     uint8_t f[DR16_FRAME_LEN];
     RcState rc;
     centered_frame(f);
     dr16_on_bytes(dr16, f, DR16_FRAME_LEN, 10000000u);
-    fake_time_advance_ms(RC_LOST_TIMEOUT_MS);
+    fake_time_advance_ms(DR16_TIMEOUT_MS);
     TEST_ASSERT_TRUE(dr16_read(dr16, &rc));
     TEST_ASSERT_TRUE(watchdog_is_online(&dr16->wd));
     fake_time_advance_ms(1u);

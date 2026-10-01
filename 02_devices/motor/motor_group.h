@@ -2,7 +2,7 @@
  * @file    motor_group.h
  * @brief   电机组：按控制帧打包、统一发送（运行时契约第 6 节“电机组打包”）
  * @note    control_task 每个周期：
- *            1. 子系统调用 motor_set_torque() / motor_apply_safe_action()，只写槽位；
+ *            1. 子系统调用 motor_set_torque() / motor_apply_stop_action()，只写槽位；
  *            2. 需要全车停时调用 motor_group_apply_stop_all()，每个电机改写成它的 stop_action；
  *            3. 周期末尾调用一次 motor_group_send()：确定最终指令 → 编码 → 发送 → 清空本周期指令。
  *          本周期没写的槽位和离线电机的槽位填零力矩，不“保持上一帧”。
