@@ -78,6 +78,8 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 
 | 文档 | 内容 |
 | --- | --- |
+| `docs/LOGIC_PSEUDOCODE.md` | **中文逻辑伪代码**：从上电到发电机指令，每个任务做什么，每段标出对应的文件和函数（新队员先看这个） |
+| `docs/CALL_FLOW.md` | 调用关系地图：老模板对照、每个任务的函数调用树、怎么在 IDE 里跳转 |
 | `docs/ARCHITECTURE.md` | 架构设计：分层、核心机制、运行时契约、决策记录（ADR），以及**实施计划**和硬件、协议事实表 |
 | `docs/CODING_STANDARD.md` | 编码规范：命名、格式、注释、错误处理、安全相关代码，“必须 / 应该 / 可以”三级 |
 | `docs/DEV_ENVIRONMENT.md` | 开发环境搭建：WSL、工具链、Ozone 烧录调试、CLion，每步带验证状态；推送到 GitHub 和 Gitee |
