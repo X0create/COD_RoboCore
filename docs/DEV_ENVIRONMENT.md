@@ -402,7 +402,7 @@ RTT 之前，或者板上还是旧程序时，程序跑起来后就会停止。
 
 新模板在 D 盘的仓库里构建（WSL 路径 `/mnt/d/...`），ELF 可以直接用 Windows 路径打开，不用 `\\wsl.localhost`。
 
-1. WSL 中构建：在仓库根目录 `cmake --preset h723-infantry-debug && cmake --build --preset h723-infantry-debug`。
+1. WSL 中构建：在仓库根目录 `cmake --preset h723-debug && cmake --build --preset h723-debug`。
 2. Ozone 打开 `MC02_H723.jdebug`。2026-09-28 起它的 `OnProjectLoad` 已改为默认打开 COD RoboCore 的 ELF，
    并加了 `Project.AddPathSubstitute ("/mnt/d", "D:");`（ELF 里记的是 `/mnt/d/...`，不加则源码窗口找不到文件）。
    2026-09-29 起根目录 `CMakeLists.txt` 用 `-fdebug-prefix-map` 把调试信息里的 `/mnt/<盘符>/` 直接写成 `<盘符>:/`，
@@ -424,9 +424,9 @@ RTT 控制块在运行时才写好。地址应与 ELF 中 `_SEGGER_RTT` 一致�
 
 1. **设置 → 构建、执行、部署 → 工具链**：`+` → **WSL**，环境选 Ubuntu-24.04，其余自动检测
    （`/usr/bin/cmake`、`/usr/bin/ninja`、`/usr/bin/gcc`、`/usr/bin/g++`、WSL GDB），并移到列表最上面作为默认。
-2. **File → Open** 选仓库根目录 `COD_RoboCore/`。**设置 → CMake** 里启用 `host-tests` 和 `h723-infantry-debug`
+2. **File → Open** 选仓库根目录 `COD_RoboCore/`。**设置 → CMake** 里启用 `host-tests` 和 `h723-debug`
    两个来自 `CMakePresets.json` 的配置文件，关掉 CLion 默认的 `Debug`。列表里灰色的同名条目是预设原件，不用管。
-3. **编译固件**：右边运行配置框选 `COD_RoboCore`，左边自动是 `h723-infantry-debug`，按 **Ctrl+F9（构建）**。
+3. **编译固件**：右边运行配置框选 `COD_RoboCore`，左边自动是 `h723-debug`，按 **Ctrl+F9（构建）**。
    **不要按运行 ▶**：ELF 是单片机程序，电脑上执行会报 `Exec format error`；烧录和调试用 Ozone（第 10 节）。
 4. **跑单元测试**：右边运行配置框选 `All CTest`（左边会自动切到 `host-tests`），按 **运行 ▶**。
    左边框只列出“当前选中的目标”所在的配置，所以要先选目标再看配置。
@@ -434,7 +434,7 @@ RTT 控制块在运行时才写好。地址应与 ELF 中 `_SEGGER_RTT` 一致�
    CLion 自带的 clang-format 版本可能与 CI 固定的 18.1.3 不同，提交前以 WSL 里 `clang-format-18` 的检查结果为准。
 
 交叉编译器由 `cmake/toolchain-arm-gcc.cmake` 在 `~/tools/arm-gnu-toolchain-*/bin` 中自动查找，CLion 不需要额外设置环境变量。
-构建目录与命令行共用（`build/host`、`build/h723-infantry-debug`）。
+构建目录与命令行共用（`build/host`、`build/h723-debug`）。
 
 ### 11.1 在 CLion 里烧录和调试（J-Link，2026-09-29 烧录已验证，断点见下）
 
@@ -456,7 +456,7 @@ Ubuntu 自带的 `/usr/bin/gdb` 又只认电脑程序。调试时要先关掉 Oz
 | 执行前 | 构建 |
 
 配置保存在 `.idea/runConfigurations/MC02_J_Link.xml`（`.idea/` 不进 Git）。手写这个文件时注意：
-`CONFIG_NAME` 必须是 CLion 里的 CMake 配置全名 `h723-infantry-debug - h723-infantry-debug`
+`CONFIG_NAME` 必须是 CLion 里的 CMake 配置全名 `h723-debug - h723-debug`
 （写错时报“未指定可执行文件”）；自定义调试器写成 `<debugger kind="GDB">路径</debugger>`；
 GDB 服务器路径是 `custom-gdb-server` 的 `executable` 属性，实参是 `PROGRAM_PARAMS`。
 
@@ -481,7 +481,7 @@ GDB 服务器路径是 `custom-gdb-server` 的 `executable` 属性，实参是 `
 1. 工具链加一个 Windows“系统”工具链（本机名 `STM32CubeCLT`，编译器填 CubeCLT 的 `arm-none-eabi-gcc.exe`，只为通过检测，不参与编译）；
    WSL 工具链保持默认。
 2. 外部工具 `WSL 构建固件`：`C:\Windows\System32\wsl.exe`，实参
-   `-d Ubuntu-24.04 --cd "$ProjectFileDir$" -- cmake --build --preset h723-infantry-debug`（保存在 `.idea/tools/`）。
+   `-d Ubuntu-24.04 --cd "$ProjectFileDir$" -- cmake --build --preset h723-debug`（保存在 `.idea/tools/`）。
 3. 自定义构建目标 `COD_RoboCore`：工具链选上面的 Windows 工具链，构建用 `WSL 构建固件`。
 4. Segger J-Link 调试配置文件：GDB 服务器 `JLinkGDBServerCL.exe`、设备 `STM32H723VG`、1000 kHz、调试器 CLion 自带 `gdb.exe`、
    控制台端口 **19021**（填 2331 会和 GDB 端口冲突）。
@@ -500,11 +500,11 @@ RTT 控制块、变量地址都是旧版的内存布局，所以 CLion 的 RTT �
 ## 11.3 用 Keil 编译、烧录和调试（2026-10-01，编译已验证，上板未验证）
 
 Keil 工程是 CubeMX 按 MDK-ARM 生成的 `06_boards/dm_mc02_h723/MDK-ARM/dm_mc02.uvprojx`，再由 `tools/keil_sync.py` 加入本框架的源文件（ADR 0053）。
-打开它 → Target `infantry` → F7 编译（Keil 自己的 AC6）→ F8 烧录 / Ctrl+F5 调试（J-Link）。和 CMake 编的是同一组源文件，两种固件都要上板验证。
+打开它 → Target `dm_mc02` → F7 编译（Keil 自己的 AC6）→ F8 烧录 / Ctrl+F5 调试（J-Link）。和 CMake 编的是同一组源文件，两种固件都要上板验证。
 CubeMX 的使用规则见 `06_boards/dm_mc02_h723/README.md`“Keil”一节。
 
 - 本机 Keil：MDK Plus 5.41（Arm Compiler 6.22），装在 `D:\RoboMaster\CODSoftware\Keil`，`Keil.STM32H7xx_DFP` 4.1.3。
-- 命令行编译：`UV4.exe -b dm_mc02.uvprojx -t infantry -j0 -o log.txt`。
+- 命令行编译：`UV4.exe -b dm_mc02.uvprojx -t dm_mc02 -j0 -o log.txt`。
 - 调试信息为 DWARF 4（GCC 15 默认 5，Keil 不一定能读），见 `cmake/board-dm_mc02.cmake`。
 
 ## 12. 推送到 GitHub 和 Gitee（GitHub 已验证 2026-09-28，Gitee 2026-09-30）

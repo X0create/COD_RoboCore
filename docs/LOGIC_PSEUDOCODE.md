@@ -1,4 +1,4 @@
-# 中文逻辑伪代码（步兵固件）
+# 中文逻辑伪代码
 
 更新时间：2026-10-01。用中文把整个固件“从上电到发电机指令”的逻辑写一遍，**只讲做什么，不讲 C 语法**。
 每一段后面的 `→ 文件:函数` 是对应的真实代码，在 IDE 里打开后用“跳到定义 / 查找用法”继续看细节（见 `docs/CALL_FLOW.md`）。
@@ -33,11 +33,11 @@ main()（CubeMX 生成）
         调用 app_main()                                    → 01_applic/system/app_main.c:app_main
             初始化 DWT 计时器；失败就停住
             初始化 RTT 日志
-            robot_init()：初始化本兵种的全部对象              → 01_applic/robots/infantry/infantry_robot.c:robot_init
+            robot_init()：初始化这台车的全部对象              → 01_applic/robot/robot.c:robot_init
                 初始化 DR16 遥控（结果发布到 rc_state）
                 对 4 个轮子电机：检查配置、查 ID 冲突、加入电机组
-                初始化底盘（轮组类型、尺寸、PID 来自 infantry_config.h）
-                初始化 ins（安装方向来自 infantry_config.h，结果发布到 imu_state）
+                初始化底盘（轮组类型、尺寸、PID 来自 robot_config.h）
+                初始化 ins（安装方向来自 robot_config.h，结果发布到 imu_state）
                 初始化安全门（解锁拨杆 = 右拨杆），模式 = Init
                 任何一步失败 → 停住，不建任何任务（电机不会收到指令）
             按任务表 robot_tasks[] 逐个创建 6 个任务；有一个失败就停住
@@ -72,7 +72,7 @@ CAN 接收中断（收到一帧）                                → 05_platfor
     打开每一路 CAN 的接收
     打开 UART5（DR16）的 DMA 接收
 
-永远循环：                                              → 01_applic/robots/infantry/infantry_comm_rx_task.c:comm_rx_task_entry
+永远循环：                                              → 01_applic/robot/robot_comm_rx_task.c:comm_rx_task_entry
     等待中断叫醒（最多等 10 ms，防止漏掉通知）
 
     对每一路 CAN：
@@ -128,7 +128,7 @@ CAN 接收中断（收到一帧）                                → 05_platfor
 ## 5. control_task：控制周期（每 1 ms）
 
 ```
-永远循环（每 1 ms）：                                   → 01_applic/robots/infantry/infantry_control_task.c:control_task_entry
+永远循环（每 1 ms）：                                   → 01_applic/robot/robot_control_task.c:control_task_entry
     now = 当前时刻
 
     【第 1 步 读输入】
@@ -140,7 +140,7 @@ CAN 接收中断（收到一帧）                                → 05_platfor
 
     【第 3 步 底盘】
     如果 stop_all：目标速度 = 0
-    否则：目标速度 = 摇杆换算（ch[3] 前后、ch[2] 左右、ch[0] 旋转，满杆速度见 infantry_config.h）
+    否则：目标速度 = 摇杆换算（ch[3] 前后、ch[2] 左右、ch[0] 旋转，满杆速度见 robot_config.h）
     底盘计算（见第 7 节），解锁后 300 ms 内输出限幅从 0 逐渐升到 1 倍
 
     【第 4 步 发送】
@@ -237,7 +237,7 @@ indicator_task（每 25 ms）：                              → 01_applic/task
         读安全门模式：刚进入 Manual → 解锁音；刚离开 Manual → 上锁音
         推进蜂鸣器的音符
 
-log_task（每 1 s）：                                      → 01_applic/robots/infantry/infantry_log_task.c
+log_task（每 1 s）：                                      → 01_applic/robot/robot_log_task.c
     打印：心跳计数和模式、遥控、4 个轮子（转速 / 目标 / 力矩 / 温度）、底盘目标、IMU 姿态和温度、电池电压
 ```
 

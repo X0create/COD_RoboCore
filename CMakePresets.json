@@ -17,15 +17,14 @@
       }
     },
     {
-      "name": "h723-infantry-debug",
-      "displayName": "DM-MC02 步兵固件（arm-none-eabi-gcc，Debug）",
+      "name": "h723-debug",
+      "displayName": "DM-MC02 固件（arm-none-eabi-gcc，Debug）",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/h723-infantry-debug",
+      "binaryDir": "${sourceDir}/build/h723-debug",
       "toolchainFile": "${sourceDir}/cmake/toolchain-arm-gcc.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "RM_BOARD": "dm_mc02",
-        "RM_ROBOT": "infantry"
+        "RM_BOARD": "dm_mc02"
       }
     }
   ],
@@ -35,8 +34,8 @@
       "configurePreset": "host-tests"
     },
     {
-      "name": "h723-infantry-debug",
-      "configurePreset": "h723-infantry-debug"
+      "name": "h723-debug",
+      "configurePreset": "h723-debug"
     }
   ],
   "testPresets": [

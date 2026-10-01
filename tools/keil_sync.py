@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """把 CubeMX 生成的 Keil 工程整理成可以编译本框架的工程（ADR 0053）。
 
-用法（WSL，仓库根目录；先让 CMake 生成两个兵种的编译清单）：
-    cmake --preset h723-infantry-debug
+用法（WSL，仓库根目录；先让 CMake 生成编译清单）：
+    cmake --preset h723-debug
     python3 tools/keil_sync.py            # 改写 06_boards/dm_mc02_h723/MDK-ARM/dm_mc02.uvprojx / .uvoptx
     python3 tools/keil_sync.py --check    # 只检查工程是否最新（不改文件），不是最新时返回 1
 
 CubeMX 每次按 MDK-ARM 重新生成都会把工程改回它自己的样子，重跑本脚本即可。脚本做的事：
-  1. 以 CubeMX 生成的 Target（dm_mc02）为模板，每个兵种建一个 Target（目前只有 infantry），CubeMX 的源文件分组原样保留；
+  1. 以 CubeMX 生成的 Target（dm_mc02）为模板整理这一个 Target，CubeMX 的源文件分组原样保留；
   2. 加入本框架 01–05 层的源文件：文件列表、宏定义、头文件路径都取自 CMake 的 compile_commands.json，两边编的是同一组文件；
   3. FreeRTOS 移植层由 RVDS 改为 GCC（AC6 应使用 GCC 移植层；RVDS 是给 AC5 的，CubeMX 按 CMake 生成时还会删掉它）；
   4. 编译器 AC6、C 语言 gnu11、-O0（与 CMake 的 Debug 一致）、每个函数单独一段；
   5. 链接用 ../dm_mc02.sct（与 dm_mc02.ld 同样的内存布局，.dma_buf 在 0x24000000），不用 Keil 自动生成的布局；
   6. 调试器 J-Link（与 Ozone 相同），Flash 算法 STM32H72x-73x_1024；
-  7. 输出放到 build/keil/<兵种>/（不进 Git）。
+  7. 输出放到 build/keil/（不进 Git）。
 """
 import json
 import os
@@ -26,8 +26,9 @@ BOARD = os.path.join(REPO, "06_boards", "dm_mc02_h723")
 MDK = os.path.join(BOARD, "MDK-ARM")
 PROJX = os.path.join(MDK, "dm_mc02.uvprojx")
 OPTX = os.path.join(MDK, "dm_mc02.uvoptx")
-ROBOTS = ["infantry"]  # 01_applic/robots/ 下的目录名，也是 Keil Target 名
-TEMPLATE_TARGET = "dm_mc02"  # CubeMX 生成的 Target 名
+TEMPLATE_TARGET = "dm_mc02"  # CubeMX 生成的 Target 名，整理后沿用
+ROBOTS = [TEMPLATE_TARGET]  # Keil Target 名（只有一个）
+PRESET = "h723-debug"  # 编译清单来自这个 CMake 预设
 
 # CMake 编、Keil 不编的文件：GCC 专用（newlib 桩函数、GNU 语法汇编）；Keil 用 MDK-ARM/startup_stm32h723xx.s
 GCC_ONLY = {"syscalls.c", "sysmem.c"}
@@ -47,9 +48,9 @@ def keil_path(abs_path):
 
 def load_robot(robot):
     """返回 (本框架的源文件列表, 宏定义列表, 头文件路径列表)，都来自 CMake 的编译清单"""
-    path = os.path.join(REPO, "build", f"h723-{robot}-debug", "compile_commands.json")
+    path = os.path.join(REPO, "build", PRESET, "compile_commands.json")
     if not os.path.exists(path):
-        sys.exit(f"缺少 {path}：先运行 cmake --preset h723-{robot}-debug")
+        sys.exit(f"缺少 {path}：先运行 cmake --preset {PRESET}")
     files, defines, includes = [], [], []
     for entry in json.load(open(path, encoding="utf-8")):
         src = os.path.normpath(entry["file"])
@@ -138,7 +139,7 @@ def pick_template(targets):
     for t in targets:
         if f"<TargetName>{TEMPLATE_TARGET}</TargetName>" in t:
             return t
-    return targets[0]  # 已经整理过：用第一个兵种的 Target，下面会去掉上次加的分组
+    return targets[0]  # 已经整理过：用现有的 Target，下面会去掉上次加的分组
 
 
 def build_projx(text, robots):
@@ -151,7 +152,7 @@ def build_projx(text, robots):
         tmpl = tmpl.replace("<ToolsetName>ARM-ADS</ToolsetName>\n",
                             f"<ToolsetName>ARM-ADS</ToolsetName>\n      <pArmCC>{AC6}</pArmCC>\n      <pCCUsed>{AC6}</pCCUsed>\n      <uAC6>1</uAC6>\n", 1)
 
-    # 所有兵种的本框架文件，按目录分组；只有某个兵种用到的分组在其他兵种里不参与编译
+    # 本框架的文件按目录分组
     per_robot = {r: robots[r][0] for r in robots}
     all_files = sorted(set(f for fs in per_robot.values() for f in fs))
     groups = {}
@@ -161,9 +162,9 @@ def build_projx(text, robots):
     out = []
     for robot, (files, defines, includes) in robots.items():
         t = set_tag(tmpl, "TargetName", robot, 1)
-        t = set_tag(t, "OutputDirectory", keil_path(os.path.join(REPO, "build", "keil", robot)) + "\\", 1)
+        t = set_tag(t, "OutputDirectory", keil_path(os.path.join(REPO, "build", "keil")) + "\\", 1)
         t = set_tag(t, "OutputName", "COD_RoboCore", 1)
-        t = set_tag(t, "ListingPath", keil_path(os.path.join(REPO, "build", "keil", robot)) + "\\", 1)
+        t = set_tag(t, "ListingPath", keil_path(os.path.join(REPO, "build", "keil")) + "\\", 1)
         t = set_tag(t, "CreateHexFile", "0", 1)
         t = set_tag(t, "BrowseInformation", "1", 1)
         cads = re.search(r"<Cads>.*?</Cads>", t, flags=re.S).group(0)
@@ -185,6 +186,8 @@ def build_projx(text, robots):
 
 
 def build_optx(text, robots):
+    # .uvoptx 里的 <Group> 是 Keil 界面状态（分组展开、文件编号），文件改名后会留下旧记录；删掉，Keil 打开工程时自己重建
+    text = re.sub(r"^[ \t]*<Group>\n.*?\n[ \t]*</Group>\n", "", text, flags=re.S | re.M)
     targets = find_targets(text, "OptTarget")
     tmpl = pick_template(targets)
     tmpl = set_tag(tmpl, "pMon", "Segger\\JL2CM3.dll", 1)

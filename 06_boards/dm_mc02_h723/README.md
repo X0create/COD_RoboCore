@@ -37,7 +37,7 @@ Copyright (c) 2025 GrassFan_Wang
 固件由仓库根目录的 CMake 构建（WSL，仓库根目录）：
 
 ```bash
-cmake --preset h723-infantry-debug && cmake --build --preset h723-infantry-debug
+cmake --preset h723-debug && cmake --build --preset h723-debug
 ```
 
 根目录的 `CMakeLists.txt` 通过 `add_subdirectory` 复用 CubeMX 生成的 `cmake/stm32cubemx/CMakeLists.txt`（源文件清单随重新生成自动更新），
@@ -51,7 +51,7 @@ cmake --preset h723-infantry-debug && cmake --build --preset h723-infantry-debug
 
 ## Keil（ADR 0053）
 
-`MDK-ARM/dm_mc02.uvprojx` 是 Keil 工程，用 Keil 自己的编译器（AC6）编译，和 CMake 编的是同一组源文件。Target 只有 `infantry`。
+`MDK-ARM/dm_mc02.uvprojx` 是 Keil 工程，用 Keil 自己的编译器（AC6）编译，和 CMake 编的是同一组源文件。Target 只有一个 `dm_mc02`。
 
 **平时用：** 打开 `MDK-ARM/dm_mc02.uvprojx` → F7 编译 → F8 烧录（J-Link）→ Ctrl+F5 调试。不用跑任何脚本。
 
@@ -72,7 +72,7 @@ cmake --preset h723-infantry-debug && cmake --build --preset h723-infantry-debug
 - 链接用 `dm_mc02.sct`（与 `dm_mc02.ld` 同样的内存布局：DMA 缓冲区 `.dma_buf` 在 0x24000000），不用 Keil 自动生成的布局——
   自动布局会把 DMA 缓冲区放进 DTCM，DMA 访问不到，串口收不到数据也不报错；
 - 加入 01–05 层的源文件，宏定义和头文件路径与 CMake 相同，另加 `RTT_USE_ASM=0`（RTT 用 C 版，不用 GNU 语法的汇编）；
-- AC6、gnu11、-O0、每个函数单独一段；调试器 J-Link；输出到 `build/keil/infantry/`。
+- AC6、gnu11、-O0、每个函数单独一段；调试器 J-Link；输出到 `build/keil/`。
 
 **验证状态：** 2026-10-01 `UV4 -b` 编译 0 错误（6 条警告都在 CubeMX 生成的代码里），map 里 DMA 缓冲区在 0x24000000、
 `startup_task` 是框架的实现。**Keil 编出的固件尚未上板。**

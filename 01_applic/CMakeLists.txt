@@ -1,6 +1,3 @@
-# 当前构建的兵种（01_applic/robots/ 下的目录，多板兵种写到板子一级，如 sentry/gimbal_board），由预设选择
-set(RM_ROBOT "infantry" CACHE STRING "兵种目录（01_applic/robots/ 下）")
-
 # 与芯片无关的部分（安全门、各机构），电脑测试和固件都链接它
 add_library(rm_app_logic STATIC
     system/safety_gate.c
@@ -17,15 +14,19 @@ if(NOT RM_BOARD)
     return()
 endif()
 
-# 上电顺序、接收公共部分、各兵种共用的任务（tasks/），加上当前兵种目录下的全部 .c（<兵种>_robot.c 和本兵种的任务文件）
-file(GLOB rm_robot_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/robots/${RM_ROBOT}/*.c)
 add_library(rm_app STATIC
+    # 上电顺序、接收公共部分
     system/app_main.c
     system/comm_rx_common.c
+    # 通用任务
     tasks/ins_task.c
     tasks/detect_task.c
     tasks/indicator_task.c
-    ${rm_robot_sources}
+    # 这台车：对象和任务表、控制 / 接收 / 打印三个任务
+    robot/robot.c
+    robot/robot_control_task.c
+    robot/robot_comm_rx_task.c
+    robot/robot_log_task.c
 )
 target_link_libraries(rm_app PUBLIC rm_app_logic rm_core rm_devices rm_algorithm)
 rm_target_warnings(rm_app)

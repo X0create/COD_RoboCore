@@ -1,7 +1,7 @@
 # COD RoboCore
 
 COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清楚，可以在电脑上测试，并内置失效安全机制。
-一套代码覆盖多个兵种，支持两种主控：达妙 DM-MC02（STM32H723）和大疆 C 板（STM32F407）。
+一套通用的电控框架，做哪台车就复制一份、改 `01_applic/robot/`；支持两种主控：达妙 DM-MC02（STM32H723）和大疆 C 板（STM32F407）。
 
 > **当前状态（2026-09-30）：** COD-H7-Template 的功能已按新架构移植完（裁判系统解析等官方协议文档），编译 0 警告、
 > 电脑侧单元测试全部通过；正在 DM-MC02 上逐项验证（进度见 `docs/VERIFICATION_TODO.md`）。大疆 C 板（F407）后端尚未开始。
@@ -98,17 +98,15 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 
 ```text
 COD_RoboCore/
-├── 01_applic/                  业务（≈ 老模板 Application/）：机构 + 兵种
-│   ├── system/              各兵种共用的框架：app_main.c（上电顺序）、安全门、comm_rx_common.c（接收公共部分）
-│   ├── tasks/               各兵种共用的任务：ins_task、detect_task（上线 / 离线）、indicator_task（灯 / 蜂鸣器 / 电池）
-│   ├── modules/             机构（各兵种复用）
+├── 01_applic/               业务（≈ 老模板 Application/）
+│   ├── system/              通用框架：app_main.c（上电顺序）、安全门、comm_rx_common.c（接收公共部分）
+│   ├── tasks/               通用任务：ins_task、detect_task（上线 / 离线）、indicator_task（灯 / 蜂鸣器 / 电池）
+│   ├── modules/             机构（可复用）
 │   │   ├── chassis/         底盘（全向轮 / 麦轮 / 舵轮）
 │   │   ├── ins/             惯性导航（标定、零偏在线修正、EKF、发布姿态）
 │   │   └── gimbal/ shooter/ leg/ arm/   （规划）云台、发射、轮腿、机械臂
-│   └── robots/              兵种（一台车一个目录，本兵种特有的任务也在这里）
-│       ├── infantry/        步兵（第一版只有底盘）
-│       └── hero/ engineer/ heavy/ wheel_leg/ sentry/   （规划）其他兵种；哨兵两块板在 sentry/ 下
-│                            每个兵种目录（文件名带兵种前缀）：<兵种>_config.h、<兵种>_robot.h、<兵种>_robot.c（对象 + robot_init + 任务表）、control / comm_rx / log 三个任务
+│   └── robot/               这台车：robot_config.h（参数）、robot.h / robot.c（对象 + robot_init + 任务表）、
+│                            control / comm_rx / log 三个任务；目前是四轮全向轮底盘
 ├── 02_devices/              具体设备驱动（≈ 老模板 Components/Device）
 │   ├── motor/               统一电机接口、DJI、达妙、电机组发送
 │   ├── imu/                 BMI088（含恒温加热）
@@ -146,9 +144,9 @@ COD_RoboCore/
 │   ├── host/                电脑侧单元测试（Unity）；fakes/ 是假 CAN / SPI / PWM / 时钟 / OS
 │   └── target/ hil/ data/   （规划）板上自测、硬件在环、录制数据
 ├── cmake/                   交叉编译工具链、板级编译选项、警告设置
-├── tools/                   keil_sync.py（整理 Keil 工程）、gen_readme_diagrams.py（生成本页的图）；（规划）新建兵种、依赖检查
+├── tools/                   keil_sync.py（整理 Keil 工程）、gen_readme_diagrams.py（生成本页的图）；（规划）依赖检查
 ├── docs/                    架构设计与实施计划、编码规范、开发环境、与旧模板的差异、待验证清单；images/ 放本页的图
-└── CMakePresets.json        两个预设：host-tests（电脑测试）、h723-infantry-debug（步兵固件）
+└── CMakePresets.json        两个预设：host-tests（电脑测试）、h723-debug
 ```
 
 各层目录（platform、core、algorithm……）都有自己的 `README.md`，说明这一层放什么、不放什么。
@@ -166,7 +164,7 @@ COD_RoboCore/
 | `control_task` | 1 kHz | 4 | 读输入 → 安全门 → 各机构计算 → 全车停改写 → 发电机指令（下图 ①–⑤） |
 | `detect_task` | 100 Hz | 3 | 报告设备上线 / 离线（只报告，不参与安全判断） |
 | `indicator_task` | 40 Hz | 2 | 状态灯、蜂鸣器、低电量检查 |
-| `log_task` | 1 Hz | 1 | 通过 RTT 打印本兵种的状态 |
+| `log_task` | 1 Hz | 1 | 通过 RTT 打印这台车的状态 |
 
 中断只收数据并唤醒 `comm_rx_task`，所有协议解析都在任务里做；1 kHz 的任务里不打日志。
 
@@ -199,10 +197,10 @@ cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset
 **2. 编译 DM-MC02 固件**（WSL，仓库根目录；`~/tools/arm-gnu-toolchain-*` 下的编译器会被自动找到）：
 
 ```bash
-cmake --preset h723-infantry-debug && cmake --build --preset h723-infantry-debug
+cmake --preset h723-debug && cmake --build --preset h723-debug
 ```
 
-输出 `build/h723-infantry-debug/COD_RoboCore.elf`，编译必须 0 警告。
+输出 `build/h723-debug/COD_RoboCore.elf`，编译必须 0 警告。
 
 **3. 烧录并看日志**：Ozone 打开这个 ELF → **Download & Reset** → F5 运行 → **View → Terminal** 看 RTT 日志。
 上电后约 2 s 内不要动板子（陀螺零偏标定）。看到 `startup done`、每秒一行 `alive N, mode safe` 就是跑起来了。
@@ -211,14 +209,18 @@ cmake --preset h723-infantry-debug && cmake --build --preset h723-infantry-debug
 
 > 目前请用 Ozone 烧录：经 J-Link GDB 服务器（CLion）烧录会显示成功但实际没写入，原因还在查，见 `docs/DEV_ENVIRONMENT.md` 11.2 节。
 
-## 新建一个兵种
+## 做一台具体的车
 
-1. 复制 `01_applic/robots/infantry/` 为 `01_applic/<兵种名>/`，把里面文件名的前缀 `infantry_` 和 include 里的文件名改成 `<兵种名>_`；在 `CMakePresets.json` 里照 `h723-infantry-debug` 加一个预设。
-2. 改 `<兵种>_config.h`：PID 参数、解锁用哪个拨杆、IMU 安装方向、电池参数等固定参数。
-3. 改 `<兵种>_robot.c`：`robot_init()` 里初始化设备和机构、任务表 `robot_tasks[]`；`<兵种>_robot.h` 同步声明新增的对象和任务。电机 ID、总线等参数改 `<兵种>_config.h`。
-4. 改 `<兵种>_control_task.c`：每个控制周期做什么（读输入 → 安全门 → 子系统 → 发送，四步写在循环里）。`<兵种>_log_task.c` 改打印内容。
-   各任务的调用关系见 `docs/CALL_FLOW.md`。
-5. 编译时选这个兵种：`cmake --preset h723-<兵种名>-debug`。
+本仓库是通用模板，`01_applic/robot/` 是“这台车”。做英雄、工程、哨兵等具体的车时复制整个仓库，然后：
+
+1. 改 `robot_config.h`：电机表（CAN 总线、ID、方向、停机动作）、PID、尺寸、解锁拨杆、IMU 安装方向。
+2. 改 `robot.c`：`robot_init()` 里初始化设备和机构、任务表 `robot_tasks[]`；`robot.h` 同步声明新增的对象和任务。
+3. 改 `robot_control_task.c`：每个控制周期做什么（读输入 → 安全门 → 各机构 → 发送，四步写在循环里）；
+   `robot_comm_rx_task.c` 改接线，`robot_log_task.c` 改打印内容。各任务的调用关系见 `docs/CALL_FLOW.md`。
+4. 需要新机构（云台、发射……）时在 `01_applic/modules/` 里加，再在第 2、3 步里接上。
+5. 加了新的 `.c` 文件：在 CMake 里加，Keil 里拖进对应分组（或运行 `python3 tools/keil_sync.py`）。
+
+多板的车（如哨兵的云台板、底盘板）每块板一份仓库副本，用 `02_devices/board_link/` 交换话题（规划）。
 
 分层规则、命名和安全相关代码的写法见 `docs/CODING_STANDARD.md`。
 

@@ -1,21 +1,21 @@
 /**
- * @file    infantry_control_task.c
- * @brief   步兵的 control_task（1 kHz）：读输入 → 安全门 → 底盘 → 发送
+ * @file    robot_control_task.c
+ * @brief   这台车的 control_task（1 kHz）：读输入 → 安全门 → 底盘 → 发送
  * @note    相当于老模板的 Control_Task.c + CAN_Task.c：一个控制周期的四步都写在下面的循环里，从上往下读即可。
  *          第一版底盘直接读遥控（ADR 0043）。1 kHz 任务里不打日志。
  *          **这个任务会给电机发指令**：上板时车架空、轮子离地（docs/VERIFICATION_TODO.md V45 起）。
  *          解锁：右拨杆拨到下再拨到中或上；急停：右拨杆拨到下（ADR 0032）。
  */
-#include "infantry_robot.h"
+#include "robot.h"
 
 #include "04_core/os/os.h"
 #include "05_platform/time/time.h"
-#include "infantry_config.h"
+#include "robot_config.h"
 
 #define CONTROL_PERIOD_MS 1u
 #define CONTROL_DT_S      ((float)CONTROL_PERIOD_MS * 0.001f)
 
-/* 摇杆 → 目标底盘速度（通道对应见 infantry_config.h）。摇杆向右为正，底盘向左、逆时针为正，所以左右和旋转取反 */
+/* 摇杆 → 目标底盘速度（通道对应见 robot_config.h）。摇杆向右为正，底盘向左、逆时针为正，所以左右和旋转取反 */
 static ChassisVel chassis_cmd_from_rc(const RcState *rc)
 {
     const float k = 1.0f / (float)RC_CH_MAX;

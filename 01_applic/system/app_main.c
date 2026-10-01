@@ -48,12 +48,12 @@ void app_main(void)
 
     /* 读故障记录、board_init、参数在阶段 1 加入 */
 
-    if (!robot_init()) /* 3. 本兵种的全部对象（兵种 <兵种>_robot.c） */
+    if (!robot_init()) /* 3. 这台车的全部对象（robot.c） */
     {
         RM_LOG_E("robot init failed");
         halt_on_init_failure();
     }
-    if (!create_tasks()) /* 4. 按本兵种的任务表创建全部任务 */
+    if (!create_tasks()) /* 4. 按这台车的任务表创建全部任务 */
     {
         halt_on_init_failure();
     }

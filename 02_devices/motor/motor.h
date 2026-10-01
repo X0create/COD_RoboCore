@@ -37,7 +37,7 @@ extern "C"
 #define DJI_M2006_GEAR_RATIO 36.0f
 
 /*
- * M3508 + C620 的换算常数（附录 A.2），全仓库只在这里定义：dji_motor.c 编解码、兵种 <兵种>_config.h 把旧工程的 PID
+ * M3508 + C620 的换算常数（附录 A.2），全仓库只在这里定义：dji_motor.c 编解码、robot_config.h 把旧工程的 PID
  * 换算到国际单位都用这里。C620 电流原始值 ±16384 对应 ±20 A；原装减速箱输出轴 0.3 N·m/A
  */
 #define DJI_C620_RAW_MAX   16384
@@ -78,7 +78,7 @@ typedef struct
     float damp_kd;      /* 阻尼停机时的 Kd，N·m·s/rad（0–5） */
 } DmConfig;
 
-/** 本车固定参数：写成兵种 <兵种>_config.h 里的 const 配置表，运行中不变 */
+/** 本车固定参数：写成robot_config.h 里的 const 配置表，运行中不变 */
 typedef struct
 {
     const char *name; /* 日志和设备清单里的名字 */
@@ -192,7 +192,7 @@ bool motor_supports_torque(const Motor *m);
 /**
  * @brief   把一帧 CAN 交给这个电机：是它的反馈（总线和反馈 ID 都对上）就解码、存下、喂看门狗
  * @return  true：这帧是它的（长度不对的也算，丢弃不喂狗），调用方不用再交给别的电机；false：不是它的
- * @pre     只在 comm_rx_task 里调用（兵种的 comm_rx_task.c）
+ * @pre     只在 comm_rx_task 里调用（robot_comm_rx_task.c）
  */
 bool motor_receive(Motor *m, CanBusId bus, const CanFrame *frame);
 

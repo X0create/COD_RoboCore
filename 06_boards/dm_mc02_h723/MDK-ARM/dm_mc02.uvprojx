@@ -7,7 +7,7 @@
 
   <Targets>
     <Target>
-      <TargetName>infantry</TargetName>
+      <TargetName>dm_mc02</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
       <pArmCC>6220000::V6.22::ARMCLANG</pArmCC>
@@ -49,14 +49,14 @@
             <NotGenerated>0</NotGenerated>
             <InvalidFlash>1</InvalidFlash>
           </TargetStatus>
-          <OutputDirectory>..\..\..\build\keil\infantry\</OutputDirectory>
+          <OutputDirectory>..\..\..\build\keil\</OutputDirectory>
           <OutputName>COD_RoboCore</OutputName>
           <CreateExecutable>1</CreateExecutable>
           <CreateLib>0</CreateLib>
           <CreateHexFile>0</CreateHexFile>
           <DebugInformation>1</DebugInformation>
           <BrowseInformation>1</BrowseInformation>
-          <ListingPath>..\..\..\build\keil\infantry\</ListingPath>
+          <ListingPath>..\..\..\build\keil\</ListingPath>
           <HexFormatSelection>1</HexFormatSelection>
           <Merge32K>0</Merge32K>
           <CreateBatchFile>0</CreateBatchFile>
@@ -753,27 +753,27 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>01_applic/robots/infantry</GroupName>
+          <GroupName>01_applic/robot</GroupName>
           <Files>
             <File>
-              <FileName>infantry_comm_rx_task.c</FileName>
+              <FileName>robot.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\robots\infantry\infantry_comm_rx_task.c</FilePath>
+              <FilePath>..\..\..\01_applic\robot\robot.c</FilePath>
             </File>
             <File>
-              <FileName>infantry_control_task.c</FileName>
+              <FileName>robot_comm_rx_task.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\robots\infantry\infantry_control_task.c</FilePath>
+              <FilePath>..\..\..\01_applic\robot\robot_comm_rx_task.c</FilePath>
             </File>
             <File>
-              <FileName>infantry_log_task.c</FileName>
+              <FileName>robot_control_task.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\robots\infantry\infantry_log_task.c</FilePath>
+              <FilePath>..\..\..\01_applic\robot\robot_control_task.c</FilePath>
             </File>
             <File>
-              <FileName>infantry_robot.c</FileName>
+              <FileName>robot_log_task.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\robots\infantry\infantry_robot.c</FilePath>
+              <FilePath>..\..\..\01_applic\robot\robot_log_task.c</FilePath>
             </File>
           </Files>
         </Group>

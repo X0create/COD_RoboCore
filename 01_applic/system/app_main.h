@@ -1,10 +1,10 @@
 /**
  * @file    app_main.h
- * @brief   上电顺序（各兵种共用，只有这一份）与兵种必须提供的两样东西
+ * @brief   上电顺序（通用，只有这一份）与 01_applic/robot/ 必须提供的两样东西
  * @note    上电顺序（app_main.c）：
  *            调度器启动前  app_main()：DWT 计时 → RTT 日志 → robot_init() → 按 robot_tasks[] 创建全部任务
  *            调度器启动后  startup_task()：允许解锁，然后删除自己
- *          每个兵种在自己的 <兵种>_robot.c 里提供 robot_init() 和 robot_tasks[]。
+ *          01_applic/robot/robot.c 提供 robot_init() 和 robot_tasks[]。
  *          任何一步失败都停在 halt_on_init_failure()（app_main.c），此时没有任务运行，不会给电机发指令。
  */
 #pragma once
@@ -32,15 +32,15 @@ typedef struct
     uint32_t stack_words;
 } AppTask;
 
-/* ---------------- 每个兵种的 <兵种>_robot.c 提供 ---------------- */
+/* ---------------- 01_applic/robot/robot.c 提供 ---------------- */
 
 /**
- * @brief   初始化本兵种的全部对象（设备 → 机构 → 安全门），调度器启动前调用
+ * @brief   初始化这台车的全部对象（设备 → 机构 → 安全门），调度器启动前调用
  * @return  false：必需的设备或机构初始化失败，原因已记日志
  */
 RM_NODISCARD bool robot_init(void);
 
-/** 本兵种的全部任务（startup_task 除外，它由 CubeMX 创建） */
+/** 这台车的全部任务（startup_task 除外，它由 CubeMX 创建） */
 extern const AppTask robot_tasks[];
 extern const uint32_t robot_task_count;
 

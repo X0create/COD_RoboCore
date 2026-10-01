@@ -101,9 +101,9 @@ def architecture():
     s.text(24, 54, "左侧五层只能从上往下调用；右侧模块各层都可以使用。虚线框为规划中、尚无代码。", 12.5, INK2)
 
     layers = [
-        ("01_applic/robots/<兵种>", "兵种", "这台车怎么组装、怎么控制", BLUE,
+        ("01_applic/robot", "这台车", "怎么组装、怎么控制", BLUE,
          ["robot.c：对象 · 任务表", "control · comm_rx · log", "config.h"]),
-        ("01_applic 共用", "system + 机构", "各兵种共用的框架和机构", AQUA,
+        ("01_applic 共用", "system + 机构", "通用的框架和机构", AQUA,
          ["system：上电 · 安全门 · 指示 · 检测", "ins", "底盘", "*云台", "*发射"]),
         ("02_devices", "设备驱动", "协议字节 ⇄ 物理量", ORANGE,
          ["DJI 电机", "达妙电机", "BMI088", "DR16", "VT13 图传", "视觉帧", "电池", "蜂鸣器"]),
@@ -232,7 +232,7 @@ def runtime():
     s.text(24, ay - 8, "低优先级任务：只读话题，不参与控制", 12, INK2, bold=True)
     aux = [("detect_task", "100 Hz · 优先级 3", "报告设备上线 / 离线", 24),
            ("indicator_task", "40 Hz · 优先级 2", "状态灯 · 蜂鸣器 · 低电量", 330),
-           ("log_task", "1 Hz · 优先级 1", "每秒打印本兵种状态", 636)]
+           ("log_task", "1 Hz · 优先级 1", "每秒打印这台车状态", 636)]
     for name, meta, role, x in aux:
         s.rect(x, ay, 290, 58, tint(VIOLET, 0.07), tint(VIOLET, 0.35))
         s.rect(x, ay, 5, 58, VIOLET, VIOLET, rx=2)
@@ -281,7 +281,7 @@ def safety_gate():
 def startup():
     W, H = 960, 330
     s = Svg(W, H, "上电后按什么顺序启动")
-    s.text(24, 54, "前两行在 01_applic/system/app_main.c，各兵种相同。任何一步失败都停在 halt_on_init_failure()。⑥ 之前安全门一直是 Init，不能解锁。", 12.5, INK2)
+    s.text(24, 54, "前两行在 01_applic/system/app_main.c，通用。任何一步失败都停在 halt_on_init_failure()。⑥ 之前安全门一直是 Init，不能解锁。", 12.5, INK2)
 
     lanes = [
         ("app_main", "调度器启动前，单线程", BLUE,

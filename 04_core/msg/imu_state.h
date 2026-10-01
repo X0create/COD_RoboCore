@@ -3,7 +3,7 @@
  * @brief   姿态与惯性测量消息（ins 发布）
  * @note    ins 只在零偏标定完成后发布，所以“读得到且不旧”就是“IMU 就绪”：
  *          安全门用 imu_state_read(topic, &s, IMU_STALE_MS) 判断，失败即全车停（运行时契约第 5 节）。
- *          坐标系为 IMU 所属刚体的机体系（X 前、Y 左、Z 上，ADR 0006），由兵种配置的安装旋转转换。
+ *          坐标系为 IMU 所属刚体的机体系（X 前、Y 左、Z 上，ADR 0006），由 robot_config.h 配置的安装旋转转换。
  */
 #pragma once
 

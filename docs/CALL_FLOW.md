@@ -1,6 +1,6 @@
 # 调用关系地图（新旧模板对照）
 
-更新时间：2026-09-30。对象以步兵 `01_applic/robots/infantry/` 为例。
+更新时间：2026-09-30。对象以 `01_applic/robot/`（目前是四轮全向轮底盘）为例。
 
 只想先弄懂“做了什么”，看中文伪代码 `docs/LOGIC_PSEUDOCODE.md`；要看具体函数，再看本文。
 
@@ -43,34 +43,34 @@ COD-H7-Template/
 
 | 老模板 | 新模板 | 说明 |
 | --- | --- | --- |
-| `Core/`（CubeMX） | `06_boards/dm_mc02_h723/` | CubeMX 只建一个 `startup` 任务，其余任务由兵种 `<兵种>_robot.c` 的任务表创建（ADR 0025） |
+| `Core/`（CubeMX） | `06_boards/dm_mc02_h723/` | CubeMX 只建一个 `startup` 任务，其余任务由 `robot/robot.c` 的任务表创建（ADR 0025） |
 | `BSP/bsp_*.c` | `05_platform/stm32h7/*.c`（接口在 `05_platform/*.h`） | 中断回调只收数据、唤醒 comm_rx_task，不在中断里解析 |
 | `Components/Algorithm/`、`Controller/` | `03_algorithm/`（`control/pid`、`filter/lpf`、`attitude/quat_ekf` …） | |
 | `Components/Device/` | `02_devices/`（`motor/`、`remote/dr16`、`imu/bmi088` …） | |
-| `Application/` | `01_applic/` | 各兵种共用（`system/`）、机构（`modules/chassis/`、`modules/ins/`）、兵种（`robots/infantry/`） |
-| `Application/Task/INS_Task.c` | `01_applic/tasks/ins_task.c` + `ins.c` | 各兵种共用 |
-| `Application/Task/Control_Task.c` | `01_applic/robots/<兵种>/<兵种>_control_task.c` + `01_applic/modules/chassis/chassis.c` | |
-| `Application/Task/CAN_Task.c` | `<兵种>_control_task.c` 第 4 步 → `02_devices/motor/motor_group.c` | 发送与控制同一周期，不再单独一个任务 |
+| `Application/` | `01_applic/` | 通用（`system/`）、机构（`modules/chassis/`、`modules/ins/`）、这台车（`robot/`） |
+| `Application/Task/INS_Task.c` | `01_applic/tasks/ins_task.c` + `ins.c` | 通用 |
+| `Application/Task/Control_Task.c` | `01_applic/robot/robot_control_task.c` + `01_applic/modules/chassis/chassis.c` | |
+| `Application/Task/CAN_Task.c` | `robot_control_task.c` 第 4 步 → `02_devices/motor/motor_group.c` | 发送与控制同一周期，不再单独一个任务 |
 | `Application/Task/Detect_Task.c` | `01_applic/tasks/detect_task.c` | 只报告上线 / 离线；是否停车由读数据的地方按时间戳当场判断 |
-| `Core/Src/freertos.c` 的任务列表 | `01_applic/robots/<兵种>/<兵种>_robot.c` 的 `robot_tasks[]` | 6 个任务的优先级、栈都在这一处 |
-| 全局变量 `remote_ctrl`、`Chassis_Motor[]` … | `01_applic/robots/<兵种>/<兵种>_robot.h`（定义在 `<兵种>_robot.c` 第 1 节） | 只在兵种目录内共享 |
-| `Config.h` | `01_applic/robots/<兵种>/<兵种>_config.h` | |
+| `Core/Src/freertos.c` 的任务列表 | `01_applic/robot/robot.c` 的 `robot_tasks[]` | 6 个任务的优先级、栈都在这一处 |
+| 全局变量 `remote_ctrl`、`Chassis_Motor[]` … | `01_applic/robot/robot.h`（定义在 `robot.c` 第 1 节） | 只在 `robot/` 内共享 |
+| `Config.h` | `01_applic/robot/robot_config.h` | |
 
-## 3. 新模板的文件（步兵）
+## 3. 新模板的文件
 
 ```
-01_applic/robots/infantry/（只放本兵种特有的）
-├── infantry_config.h           本兵种参数：电机表、PID、底盘尺寸、满杆速度、解锁拨杆、IMU 安装方向
-├── infantry_robot.h            本兵种对象 + 本目录任务入口的声明              ← 相当于老模板的全局变量
-├── infantry_robot.c            ① 对象定义 ② robot_init() ③ 任务表 robot_tasks[]
-├── infantry_control_task.c     1 kHz：读输入 → 安全门 → 底盘 → 发送          ← Control_Task + CAN_Task
-├── infantry_comm_rx_task.c     收到数据就运行：打开接收，CAN → 电机，UART5 → DR16 ← BSP 里的接收回调
-└── infantry_log_task.c         1 s：RTT 打印本兵种状态
-01_applic/tasks/（各兵种相同的任务）
+01_applic/robot/（只放这台车特有的）
+├── robot_config.h           这台车参数：电机表、PID、底盘尺寸、满杆速度、解锁拨杆、IMU 安装方向
+├── robot.h            这台车对象 + 本目录任务入口的声明              ← 相当于老模板的全局变量
+├── robot.c            ① 对象定义 ② robot_init() ③ 任务表 robot_tasks[]
+├── robot_control_task.c     1 kHz：读输入 → 安全门 → 底盘 → 发送          ← Control_Task + CAN_Task
+├── robot_comm_rx_task.c     收到数据就运行：打开接收，CAN → 电机，UART5 → DR16 ← BSP 里的接收回调
+└── robot_log_task.c         1 s：RTT 打印这台车状态
+01_applic/tasks/（通用的任务）
 ├── ins_task.c         1 kHz：姿态解算（调用 modules/ins/ins.c）       ← INS_Task
 ├── detect_task.c      10 ms：上线 / 离线报告                        ← Detect_Task
 └── indicator_task.c   25 ms：状态灯、蜂鸣器、低电量（照 UniC 的 app_indicator）
-01_applic/system/（各兵种相同的框架）
+01_applic/system/（通用的框架）
 ├── app_main.c         上电顺序（只有这一份）：app_main()、startup_task()
 ├── safety_gate.c      全车唯一的安全门：急停、遥控丢失、未解锁、IMU 未就绪 → 全车停
 └── comm_rx_common.c   接收的公共部分：中断唤醒任务、打开接收、CAN bus-off 恢复
@@ -78,14 +78,14 @@ COD-H7-Template/
 01_applic/modules/chassis/chassis.c      底盘：读实测 → 算目标 → 算输出
 ```
 
-## 4. 上电顺序（`01_applic/system/app_main.c`，各兵种相同）
+## 4. 上电顺序（`01_applic/system/app_main.c`，通用）
 
 ```
 main()（CubeMX）→ MX_FREERTOS_Init()（freertos.c 的 USER CODE 区）
 └─ app_main()                                   调度器启动前
    ├─ rm_time_init()、rm_log_init()
-   ├─ robot_init()                              01_applic/robots/infantry/infantry_robot.c：遥控 → 4 个轮子电机 → 底盘 → IMU → 安全门
-   └─ create_tasks()                            按 01_applic/robots/infantry/infantry_robot.c 的 robot_tasks[] 创建 6 个任务
+   ├─ robot_init()                              01_applic/robot/robot.c：遥控 → 4 个轮子电机 → 底盘 → IMU → 安全门
+   └─ create_tasks()                            按 01_applic/robot/robot.c 的 robot_tasks[] 创建 6 个任务
                                                 （任何一步失败都停在 halt_on_init_failure）
 （调度器启动）
 startup_task()                                  最高优先级，第一个运行
@@ -96,7 +96,7 @@ startup_task()                                  最高优先级，第一个运�
 
 ## 5. 每个任务做什么
 
-### control_task（1 kHz）：`01_applic/robots/infantry/infantry_control_task.c:control_task_entry`
+### control_task（1 kHz）：`01_applic/robot/robot_control_task.c:control_task_entry`
 
 ```
 for (;;)
@@ -135,7 +135,7 @@ for (;;)
       └─ imu_state_publish(&imu_state, ...)     control、log 读（发布在 ins_step 第 5 步）
 ```
 
-### comm_rx_task（收到数据就运行）：`01_applic/robots/infantry/infantry_comm_rx_task.c:comm_rx_task_entry`
+### comm_rx_task（收到数据就运行）：`01_applic/robot/robot_comm_rx_task.c:comm_rx_task_entry`
 
 ```
 中断：HAL_FDCAN_RxFifo0/1Callback               05_platform/can/can_stm32h7.c    帧放进环形缓冲
@@ -159,7 +159,7 @@ comm_rx_task：
 
 开头打开 ADC 和蜂鸣器、放启动音；之后每 25 ms：状态灯（一长一短）、电池检查（低电量每 2 s 响一次）、读 `safety_gate.mode` 放解锁 / 上锁音。
 
-### log_task（1 s）：`01_applic/robots/infantry/infantry_log_task.c:log_task_entry`
+### log_task（1 s）：`01_applic/robot/robot_log_task.c:log_task_entry`
 
 打印模式、遥控、四个轮子、底盘目标、IMU、电池（电池读 `indicator_battery_v()`）。
 
