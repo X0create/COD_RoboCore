@@ -22,9 +22,9 @@ static void halt_on_init_failure(void)
 /** @return false：有任务创建失败，失败的任务名已记日志 */
 static bool create_tasks(void)
 {
-    for (uint32_t i = 0u; i < robot_task_count; i++)
+    for (uint32_t i = 0u; i < task_table_count; i++)
     {
-        const AppTask *t = &robot_tasks[i];
+        const AppTask *t = &task_table[i];
         if (!rm_task_create(t->task, t->name, t->entry, t->arg, t->priority, t->stack,
                             t->stack_words))
         {
@@ -48,7 +48,7 @@ void app_main(void)
 
     /* 读故障记录、board_init、参数在阶段 1 加入 */
 
-    if (!robot_init()) /* 3. 这台车的全部对象（robot.c） */
+    if (!objects_init()) /* 3. 这台车的全部对象（objects.c） */
     {
         RM_LOG_E("robot init failed");
         halt_on_init_failure();

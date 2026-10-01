@@ -39,7 +39,7 @@
 
 ## 目标与约束
 
-一套通用代码覆盖全部兵种和两种主控：做一台具体的车 = 复制本仓库 + 改 `01_applic/robot/`（`robot_config.h` 参数、`robot.c` 组装机构、`control_task.c` 控制逻辑，ADR 0056）；换主控只换平台目录，在资源和算力满足该兵种要求时业务代码不动，不满足的组合在 CMake 配置阶段直接报错。模板的首要要求是**明了易懂**：新队员能顺着目录和注释读懂，代码是普通 C：结构体 + 函数。
+一套通用代码覆盖全部兵种和两种主控：做一台具体的车 = 复制本仓库 + 改 `01_applic/config/`（`params.h` 参数、`objects.c` 组装机构、`control_task.c` 控制逻辑，ADR 0056）；换主控只换平台目录，在资源和算力满足该兵种要求时业务代码不动，不满足的组合在 CMake 配置阶段直接报错。模板的首要要求是**明了易懂**：新队员能顺着目录和注释读懂，代码是普通 C：结构体 + 函数。
 
 | 项目 | 决定 |
 | --- | --- |
@@ -110,7 +110,7 @@
 
 ```mermaid
 flowchart TD
-    APP["01_applic/robot<br/>组装 + 模式状态机 + 任务"]
+    APP["01_applic<br/>config 组装 + tasks 任务 + modules 机构"]
     SUB["01_applic/modules/<机构><br/>云台 / 底盘 / 发射 / 腿 / INS"]
     DEV["02_devices<br/>电机 / IMU / 遥控 / 裁判 / 视觉"]
     ALG["03_algorithm<br/>PID / 滤波 / 四元数 / LQR"]
@@ -165,7 +165,7 @@ COD_RoboCore/
 │   ├── tasks/                   # 全部任务：ins control comm_rx detect indicator log（≈ 老模板 Application/Task，ADR 0057）
 │   ├── modules/                 # 机构，只放计算；功率控制属于 chassis / leg 内部，见“功率控制”一节
 │   │   └── ins/  chassis/  gimbal/  shooter/  leg/  arm/
-│   └── robot/                   # 这台车的参数和对象：robot_config.h robot.h/.c（任务表）
+│   └── config/                  # 这台车：params.h（参数）objects.h/.c（对象）task_table.c（任务表）（ADR 0061）
 ├── 02_devices/
 │   ├── motor/                   # motor.h（统一接口）dji_motor dm_motor motor_group
 │   ├── imu/                     # bmi088
@@ -224,8 +224,8 @@ COD_RoboCore/
 
 **关键点**
 
-- **一个仓库 = 一台车（多板时一块板）的固件。** 本仓库是通用模板，`01_applic/robot/` 是“这台车”；做具体的车时复制整个仓库，改 `robot/` 里的参数、对象、任务和控制逻辑，新机构加在 `modules/`（ADR 0056）。
-- **一块板 = 06_boards/ 下一个目录 + 05_platform/ 下一份实现。** 资源和算力够用时，上层代码在 H723 和 F407 之间原样复用；每个目录在 robot_config.h 里声明需要的能力（CAN 路数、CAN FD、控制频率），CMake 与板子能力比对，不支持的组合在构建时报错。
+- **一个仓库 = 一台车（多板时一块板）的固件。** 本仓库是通用模板，`01_applic/config/` 是“这台车”；做具体的车时复制整个仓库，改 `config/` 里的参数、对象、任务和控制逻辑，新机构加在 `modules/`（ADR 0056）。
+- **一块板 = 06_boards/ 下一个目录 + 05_platform/ 下一份实现。** 资源和算力够用时，上层代码在 H723 和 F407 之间原样复用；每个目录在 params.h 里声明需要的能力（CAN 路数、CAN FD、控制频率），CMake 与板子能力比对，不支持的组合在构建时报错。
 - **多板是通用机制，不只属于哨兵**：步兵常分云台板和底盘板（24\_Wolf），平衡步兵用 MC02 底盘 + C 板云台（SPR），哨兵是双云台加底盘。每块板一个 01_applic/ 下的兵种目录，可以是不同的主控，共用 02_devices/board\_link 和同一份跨板话题表。
 - **CubeMX 重新生成只会改写 06_boards/<板子>/ 下的文件**，但**它会悄悄删掉它认为不属于用户的代码**。UniC 在同一块板上出过这些事故：
   - `USER CODE BEGIN 2` 被清空，框架入口不再被调用，固件能编译能链接但什么都不做；
@@ -340,7 +340,7 @@ return watchdog_read_data(&self->wd, &self->rc, out, sizeof(*out)); // dr16_read
 
 | 类别 | 放哪里 | 例子 | 改动方式 |
 | --- | --- | --- | --- |
-| 兵种结构参数 | `01_applic/robot/robot_config.h`，const 结构体 | 电机 ID、减速比、PID 参数、限位、轮距 | 改代码、重新编译 |
+| 兵种结构参数 | `01_applic/config/params.h`，const 结构体 | 电机 ID、减速比、PID 参数、限位、轮距 | 改代码、重新编译 |
 | 标定值 | `04_core/param`，存 Flash（版本号 + CRC） | 云台零点、IMU 安装偏差、陀螺零偏初值 | 上电自动标定，或用遥控器组合键触发，掉电保存；调试时也可在 Ozone 里改（第一版不做串口命令行，ADR 0027） |
 | 调试量 | 带 `volatile` 的 `g_debug` 结构体 | 测试模式、临时目标 | Ozone / Keil Watch 在线修改 |
 
@@ -387,7 +387,7 @@ typedef struct {                // 这种型号支持什么，由 motor.c 按型
 typedef enum { MOTOR_M3508, MOTOR_M2006, MOTOR_GM6020, MOTOR_DM } MotorType;  // 达妙各型号（DM4310、DM8009…）共用 MOTOR_DM，差异在配置里
 typedef enum { SAFE_ACTION_ZERO_TORQUE, SAFE_ACTION_DAMP, SAFE_ACTION_DISABLE } SafeAction;
 
-/* 配置：本车固定参数，写成 robot.c / robot_config.h 里的 const 对象，运行中不变 */
+/* 配置：本车固定参数，写成 objects.c / params.h 里的 const 对象，运行中不变 */
 typedef struct {
     MotorType type;
     CanBusId  can_bus;
@@ -422,11 +422,11 @@ void motor_request_clear_error(Motor *m);
 **配置和运行状态分开存放。** 改车的参数只看 `MotorConfig`，反馈数据不会和配置混在一起：
 
 ```c
-/* robot.c */
+/* objects.c */
 static const MotorConfig yaw_config = { .type = MOTOR_GM6020, .can_bus = CAN_BUS_1, .id = 1, .direction = -1, .gear_ratio = 1.0f };
 static Motor yaw_motor;                 // 运行中变化的数据
 
-/* robot_init() 里 */
+/* objects_init() 里 */
 if (!motor_init(&yaw_motor, &yaw_config)) { return false; }
 ```
 
@@ -483,7 +483,7 @@ motor_set_torque(self->yaw_motor, torque_nm);
 
 **DJI 电机的 ID 冲突在初始化时拒绝。** GM6020 的反馈 ID 是 `0x204 + id`，M3508/M2006 的反馈 ID 是 `0x200 + id`：同一路 CAN 上，GM6020 的 1–4 号和 M3508/M2006 的 5–8 号反馈 ID 相同。控制帧也有共用：`0x1FF` 同时承载 C6x0 的 5–8 号和 GM6020 电压模式的 1–4 号。
 
-`motor_init()` 按“总线 + 反馈 ID”和“总线 + 控制帧槽位”查重，冲突就返回 false，`robot_init()` 失败并在日志里写出冲突的两个电机。basic\_framework 在注册时做同样的检查。这类配置错误表现为“两个电机的反馈互相覆盖”，上电后很难查。
+`motor_init()` 按“总线 + 反馈 ID”和“总线 + 控制帧槽位”查重，冲突就返回 false，`objects_init()` 失败并在日志里写出冲突的两个电机。basic\_framework 在注册时做同样的检查。这类配置错误表现为“两个电机的反馈互相覆盖”，上电后很难查。
 
 **达妙电机的三条硬性要求**（引用 basic\_framework、StandardRobot++，未在本项目实测）：
 
@@ -611,7 +611,7 @@ flowchart LR
 - **卡弹检测**：拨弹电机的电流持续偏大、转速却接近 0，超过设定时间就判为卡弹，自动反转一小段后再恢复。反复卡弹就停止拨弹、记错误码，等操作手处理。basic\_framework 把这一项列为待办。
 - **单发、三连发**按拨盘角度闭环，走到位就停；连发按射频做速度闭环。
 
-具体阈值是标定值，写在 `robot_config.h` 里。
+具体阈值是标定值，写在 `params.h` 里。
 
 ### 模式状态机
 
@@ -631,7 +631,7 @@ stateDiagram-v2
 - **断言失败**不在图中：记录到 `.noinit` 后直接复位，复位后电机不会自动使能（运行时契约第 3 节，ADR 0026）。
 - 底盘跟随、小陀螺、开火模式是 Manual / AutoAim 下的子状态，由 `RobotCmd` 里的 `chassis.mode`、`shoot.mode` 字段表达。
 - 状态机写成表驱动（状态 × 事件 → 新状态 + 进入动作），可在 PC 上单元测试。
-- **急停**的具体来源（遥控器哪个拨杆位置、是否另有物理开关）写在每个兵种的 `robot_config.h` 里，统一映射成 `RcState` 里的一个电平信号，不用边沿事件。
+- **急停**的具体来源（遥控器哪个拨杆位置、是否另有物理开关）写在每个兵种的 `params.h` 里，统一映射成 `RcState` 里的一个电平信号，不用边沿事件。
 
 **输入源先标准化，再进状态机**（借鉴 basic\_framework 的 `standard_cmd`）。操作输入可能来自：
 - DR16 或富斯遥控器；
@@ -641,7 +641,7 @@ stateDiagram-v2
 
 command 任务第一步把它们统一成一个 `OperatorInput`（摇杆、拨杆、键鼠，以及**按键的按下 / 单击 / 长按**），后面的模式状态机和命令计算只看 `OperatorInput`。
 - 按键的边沿和长按由 `03_algorithm/` 里的 `KeyTracker` 判断（纯函数，可在 PC 上测试）。basic\_framework 在应用里直接用按键计数取模来切换模式，不同兵种各写一遍，这里改为复用。
-- 多个来源同时有输入时，由这一步按 `robot_config.h` 里的优先级仲裁，例如“遥控器拨杆优先于键鼠”。
+- 多个来源同时有输入时，由这一步按 `params.h` 里的优先级仲裁，例如“遥控器拨杆优先于键鼠”。
 
 **裁判系统断电（阵亡、罚下、复活）。** 裁判系统的电源管理模块会分别切断云台、底盘、发射机构的电源。此时主控仍在运行，而电机已经掉电：
 - 对应电机离线，DJI 电调掉电；达妙驱动器重新上电后处于失能状态；
@@ -653,11 +653,11 @@ command 任务第一步把它们统一成一个 `OperatorInput`（摇杆、拨�
 
 | 场景 | 做法 |
 | --- | --- |
-| 选兵种 | 不在一个仓库里选：一个仓库就是一台车，`01_applic/robot/` 只有一个（ADR 0056） |
+| 选兵种 | 不在一个仓库里选：一个仓库就是一台车，`01_applic/config/` 只有一个（ADR 0056） |
 | 选主控 | `-DBOARD=dm_mc02` 选 `06_boards/` 和 `05_platform/` 的实现；上层代码不出现板子宏 |
-| 兵种差异 | 全部在 `01_applic/robot/`：`robot_config.h`（电机、ID、参数）、`robot.c`（组装哪些机构、任务表）、`robot_*_task.c`；机构代码（`modules/`）对所有车相同 |
-| 轮腿 | 用 `leg` 子系统替换 `chassis`，读同一个 `RobotCmd` 里的 chassis 部分；平衡控制（LQR）在控制任务内运行。LQR 增益按腿长拟合成多项式，在 MATLAB 里离线生成系数表（SPR 的做法），系数表作为 `robot_config.h` 常量，拟合脚本放在 `tools/`。离地检测、跳跃、上台阶是 `leg` 的子状态，每个都要定义自己的安全动作 |
-| 多板（任意兵种） | 每块板一份仓库副本（各自的 `01_applic/robot/`），两块板可以是不同主控；BoardLink 按表把指定话题映射到 CAN 帧（话题、帧 ID、发送周期），另一块板收到后原样发布。对子系统来说，话题来自本板还是另一块板没有区别。一个 CMake 预设可以同时构建一台车的全部板子 |
+| 兵种差异 | 全部在 `01_applic/config/`：`params.h`（电机、ID、参数）、`objects.c`（组装哪些机构）、`task_table.c`（任务表）；机构代码（`modules/`）对所有车相同 |
+| 轮腿 | 用 `leg` 子系统替换 `chassis`，读同一个 `RobotCmd` 里的 chassis 部分；平衡控制（LQR）在控制任务内运行。LQR 增益按腿长拟合成多项式，在 MATLAB 里离线生成系数表（SPR 的做法），系数表作为 `params.h` 常量，拟合脚本放在 `tools/`。离地检测、跳跃、上台阶是 `leg` 的子状态，每个都要定义自己的安全动作 |
+| 多板（任意兵种） | 每块板一份仓库副本（各自的 `01_applic/config/`），两块板可以是不同主控；BoardLink 按表把指定话题映射到 CAN 帧（话题、帧 ID、发送周期），另一块板收到后原样发布。对子系统来说，话题来自本板还是另一块板没有区别。一个 CMake 预设可以同时构建一台车的全部板子 |
 
 ## 运行时契约
 
@@ -684,7 +684,7 @@ void app_main(void)                   // 调度器启动前，不开任何接收
     rm_fault_report_last_reset();     // 3. 读复位原因和上次 HardFault 记录
     RM_ASSERT(board_init());          // 4. 平台层：配置 CAN 滤波、SPI、UART（不开接收）
     rm_param_load();                  // 5. 读 Flash 标定值，失败用默认值并记日志
-    RM_ASSERT(robot_init());        // 6. 设备 → 子系统 → 安全门
+    RM_ASSERT(objects_init());        // 6. 设备 → 子系统 → 安全门
     RM_ASSERT(create_tasks());        // 7. 静态创建其余全部队列和任务（startup_task 由 CubeMX 创建，见 ADR 0025 说明）
 }                                     // 8. 返回后由 CubeMX 生成的 main() 调用 osKernelStart()
 
@@ -715,7 +715,7 @@ void startup_task(void *argument)
 | 对象 | 谁创建、初始化 | 谁使用 |
 | --- | --- | --- |
 | CAN、SPI、UART | `board.c` | 设备驱动 |
-| 电机、IMU、遥控对象 | `robot.c` 定义配置、组装并调用 `xxx_init()` | 对应子系统或采集任务 |
+| 电机、IMU、遥控对象 | `objects.c` 定义配置、组装并调用 `xxx_init()` | 对应子系统或采集任务 |
 | PID 等算法状态 | 所属子系统（放在子系统结构体里） | 该子系统 |
 | 任务 | `create_tasks()` | control_task 按固定顺序调用各子系统 |
 
@@ -730,7 +730,7 @@ void startup_task(void *argument)
 
 - 模块对象里放“最新一份数据 + `Watchdog`”，提供 `xxx_read(const Xxx *self, T *out)`；超时时限是这个模块头文件里的常量，登记看门狗时传入。
 - 每个数据结构体用 `_Static_assert(sizeof(T) <= 256, "...")` 限制大小（临界区拷贝时间）。
-- 读取方只 include 产生方的头文件；机构之间仍不互相 include，需要别的机构的数据时由 `robot.c` / control_task 读出来传进去。
+- 读取方只 include 产生方的头文件；机构之间仍不互相 include，需要别的机构的数据时由 `objects.c` / control_task 读出来传进去。
 
 **有几份由这台车决定。** 双云台哨兵就有 `front_gimbal`、`rear_gimbal` 两个对象，各自保存自己的 `GimbalState`，
 `gimbal_read_state(&front_gimbal, &s)` 和 `gimbal_read_state(&rear_gimbal, &s)` 互不干扰。PC 测试可以同时创建两个对象。
@@ -738,7 +738,7 @@ void startup_task(void *argument)
 ```c
 // 01_applic/modules/gimbal/gimbal.h
 typedef struct {
-    Motor      *yaw_motor;    // 由 robot.c 在初始化时指定
+    Motor      *yaw_motor;    // 由 objects.c 在初始化时指定
     Motor      *pitch_motor;
     Pid         yaw_angle_pid, yaw_speed_pid;      // 算法状态归本子系统所有
     Pid         pitch_angle_pid, pitch_speed_pid;
@@ -830,12 +830,12 @@ if (!RM_CHECK(quat_ekf_update(&self->ekf, &sample, dt_s) == ALGO_OK, ERR_EKF_DIV
 
 | 失败位置 | 调用方动作 |
 | --- | --- |
-| 必需设备 / 子系统初始化失败 | `robot_init()` 返回 false，记录原因；系统保持不可解锁 |
+| 必需设备 / 子系统初始化失败 | `objects_init()` 返回 false，记录原因；系统保持不可解锁 |
 | 电机型号不支持力矩控制 | 属于配置不匹配，在 `xxx_init()` 里用 `motor_supports_torque()` 检查一次并拒绝；运行时不重复检查，`motor_set_torque()` 把它写成 `@pre`（`CODING_STANDARD.md` 第 2 节：边界检查一次） |
 | 指令话题过期 | 本周期按对应机构的安全动作处理 |
 | 电机反馈读取失败 | 不使用未初始化或不完整的反馈；该机构执行安全动作 |
 | CAN 指令入队失败 | 丢帧并计数 `ERR_CAN_TX_QUEUE_FULL`；指令长期发不出去时，由电机反馈超时（机构停）和电调自身的通信超时兜底 |
-| 话题重复认领 | `robot_init()` 失败，Debug 下 `RM_ASSERT` |
+| 话题重复认领 | `objects_init()` 失败，Debug 下 `RM_ASSERT` |
 
 ### 4. 实时预算与看门狗
 
@@ -984,7 +984,7 @@ UniC 最早照搬了 5 / 14 / 5，但它的时钟是 96 MHz，结果实际只有
 - 在 FD + BRS 总线上，仲裁段仍是 1 Mbit/s，数据段是 5 Mbit/s，一帧 8 字节的 FD 帧大约只占经典帧一半的时间（推算），同一路能挂更多达妙电机。这也是 COD-H7-Template 把 DM8009 放在 FD 总线上的原因。
 
 规划原则：
-- 每路 CAN 的设计负载不超过 70%，在 `robot_config.h` 里声明每路挂哪些电机，构建时按上表估算，超过就报错；
+- 每路 CAN 的设计负载不超过 70%，在 `params.h` 里声明每路挂哪些电机，构建时按上表估算，超过就报错；
 - H723 有 3 路 FDCAN，F407 只有 2 路，同一个兵种在 F407 上可能需要降低反馈频率或减少电机，这是能力矩阵要检查的内容。
 
 **发送队列满了怎么办。**
@@ -1039,11 +1039,11 @@ typedef struct {
 | 参数 | 默认值 | 必须标定 | 标定方式 | 未标定时 |
 | --- | --- | --- | --- | --- |
 | 云台 Yaw / Pitch 编码器零点 | 0 | 是 | 遥控器组合键：摆正后记录 | 云台机构停（零力矩 / 阻尼） |
-| IMU 安装旋转（标称值） | —— | —— | 编译期 `robot_config.h`，按机械图纸填写，不进 Flash | —— |
+| IMU 安装旋转（标称值） | —— | —— | 编译期 `params.h`，按机械图纸填写，不进 Flash | —— |
 | IMU 安装偏差（小角度修正） | 0 | 否 | 水平静置**只能标 roll / pitch 偏差**；绕重力方向的 yaw 偏差需要已知朝向（如靠齐机械基准）另行标定 | 警告，继续运行 |
 | 陀螺零偏初值 | 0 | 否 | 上电静止自动更新，和安装标定分开 | EKF 自己收敛 |
 | 轮腿关节零点 | 0 | 是 | 限位归零后记录 | 腿部机构停 |
-| PID、限幅、减速比 | —— | —— | 编译期 `robot_config.h`，不进 Flash | —— |
+| PID、限幅、减速比 | —— | —— | 编译期 `params.h`，不进 Flash | —— |
 
 ### 8. 板间通信 BoardLink
 
@@ -1096,7 +1096,7 @@ typedef struct {
 | G 云台系 | Yaw 与 Pitch 轴交点 | X = 炮管方向 | 随 Yaw、Pitch 转动 |
 | S 传感器系 | IMU 芯片 | 按数据手册 | 只在设备层内部出现 |
 
-**每个 IMU 属于一个刚体。** 云台 IMU 属于 G，底盘 / 轮腿机体 IMU 属于 C。设备层输出传感器测量，并用 `robot_config.h` 里显式写出的安装旋转（“这个 IMU 装在哪个刚体上、怎么装的”）转到所属刚体的坐标系；算法接口的注释写清使用哪个坐标系。
+**每个 IMU 属于一个刚体。** 云台 IMU 属于 G，底盘 / 轮腿机体 IMU 属于 C。设备层输出传感器测量，并用 `params.h` 里显式写出的安装旋转（“这个 IMU 装在哪个刚体上、怎么装的”）转到所属刚体的坐标系；算法接口的注释写清使用哪个坐标系。
 
 | 量 | 正方向 | 公式或约定 |
 | --- | --- | --- |
@@ -1325,6 +1325,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0058 | 用户 2026-10-01 仍觉得“话题 / 拷贝绕”，选**去掉话题层**：删除 `04_core/msg/`（`Topic`、`xxx_claim/publish/read`、`rc_state.h` 等四个消息头文件），数据类型移到产生它的模块（`RcState` → `dr16.h`，`ImuState` → `ins.h`，`VtRcState`/`KbmState` → `vt_link.h`）；模块对象自带“最新一份 + `Snapshot`”（`04_core/util/snapshot`，即原 topic 去掉认领），读取用 `dr16_read()`、`ins_read()`、`vt_link_read_rc/kbm()`，超时由产生方定。`robot.c` 不再有话题实例，`dr16_init`/`ins_init`/`vt_link_init` 不再会失败。取代 0013 的话题实例部分；其余章节里规划中的“话题”（`RobotCmd`、`GimbalState`、话题表）都按本条理解为“产生方保存 + 读取函数” | 跳到定义一步就到数据所在模块；数据是模块成员，天然只有一个写入者，不需要运行时认领 |
 | 0059 | 用户 2026-10-01 评审“同种数据东一块西一块”：① **在线状态只有一个来源**：`Snapshot` 并入 `Watchdog`（新增 `watchdog_feed_data()` / `watchdog_read_data()`，数据和接收时刻在同一临界区写入），删除 `04_core/util/snapshot`；dr16、vt_link（`vt13`、`vt_kbm` 各一个）、ins、电机反馈的读取函数和 detect 日志都看同一个看门狗；超时边界统一为“≤ 超时算在线”（电机原为 < 20 ms）；`MotorFeedback.stamp_us` 删除（接收时刻只在看门狗里）；读取失败时仍拷出旧数据（只能用来打印）；② **任务声明归位**：每个任务一对 `tasks/xxx_task.{h,c}`，`robot.h` 只声明车上的对象；③ **接收流程一个文件**：`system/comm_rx_common.{h,c}` 并入 `tasks/comm_rx_task.c`（中断回调、打开接收、分派、bus-off 恢复），未使用的 `comm_rx_start_usb` 删除（接视觉时再加）；④ `04_core/msg/` 规划条目删除，事件队列、环形队列以后放 `util/` | 一个状态一个权威来源；找任务入口、看接收流程都只有一个文件 |
 | 0060 | 用户 2026-10-01 确认修复“旧 CAN 帧刷新在线状态”：`watchdog_feed_data()` 增加参数 `rx_us`（数据的接收时刻），`motor_receive` 传中断里记下的 `CanFrame.stamp_us`，不再用解析时刻；DR16 传读出字节的时刻（串口没有逐字节时刻），VT 链路、ins 传当时的时刻 | comm_rx_task 被耽误时，积压的旧帧不会让离线的电机“复活” |
+| 0061 | 用户 2026-10-01：“robot 这个名字不唯一，什么都能叫 robot”，选**按内容命名**：`01_applic/robot/` → **`01_applic/config/`**（≈ 老模板 Config.h），`robot_config.h` → `params.h`（全部参数），`robot.h` → `objects.h`（车上对象的声明），`robot.c` 拆成 `objects.c`（对象定义 + `objects_init()`，原 `robot_init()`）和 `task_table.c`（任务表 `task_table[]`，原 `robot_tasks[]`）；测试 `test_robot_config` → `test_params` | 看文件名就知道里面是什么；改任务优先级只开任务表 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
@@ -1539,7 +1540,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 10 | `Device/Referee_System.c`、`Image_Transmission.c` | `02_devices/referee/referee`（协议 v2.0.0）、`02_devices/remote/vt_link` | 图传完成（2026-09-28）：`ref_frame`（0xA5 帧检查）、`vt_link`（VT13、0x0304），主机测试 11 项，上板待 V13、V14；**裁判系统等官方 V2.0.0 文档**（ADR 0036） |
 | 11 | `Device/MiniPC.c`、USB CDC | `05_platform/…/usb_cdc`、`02_devices/vision/vision_link` | 通道和帧层完成（2026-09-28，ADR 0037）：usb_cdc、byte_ring、vision_frame、vision_link；主机测试 8 项；上板待 V15；**消息字段等视觉组协议** |
 | 12 | `BSP/bsp_adc.c`、`Algorithm/RLS.c`、蜂鸣器 | `05_platform/…/adc`、`02_devices/battery`、`03_algorithm/power/rls`、`02_devices/buzzer` | 代码完成（2026-09-28，ADR 0038）：adc、battery（6S / 21.0 V）、buzzer（启动 / 解锁 / 上锁 / 低电量）、rls（标准公式重写，暂未接入）；主机测试 12 项；上板待 V16–V18 |
-| 13 | （旧工程只有一台电机的速度环） | `03_algorithm/kinematics/{omni,mecanum,steer}`、`01_applic/modules/chassis`、`01_applic/robot` | 代码完成（2026-09-30，ADR 0043）：三种运动学 + 底盘子系统 + 固件（四轮全向轮）；主机测试 26 项；上板待 V45–V49（车架空） |
+| 13 | （旧工程只有一台电机的速度环） | `03_algorithm/kinematics/{omni,mecanum,steer}`、`01_applic/modules/chassis`、`01_applic/config` | 代码完成（2026-09-30，ADR 0043）：三种运动学 + 底盘子系统 + 固件（四轮全向轮）；主机测试 26 项；上板待 V45–V49（车架空） |
 
 ### 风险
 

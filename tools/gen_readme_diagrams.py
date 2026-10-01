@@ -101,8 +101,8 @@ def architecture():
     s.text(24, 54, "左侧五层只能从上往下调用；右侧模块各层都可以使用。虚线框为规划中、尚无代码。", 12.5, INK2)
 
     layers = [
-        ("01_applic/robot", "这台车", "怎么组装、怎么控制", BLUE,
-         ["robot.c：对象 · 任务表", "control · comm_rx · log", "config.h"]),
+        ("01_applic/config", "这台车", "参数、对象、任务表", BLUE,
+         ["params.h：参数", "objects.c：对象", "task_table.c：任务表"]),
         ("01_applic 共用", "system + 机构", "通用的框架和机构", AQUA,
          ["system：上电 · 安全门 · 指示 · 检测", "ins", "底盘", "*云台", "*发射"]),
         ("02_devices", "设备驱动", "协议字节 ⇄ 物理量", ORANGE,

@@ -12,7 +12,7 @@ extern "C"
 {
 #endif
 
-/** 任务入口，由robot.c 的任务表创建（栈 256 字够用） */
+/** 任务入口，由 task_table.c 创建（栈 256 字够用） */
 void detect_task_entry(void *arg);
 
 #ifdef __cplusplus

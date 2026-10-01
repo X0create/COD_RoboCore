@@ -9,7 +9,7 @@
 ├── modules/     机构，可复用（只放计算，不放任务）
 │   ├── chassis/  ins/
 │   └── gimbal/  shooter/  leg/  arm/          （规划）
-└── robot/       这台车的参数、对象、任务表（≈ 老模板 Config.h + 全局变量）
+└── config/      这台车的参数、对象、任务表（≈ 老模板 Config.h + 全局变量 + freertos.c 任务列表）
 ```
 
 | 目录 | 内容 |
@@ -19,21 +19,22 @@
 | `modules/chassis/` | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮，读实测 → 算目标 → 算输出（ADR 0043） |
 | `modules/ins/` | 惯性导航：`ins.c`（BMI088 → 零偏标定 → EKF → 保存最新姿态，`ins_read()` 读） |
 | `modules/gimbal/`、`shooter/`、`leg/`、`arm/` | （规划）云台、发射、轮腿、机械臂（工程） |
-| `robot/` | 这台车（预设 `h723-debug`）。目前：四轮全向轮底盘，遥控直接给底盘速度 |
+| `config/` | 这台车（预设 `h723-debug`）。目前：四轮全向轮底盘，遥控直接给底盘速度 |
 
-## robot/：这台车的参数和对象
+## config/：这台车的参数、对象、任务表
 
 ```
-robot/
-├── robot_config.h          全部参数：电机表、底盘尺寸与 PID、满杆速度、解锁拨杆、IMU 安装方向
-├── robot.h                 全部对象 + 各任务入口的声明
-└── robot.c                 ① 对象定义 ② robot_init() ③ 任务表 robot_tasks[]（6 个任务的优先级、栈）
+config/
+├── params.h      全部参数：电机表、底盘尺寸与 PID、满杆速度、解锁拨杆、IMU 安装方向   ≈ Config.h
+├── objects.h     车上全部对象的声明（任务入口在 tasks/ 各自的 .h）              ≈ 全局变量
+├── objects.c     对象定义 + objects_init()（设备 → 机构 → 安全门）
+└── task_table.c  任务表 task_table[]：6 个任务的优先级、栈                      ≈ freertos.c 任务列表
 ```
 
-- 上电顺序通用，在 `system/app_main.c`：`app_main()` 调用 `robot_init()`，再按 `robot_tasks[]` 创建任务。
-- 读这台车：先看 `robot.c`（对象和任务表），再看 `tasks/` 里的各个任务。调用关系总图见 `docs/CALL_FLOW.md`，中文伪代码见 `docs/LOGIC_PSEUDOCODE.md`。
-- 对象定义在 `robot.c`、声明在 `robot.h`，只给本目录的文件用（相当于老模板的全局变量，ADR 0044）。
-- **做一台具体的车（英雄、工程、哨兵……）：复制整个仓库，改 `robot/` 里的参数和对象、`tasks/control_task.c` 等任务里的控制逻辑**；需要新机构就在 `modules/` 里加（ADR 0056）。
+- 上电顺序通用，在 `system/app_main.c`：`app_main()` 调用 `objects_init()`，再按 `task_table[]` 创建任务。
+- 读这台车：先看 `config/objects.c`（对象）和 `config/task_table.c`（任务表），再看 `tasks/` 里的各个任务。调用关系总图见 `docs/CALL_FLOW.md`，中文伪代码见 `docs/LOGIC_PSEUDOCODE.md`。
+- 对象定义在 `objects.c`、声明在 `objects.h`，只给本目录的文件用（相当于老模板的全局变量，ADR 0044）。
+- **做一台具体的车（英雄、工程、哨兵……）：复制整个仓库，改 `config/` 里的参数和对象、`tasks/control_task.c` 等任务里的控制逻辑**；需要新机构就在 `modules/` 里加（ADR 0056）。
   多板的车（如哨兵的云台板、底盘板）每块板一份仓库副本，用 `02_devices/board_link/` 交换数据。
 
 ## 一处定义
@@ -48,11 +49,11 @@ robot/
 
 | 参数 | 位置 | 说明 |
 | --- | --- | --- |
-| 电机 ID、方向、总线、停机动作 | `robot/robot_config.h` 的电机表（如 `wheel_config`） | comm_rx_task 读每一路 CAN，总线不在别处重复 |
-| 底盘尺寸、加速度、速度环 PID | `robot/robot_config.h` 的 `chassis_config` | PID 不带 dt，和 1 kHz 绑定（ADR 0029） |
-| 满杆速度、解锁拨杆、IMU 安装方向 | `robot/robot_config.h` | |
+| 电机 ID、方向、总线、停机动作 | `config/params.h` 的电机表（如 `wheel_config`） | comm_rx_task 读每一路 CAN，总线不在别处重复 |
+| 底盘尺寸、加速度、速度环 PID | `config/params.h` 的 `chassis_config` | PID 不带 dt，和 1 kHz 绑定（ADR 0029） |
+| 满杆速度、解锁拨杆、IMU 安装方向 | `config/params.h` | |
 | 串口接线（哪个串口接什么） | `tasks/comm_rx_task.c` 开头 | |
-| 任务优先级、栈大小 | `robot/robot.c` 的任务表 | |
+| 任务优先级、栈大小 | `config/task_table.c` | |
 | 电池：分压比、低电量阈值 | `tasks/indicator_task.c` 的 `battery_config` | 板子和电池的属性，通用（ADR 0038） |
 | M3508 / C620 换算常数 | `02_devices/motor/motor.h` 的 `DJI_M3508_*`、`DJI_C620_*` | 附录 A.2 |
 | π | `03_algorithm/math/math_const.h` 的 `RM_PI` 等 | |
@@ -68,5 +69,5 @@ robot/
 ## 规则
 
 - 机构目录（`modules/` 下）：一个机构的完整闭环，只用 devices、algorithm、core；机构之间不互相 include，需要的数据由任务读出后传入。电脑上可测。
-- `robot/`：选模块、填参数、创建任务；**禁止**写控制算法、直接操作外设。
+- `config/`：选模块、填参数、创建任务；**禁止**写控制算法、直接操作外设。
 - `system/safety_gate` 和各机构是纯逻辑（库 `rm_app_logic`，电脑测试和固件都链接）；任务文件和 `app_main.c` 只用于固件（库 `rm_app`）。

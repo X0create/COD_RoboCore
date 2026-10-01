@@ -37,7 +37,7 @@ extern "C"
 #define DJI_M2006_GEAR_RATIO 36.0f
 
 /*
- * M3508 + C620 的换算常数（附录 A.2），全仓库只在这里定义：dji_motor.c 编解码、robot_config.h 把旧工程的 PID
+ * M3508 + C620 的换算常数（附录 A.2），全仓库只在这里定义：dji_motor.c 编解码、params.h 把旧工程的 PID
  * 换算到国际单位都用这里。C620 电流原始值 ±16384 对应 ±20 A；原装减速箱输出轴 0.3 N·m/A
  */
 #define DJI_C620_RAW_MAX   16384
@@ -78,7 +78,7 @@ typedef struct
     float damp_kd;      /* 阻尼停机时的 Kd，N·m·s/rad（0–5） */
 } DmConfig;
 
-/** 本车固定参数：写成robot_config.h 里的 const 配置表，运行中不变 */
+/** 本车固定参数：写成params.h 里的 const 配置表，运行中不变 */
 typedef struct
 {
     const char *name; /* 日志和设备清单里的名字 */

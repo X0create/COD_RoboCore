@@ -11,10 +11,10 @@ extern "C"
 {
 #endif
 
-/** 任务控制块：中断要用它唤醒任务，所以定义在 comm_rx_task.c；由 robot.c 的任务表创建 */
+/** 任务控制块：中断要用它唤醒任务，所以定义在 comm_rx_task.c；由 task_table.c 创建 */
 extern RmTask comm_rx_task;
 
-/** 任务入口，由 robot.c 的任务表创建（栈 512 字） */
+/** 任务入口，由 task_table.c 创建（栈 512 字） */
 void comm_rx_task_entry(void *arg);
 
 #ifdef __cplusplus

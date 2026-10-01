@@ -25,7 +25,8 @@ add_library(rm_app STATIC
     tasks/indicator_task.c
     tasks/log_task.c
     # 这台车的对象和任务表（≈ 老模板的全局变量 + freertos.c 的任务列表）
-    robot/robot.c
+    config/objects.c
+    config/task_table.c
 )
 target_link_libraries(rm_app PUBLIC rm_app_logic rm_core rm_devices rm_algorithm)
 rm_target_warnings(rm_app)

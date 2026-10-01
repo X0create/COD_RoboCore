@@ -8,16 +8,16 @@
  */
 #include "control_task.h"
 
-#include "01_applic/robot/robot.h"
+#include "01_applic/config/objects.h"
 
-#include "01_applic/robot/robot_config.h"
+#include "01_applic/config/params.h"
 #include "04_core/os/os.h"
 #include "05_platform/time/time.h"
 
 #define CONTROL_PERIOD_MS 1u
 #define CONTROL_DT_S      ((float)CONTROL_PERIOD_MS * 0.001f)
 
-/* 摇杆 → 目标底盘速度（通道对应见 robot_config.h）。摇杆向右为正，底盘向左、逆时针为正，所以左右和旋转取反 */
+/* 摇杆 → 目标底盘速度（通道对应见 params.h）。摇杆向右为正，底盘向左、逆时针为正，所以左右和旋转取反 */
 static ChassisVel chassis_cmd_from_rc(const RcState *rc)
 {
     const float k = 1.0f / (float)RC_CH_MAX;

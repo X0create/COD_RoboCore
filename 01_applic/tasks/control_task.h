@@ -9,7 +9,7 @@ extern "C"
 {
 #endif
 
-/** 任务入口，由 robot.c 的任务表创建（栈 1024 字） */
+/** 任务入口，由 task_table.c 创建（栈 1024 字） */
 void control_task_entry(void *arg);
 
 #ifdef __cplusplus

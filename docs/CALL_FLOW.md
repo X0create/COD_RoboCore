@@ -1,6 +1,6 @@
 # 调用关系地图（新旧模板对照）
 
-更新时间：2026-09-30。对象以 `01_applic/robot/`（目前是四轮全向轮底盘）为例。
+更新时间：2026-09-30。对象以 `01_applic/config/`（目前是四轮全向轮底盘）为例。
 
 只想先弄懂“做了什么”，看中文伪代码 `docs/LOGIC_PSEUDOCODE.md`；要看具体函数，再看本文。
 
@@ -43,18 +43,18 @@ COD-H7-Template/
 
 | 老模板 | 新模板 | 说明 |
 | --- | --- | --- |
-| `Core/`（CubeMX） | `06_boards/dm_mc02_h723/` | CubeMX 只建一个 `startup` 任务，其余任务由 `robot/robot.c` 的任务表创建（ADR 0025） |
+| `Core/`（CubeMX） | `06_boards/dm_mc02_h723/` | CubeMX 只建一个 `startup` 任务，其余任务由 `config/task_table.c` 创建（ADR 0025） |
 | `BSP/bsp_*.c` | `05_platform/stm32h7/*.c`（接口在 `05_platform/*.h`） | 中断回调只收数据、唤醒 comm_rx_task，不在中断里解析 |
 | `Components/Algorithm/`、`Controller/` | `03_algorithm/`（`control/pid`、`filter/lpf`、`attitude/quat_ekf` …） | |
 | `Components/Device/` | `02_devices/`（`motor/`、`remote/dr16`、`imu/bmi088` …） | |
-| `Application/` | `01_applic/` | 通用（`system/`）、机构（`modules/chassis/`、`modules/ins/`）、这台车（`robot/`） |
+| `Application/` | `01_applic/` | 通用（`system/`）、机构（`modules/chassis/`、`modules/ins/`）、这台车（`config/`） |
 | `Application/Task/INS_Task.c` | `01_applic/tasks/ins_task.c` + `ins.c` | 通用 |
 | `Application/Task/Control_Task.c` | `01_applic/tasks/control_task.c` + `01_applic/modules/chassis/chassis.c` | |
 | `Application/Task/CAN_Task.c` | `control_task.c` 第 4 步 → `02_devices/motor/motor_group.c` | 发送与控制同一周期，不再单独一个任务 |
 | `Application/Task/Detect_Task.c` | `01_applic/tasks/detect_task.c` | 只报告上线 / 离线；是否停车由读数据的地方按时间戳当场判断 |
-| `Core/Src/freertos.c` 的任务列表 | `01_applic/robot/robot.c` 的 `robot_tasks[]` | 6 个任务的优先级、栈都在这一处 |
-| 全局变量 `remote_ctrl`、`Chassis_Motor[]` … | `01_applic/robot/robot.h`（定义在 `robot.c` 第 1 节） | 只在 `robot/` 内共享 |
-| `Config.h` | `01_applic/robot/robot_config.h` | |
+| `Core/Src/freertos.c` 的任务列表 | `01_applic/config/task_table.c` 的 `task_table[]` | 6 个任务的优先级、栈都在这一处 |
+| 全局变量 `remote_ctrl`、`Chassis_Motor[]` … | `01_applic/config/objects.h`（定义在 `objects.c` 第 1 节） | 只在 `config/` 内共享 |
+| `Config.h` | `01_applic/config/params.h` | |
 
 ## 3. 新模板的文件
 
@@ -66,10 +66,11 @@ COD-H7-Template/
 ├── detect_task.c      10 ms：上线 / 离线报告                        ← Detect_Task
 ├── indicator_task.c   25 ms：状态灯、蜂鸣器、低电量（照 UniC 的 app_indicator）
 └── log_task.c         1 s：RTT 打印状态
-01_applic/robot/（这台车的参数和对象）
-├── robot_config.h     全部参数：电机表、PID、底盘尺寸、满杆速度、解锁拨杆、IMU 安装方向 ← Config.h
-├── robot.h            全部对象的声明（任务入口在 tasks/ 各自的 .h）   ← 相当于老模板的全局变量
-└── robot.c            ① 对象定义 ② robot_init() ③ 任务表 robot_tasks[] ← freertos.c 的任务列表
+01_applic/config/（这台车的参数、对象、任务表）
+├── params.h           全部参数：电机表、PID、底盘尺寸、满杆速度、解锁拨杆、IMU 安装方向 ← Config.h
+├── objects.h          全部对象的声明（任务入口在 tasks/ 各自的 .h）   ← 相当于老模板的全局变量
+├── objects.c          对象定义 + objects_init()
+└── task_table.c       任务表 task_table[]                             ← freertos.c 的任务列表
 01_applic/system/（通用的框架）
 ├── app_main.c         上电顺序（只有这一份）：app_main()、startup_task()
 └── safety_gate.c      全车唯一的安全门：急停、遥控丢失、未解锁、IMU 未就绪 → 全车停
@@ -83,8 +84,8 @@ COD-H7-Template/
 main()（CubeMX）→ MX_FREERTOS_Init()（freertos.c 的 USER CODE 区）
 └─ app_main()                                   调度器启动前
    ├─ rm_time_init()、rm_log_init()
-   ├─ robot_init()                              01_applic/robot/robot.c：遥控 → 4 个轮子电机 → 底盘 → IMU → 安全门
-   └─ create_tasks()                            按 01_applic/robot/robot.c 的 robot_tasks[] 创建 6 个任务
+   ├─ objects_init()                            01_applic/config/objects.c：遥控 → 4 个轮子电机 → 底盘 → IMU → 安全门
+   └─ create_tasks()                            按 01_applic/config/task_table.c 的 task_table[] 创建 6 个任务
                                                 （任何一步失败都停在 halt_on_init_failure）
 （调度器启动）
 startup_task()                                  最高优先级，第一个运行

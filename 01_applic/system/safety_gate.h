@@ -34,8 +34,7 @@ typedef enum
 
 typedef struct
 {
-    uint8_t
-        arm_switch; /* 解锁 / 急停用哪个拨杆：RcState.sw 的下标（robot_config.h 配置，ADR 0032） */
+    uint8_t arm_switch; /* 解锁 / 急停用哪个拨杆：RcState.sw 的下标（params.h 配置，ADR 0032） */
     volatile bool system_ready; /* startup_task 写、control_task 读；单字节读写是原子的 */
     RobotMode mode;
     bool saw_stop_position;   /* Safe 模式下、遥控在线时看到过拨杆在“下” */

@@ -55,7 +55,7 @@ typedef struct
     PidParam speed_pid; /* 转向电机转速 rad/s → N·m */
 } ChassisSteerConfig;
 
-/** 底盘参数：写成robot_config.h 里的常量 */
+/** 底盘参数：写成params.h 里的常量 */
 typedef struct
 {
     ChassisType type;

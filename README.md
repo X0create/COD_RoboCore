@@ -1,7 +1,7 @@
 # COD RoboCore
 
 COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清楚，可以在电脑上测试，并内置失效安全机制。
-一套通用的电控框架，做哪台车就复制一份、改 `01_applic/robot/`；支持两种主控：达妙 DM-MC02（STM32H723）和大疆 C 板（STM32F407）。
+一套通用的电控框架，做哪台车就复制一份、改 `01_applic/config/`；支持两种主控：达妙 DM-MC02（STM32H723）和大疆 C 板（STM32F407）。
 
 > **当前状态（2026-09-30）：** COD-H7-Template 的功能已按新架构移植完（裁判系统解析等官方协议文档），编译 0 警告、
 > 电脑侧单元测试全部通过；正在 DM-MC02 上逐项验证（进度见 `docs/VERIFICATION_TODO.md`）。大疆 C 板（F407）后端尚未开始。
@@ -105,7 +105,7 @@ COD_RoboCore/
 │   │   ├── chassis/         底盘（全向轮 / 麦轮 / 舵轮）
 │   │   ├── ins/             惯性导航（标定、零偏在线修正、EKF、发布姿态）
 │   │   └── gimbal/ shooter/ leg/ arm/   （规划）云台、发射、轮腿、机械臂
-│   └── robot/               这台车：robot_config.h（参数）、robot.h / robot.c（对象 + robot_init + 任务表）；目前是四轮全向轮底盘
+│   └── config/              这台车：params.h（参数）、objects.h / objects.c（对象 + objects_init）、task_table.c（任务表）；目前是四轮全向轮底盘
 ├── 02_devices/              具体设备驱动（≈ 老模板 Components/Device）
 │   ├── motor/               统一电机接口、DJI、达妙、电机组发送
 │   ├── imu/                 BMI088（含恒温加热）
@@ -209,10 +209,10 @@ cmake --preset h723-debug && cmake --build --preset h723-debug
 
 ## 做一台具体的车
 
-本仓库是通用模板，`01_applic/robot/` 是“这台车”。做英雄、工程、哨兵等具体的车时复制整个仓库，然后：
+本仓库是通用模板，`01_applic/config/` 是“这台车”。做英雄、工程、哨兵等具体的车时复制整个仓库，然后：
 
-1. 改 `robot_config.h`：电机表（CAN 总线、ID、方向、停机动作）、PID、尺寸、解锁拨杆、IMU 安装方向。
-2. 改 `robot.c`：`robot_init()` 里初始化设备和机构、任务表 `robot_tasks[]`；`robot.h` 同步声明新增的对象和任务。
+1. 改 `config/params.h`：电机表（CAN 总线、ID、方向、停机动作）、PID、尺寸、解锁拨杆、IMU 安装方向。
+2. 改 `config/objects.c`：`objects_init()` 里初始化设备和机构；`config/objects.h` 同步声明新增的对象；加任务时改 `config/task_table.c`。
 3. 改 `01_applic/tasks/control_task.c`：每个控制周期做什么（读输入 → 安全门 → 各机构 → 发送，四步写在循环里）；
    `tasks/comm_rx_task.c` 改接线，`tasks/log_task.c` 改打印内容。各任务的调用关系见 `docs/CALL_FLOW.md`。
 4. 需要新机构（云台、发射……）时在 `01_applic/modules/` 里加，再在第 2、3 步里接上。

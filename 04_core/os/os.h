@@ -29,7 +29,7 @@ typedef struct
 
 /**
  * @brief   静态创建任务
- * @param   priority     FreeRTOS 优先级，数字越大越高；各任务的取值只在robot.c 的任务表一处写
+ * @param   priority     FreeRTOS 优先级，数字越大越高；各任务的取值只在 task_table.c 一处写
  * @param   stack        栈数组，元素类型 StackType_t
  * @param   stack_words  栈数组的元素个数
  * @return  false：参数不合法，任务没有创建

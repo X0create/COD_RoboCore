@@ -33,14 +33,14 @@ main()（CubeMX 生成）
         调用 app_main()                                    → 01_applic/system/app_main.c:app_main
             初始化 DWT 计时器；失败就停住
             初始化 RTT 日志
-            robot_init()：初始化这台车的全部对象              → 01_applic/robot/robot.c:robot_init
+            objects_init()：初始化这台车的全部对象              → 01_applic/config/objects.c:objects_init
                 初始化 DR16 遥控（最新一帧保存在 dr16 里）
                 对 4 个轮子电机：检查配置、查 ID 冲突、加入电机组
-                初始化底盘（轮组类型、尺寸、PID 来自 robot_config.h）
-                初始化 ins（安装方向来自 robot_config.h，最新姿态保存在 ins 里）
+                初始化底盘（轮组类型、尺寸、PID 来自 params.h）
+                初始化 ins（安装方向来自 params.h，最新姿态保存在 ins 里）
                 初始化安全门（解锁拨杆 = 右拨杆），模式 = Init
                 任何一步失败 → 停住，不建任何任务（电机不会收到指令）
-            按任务表 robot_tasks[] 逐个创建 6 个任务；有一个失败就停住
+            按任务表 task_table[] 逐个创建 6 个任务；有一个失败就停住
     启动调度器
 
 startup_task（CubeMX 建的，优先级最高，第一个运行）     → 01_applic/system/app_main.c:startup_task
@@ -140,7 +140,7 @@ CAN 接收中断（收到一帧）                                → 05_platfor
 
     【第 3 步 底盘】
     如果 stop_all：目标速度 = 0
-    否则：目标速度 = 摇杆换算（ch[3] 前后、ch[2] 左右、ch[0] 旋转，满杆速度见 robot_config.h）
+    否则：目标速度 = 摇杆换算（ch[3] 前后、ch[2] 左右、ch[0] 旋转，满杆速度见 params.h）
     底盘计算（见第 7 节），解锁后 300 ms 内输出限幅从 0 逐渐升到 1 倍
 
     【第 4 步 发送】

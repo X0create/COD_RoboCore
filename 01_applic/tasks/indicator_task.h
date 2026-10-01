@@ -14,7 +14,7 @@ extern "C"
 {
 #endif
 
-/** 任务入口，由robot.c 的任务表创建（栈 256 字够用） */
+/** 任务入口，由 task_table.c 创建（栈 256 字够用） */
 void indicator_task_entry(void *arg);
 
 /** 最近一次测得的电池电压（V），供 log_task 打印；本任务启动前为 0 */

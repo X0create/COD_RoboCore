@@ -12,7 +12,7 @@ extern "C"
 #endif
 
 /**
- * @brief   任务入口，由robot.c 的任务表创建（优先级最高，栈 1024 字：EKF 的矩阵运算在栈上有临时变量）
+ * @brief   任务入口，由 task_table.c 创建（优先级最高，栈 1024 字：EKF 的矩阵运算在栈上有临时变量）
  * @param   arg  这台车的 Ins 对象（Ins *），已经 ins_init()
  */
 void ins_task_entry(void *arg);
