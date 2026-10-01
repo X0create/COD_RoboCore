@@ -34,9 +34,9 @@ void control_task_entry(void *arg)
 
         /* 1. 读输入：遥控 200 ms 没更新算丢失；IMU 标定完成且 20 ms 内有更新才算就绪 */
         RcState rc;
-        const bool rc_online = rc_state_read(&rc_state, &rc, RC_LOST_TIMEOUT_MS);
+        const bool rc_online = dr16_read(&dr16, &rc);
         ImuState imu;
-        const bool imu_ready = imu_state_read(&imu_state, &imu, IMU_STALE_MS);
+        const bool imu_ready = ins_read(&ins, &imu);
 
         /* 2. 安全门：急停、遥控丢失、未解锁、IMU 未就绪 → 全车停（stop_all） */
         const SafetyDecision gate_out =

@@ -17,7 +17,7 @@
 static void log_rc(void)
 {
     RcState rc;
-    if (!rc_state_read(&rc_state, &rc, RC_LOST_TIMEOUT_MS))
+    if (!dr16_read(&dr16, &rc))
     {
         RM_LOG_I("rc lost (bad frames %u)", (unsigned)dr16.bad_frames);
         return;
@@ -51,7 +51,7 @@ static void log_chassis(void)
 static void log_imu(void)
 {
     ImuState st;
-    if (!imu_state_read(&imu_state, &st, IMU_STALE_MS))
+    if (!ins_read(&ins, &st))
     {
         RM_LOG_I("imu not ready");
         return;

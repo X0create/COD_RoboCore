@@ -22,10 +22,6 @@
 /* 1. 对象                                                             */
 /* ================================================================== */
 
-/* 话题：谁发布、谁读取 */
-RcStateTopic rc_state;   /* 发布：dr16  读取：control、log */
-ImuStateTopic imu_state; /* 发布：ins   读取：control、log */
-
 /* 设备 */
 Dr16 dr16;
 
@@ -43,11 +39,7 @@ Ins ins;
 
 bool robot_init(void)
 {
-    if (!dr16_init(&dr16, &rc_state))
-    {
-        RM_LOG_E("dr16 init failed");
-        return false;
-    }
+    dr16_init(&dr16);
 
     Motor *drive[CHASSIS_WHEELS];
     for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
@@ -68,11 +60,7 @@ bool robot_init(void)
         return false;
     }
 
-    if (!ins_init(&ins, &ins_config, &imu_state))
-    {
-        RM_LOG_E("ins init failed");
-        return false;
-    }
+    ins_init(&ins, &ins_config);
     safety_gate_init(&safety_gate, arm_switch);
     return true;
 }

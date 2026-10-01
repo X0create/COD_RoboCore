@@ -130,7 +130,7 @@ def architecture():
     s.text(rx, 68, "各层都可以用", 13, INK2, bold=True)
     shared = [
         ("03_algorithm", "纯计算，不碰硬件", ["PID", "斜坡", "低通", "卡尔曼", "四元数 EKF", "矩阵", "轮组运动学"], YELLOW, False),
-        ("04_core", "基础设施", ["话题与消息 imu_state · rc_state …", "设备看门狗", "RTT 日志", "任务封装"], YELLOW, False),
+        ("04_core", "基础设施", ["快照 snapshot", "设备看门狗", "RTT 日志", "任务封装"], YELLOW, False),
         ("tests/host", "电脑上的单元测试", ["假 CAN / SPI / PWM / 时钟", "替换 05_platform"], MAGENTA, True),
     ]
     cy, ch = 78, 88
@@ -146,7 +146,7 @@ def architecture():
 def runtime():
     W, H = 960, 444
     s = Svg(W, H, "一个控制周期里数据怎么流动")
-    s.text(24, 54, "中断只收数据；解析、解算、控制都在任务里。话题里的数据带写入时刻，读的一方按“最多多旧”判断丢失。", 12.5, INK2)
+    s.text(24, 54, "中断只收数据；解析、解算、控制都在任务里。数据由产生方保存并带写入时刻，xxx_read() 超时就返回 false。", 12.5, INK2)
 
     top = 92
     # 1. 硬件输入
@@ -193,10 +193,10 @@ def runtime():
         s.text(tx + 18, insy + 48 + k * 22, t, 12, INK2)
     s.line(hx + hwid, ys[3] + hh / 2, tx - 2, ys[3] + hh / 2)
 
-    # 4. 话题
+    # 4. 共享数据（产生方保存）
     px, pw, ph = 562, 122, 40
-    s.text(px, top - 8, "话题（数据 + 时刻）", 12, INK2, bold=True)
-    topics = [("rc_state", "遥控，200 ms 过期"), ("电机反馈", "20 ms 过期"), ("imu_state", "姿态")]
+    s.text(px, top - 8, "最新数据 + 时刻", 12, INK2, bold=True)
+    topics = [("dr16_read", "遥控，200 ms 过期"), ("motor_read…", "电机反馈，20 ms"), ("ins_read", "姿态，20 ms")]
     pys = [iy0 + 6, iy0 + 64, insy + 22]
     for (a, b), py in zip(topics, pys):
         s.rect(px, py, pw, ph + 8, tint(YELLOW, 0.1), tint(YELLOW, 0.55), rx=10)
@@ -209,7 +209,7 @@ def runtime():
     # 5. control_task
     cx, cw = 712, 224
     s.text(cx, top - 8, "control_task · 1 kHz · 优先级 4", 12, INK2, bold=True)
-    steps = [("① 读话题快照", "过期的当作没有", BLUE), ("② 安全门", "判断能不能动", ORANGE),
+    steps = [("① 读输入", "过期的当作没有", BLUE), ("② 安全门", "判断能不能动", ORANGE),
              ("③ 子系统计算", "PID 等", BLUE), ("④ 全车停改写", "换成各电机的停机动作", ORANGE),
              ("⑤ 电机组打包", "经 CAN 发给电机", BLUE)]
     sy, sh, sg = top, 44, 8
@@ -221,7 +221,7 @@ def runtime():
         s.text(cx + 16, yy + 36, b, 11.5, INK2)
         if i < len(steps) - 1:
             s.line(cx + 30, yy + sh, cx + 30, yy + sh + sg - 1, sw=1.2)
-    # 三个话题都汇到第①步
+    # 三份数据都汇到第①步
     jx = px + pw + 14
     for py in pys:
         s.path(f"M {px + pw} {py + 24} L {jx} {py + 24} L {jx} {sy + 22}", arrow=False)
@@ -229,7 +229,7 @@ def runtime():
 
     # 6. 低优先级任务
     ay = 368
-    s.text(24, ay - 8, "低优先级任务：只读话题，不参与控制", 12, INK2, bold=True)
+    s.text(24, ay - 8, "低优先级任务：只读数据，不参与控制", 12, INK2, bold=True)
     aux = [("detect_task", "100 Hz · 优先级 3", "报告设备上线 / 离线", 24),
            ("indicator_task", "40 Hz · 优先级 2", "状态灯 · 蜂鸣器 · 低电量", 330),
            ("log_task", "1 Hz · 优先级 1", "每秒打印这台车状态", 636)]
@@ -239,7 +239,7 @@ def runtime():
         s.text(x + 16, ay + 24, name, 14, INK, bold=True)
         s.text(x + 16 + text_w(name, 14) + 8, ay + 24, meta, 12, INK2)
         s.text(x + 16, ay + 44, role, 12, INK2)
-    # 话题 → 低优先级任务（虚线：只读）
+    # 数据 → 低优先级任务（虚线：只读）
     s.path(f"M {px + pw / 2} {pys[2] + ph + 8} L {px + pw / 2} {ay + 29} L {300 + 262} {ay + 29}",
            dash="4 4")
     s.save("runtime.svg")

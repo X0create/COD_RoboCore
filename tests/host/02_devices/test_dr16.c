@@ -1,6 +1,6 @@
 /**
  * @file    test_dr16.c
- * @brief   dr16 的单元测试：解析、范围检查、按时间间隔分帧、拆段与粘连、发布与喂狗
+ * @brief   dr16 的单元测试：解析、范围检查、按时间间隔分帧、拆段与粘连、保存最新一帧与喂狗
  */
 #include "02_devices/remote/dr16.h"
 
@@ -13,14 +13,12 @@
 static Dr16 pool[16];
 static unsigned next_dr16;
 static Dr16 *dr16;
-static RcStateTopic topic;
 
 void setUp(void)
 {
-    topic = (RcStateTopic){ 0 };
     dr16 = &pool[next_dr16++];
     fake_time_set_us(10000000u);
-    TEST_ASSERT_TRUE(dr16_init(dr16, &topic));
+    dr16_init(dr16);
 }
 
 void tearDown(void)
@@ -123,11 +121,11 @@ static void test_good_frame_publishes_and_feeds(void)
     uint8_t f[DR16_FRAME_LEN];
     RcState rc;
     centered_frame(f);
-    TEST_ASSERT_FALSE(rc_state_read(&topic, &rc, TOPIC_ANY_AGE));
+    TEST_ASSERT_FALSE(dr16_read(dr16, &rc));
     TEST_ASSERT_FALSE(watchdog_is_online(&dr16->wd));
 
     dr16_on_bytes(dr16, f, DR16_FRAME_LEN, 10000000u);
-    TEST_ASSERT_TRUE(rc_state_read(&topic, &rc, RC_LOST_TIMEOUT_MS));
+    TEST_ASSERT_TRUE(dr16_read(dr16, &rc));
     TEST_ASSERT_EQUAL_INT(RC_SW_MID, rc.sw[0]);
     TEST_ASSERT_TRUE(watchdog_is_online(&dr16->wd));
 }
@@ -139,7 +137,7 @@ static void test_bad_frame_not_published(void)
     const uint16_t ch[5] = { 100, 1024, 1024, 1024, 1024 };
     encode(f, ch, 3, 3);
     dr16_on_bytes(dr16, f, DR16_FRAME_LEN, 10000000u);
-    TEST_ASSERT_FALSE(rc_state_read(&topic, &rc, TOPIC_ANY_AGE));
+    TEST_ASSERT_FALSE(dr16_read(dr16, &rc));
     TEST_ASSERT_EQUAL_UINT32(1, dr16->bad_frames);
 }
 
@@ -151,7 +149,7 @@ static void test_split_frame_is_joined(void)
     centered_frame(f);
     dr16_on_bytes(dr16, f, 9, 10000000u);
     dr16_on_bytes(dr16, f + 9, 9, 10001000u);
-    TEST_ASSERT_TRUE(rc_state_read(&topic, &rc, TOPIC_ANY_AGE));
+    TEST_ASSERT_TRUE(dr16_read(dr16, &rc));
     TEST_ASSERT_EQUAL_UINT32(0, dr16->bad_frames);
 }
 
@@ -163,11 +161,11 @@ static void test_gap_resyncs(void)
     centered_frame(f);
     dr16_on_bytes(dr16, f + 5, DR16_FRAME_LEN - 5, 10000000u);  /* 残帧 */
     dr16_on_bytes(dr16, f, DR16_FRAME_LEN, 10000000u + 12000u); /* 12 ms 后的完整一帧 */
-    TEST_ASSERT_TRUE(rc_state_read(&topic, &rc, TOPIC_ANY_AGE));
+    TEST_ASSERT_TRUE(dr16_read(dr16, &rc));
     TEST_ASSERT_EQUAL_UINT32(0, dr16->bad_frames);
 }
 
-/* 任务被耽误时一次读到两帧：依次解析，话题是后一帧 */
+/* 任务被耽误时一次读到两帧：依次解析，读到的是后一帧 */
 static void test_two_frames_in_one_chunk(void)
 {
     uint8_t two[2 * DR16_FRAME_LEN];
@@ -178,12 +176,12 @@ static void test_two_frames_in_one_chunk(void)
 
     RcState rc;
     dr16_on_bytes(dr16, two, sizeof(two), 10000000u);
-    TEST_ASSERT_TRUE(rc_state_read(&topic, &rc, TOPIC_ANY_AGE));
+    TEST_ASSERT_TRUE(dr16_read(dr16, &rc));
     TEST_ASSERT_EQUAL_INT16(660, rc.ch[0]);
     TEST_ASSERT_EQUAL_UINT32(0, dr16->bad_frames);
 }
 
-/* 超过 RC_LOST_TIMEOUT_MS 没有合法帧：带时限读取失败，即遥控丢失（ADR 0030） */
+/* 超过 RC_LOST_TIMEOUT_MS 没有合法帧：dr16_read 返回 false，即遥控丢失（ADR 0030） */
 static void test_lost_after_timeout(void)
 {
     uint8_t f[DR16_FRAME_LEN];
@@ -191,9 +189,9 @@ static void test_lost_after_timeout(void)
     centered_frame(f);
     dr16_on_bytes(dr16, f, DR16_FRAME_LEN, 10000000u);
     fake_time_advance_ms(RC_LOST_TIMEOUT_MS);
-    TEST_ASSERT_TRUE(rc_state_read(&topic, &rc, RC_LOST_TIMEOUT_MS));
+    TEST_ASSERT_TRUE(dr16_read(dr16, &rc));
     fake_time_advance_ms(1u);
-    TEST_ASSERT_FALSE(rc_state_read(&topic, &rc, RC_LOST_TIMEOUT_MS));
+    TEST_ASSERT_FALSE(dr16_read(dr16, &rc));
 }
 
 int main(void)

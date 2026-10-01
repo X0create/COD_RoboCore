@@ -15,16 +15,12 @@
 static VtLink pool[16];
 static unsigned pool_used;
 static VtLink *vt;
-static VtRcStateTopic rc_topic;
-static KbmStateTopic kbm_topic;
 
 void setUp(void)
 {
-    rc_topic = (VtRcStateTopic){ 0 };
-    kbm_topic = (KbmStateTopic){ 0 };
     fake_time_set_us(1000000u);
     vt = &pool[pool_used++];
-    TEST_ASSERT_TRUE(vt_link_init(vt, &rc_topic, &kbm_topic));
+    vt_link_init(vt);
 }
 
 void tearDown(void)
@@ -121,7 +117,7 @@ static void test_kbm_frame_published(void)
     const size_t n = kbm_frame(f, 0x0304u, 0x8001u);
     vt_link_on_bytes(vt, f, (uint32_t)n);
     KbmState kbm;
-    TEST_ASSERT_TRUE(kbm_state_read(&kbm_topic, &kbm, TOPIC_ANY_AGE));
+    TEST_ASSERT_TRUE(vt_link_read_kbm(vt, &kbm));
     TEST_ASSERT_EQUAL_INT16(100, kbm.mouse_x);
     TEST_ASSERT_TRUE(kbm.mouse_left);
     TEST_ASSERT_FALSE(kbm.mouse_right);
@@ -147,9 +143,9 @@ static void test_stream_with_garbage_and_splits(void)
     }
     VtRcState rc;
     KbmState kbm;
-    TEST_ASSERT_TRUE(vt_rc_state_read(&rc_topic, &rc, TOPIC_ANY_AGE));
+    TEST_ASSERT_TRUE(vt_link_read_rc(vt, &rc));
     TEST_ASSERT_EQUAL_INT(VT_MODE_N, rc.mode);
-    TEST_ASSERT_TRUE(kbm_state_read(&kbm_topic, &kbm, TOPIC_ANY_AGE));
+    TEST_ASSERT_TRUE(vt_link_read_kbm(vt, &kbm));
     TEST_ASSERT_EQUAL_HEX16(0x0002, kbm.keys);
     TEST_ASSERT_EQUAL_UINT32(sizeof(garbage), vt->bad_bytes);
     TEST_ASSERT_EQUAL_UINT32(0, vt->len);
@@ -165,7 +161,7 @@ static void test_recovers_after_corrupt_frame(void)
     vt13_frame(&stream[VT13_FRAME_LEN], ch, VT_MODE_C, false, false, false, 1024, false);
     vt_link_on_bytes(vt, stream, 2u * VT13_FRAME_LEN);
     VtRcState rc;
-    TEST_ASSERT_TRUE(vt_rc_state_read(&rc_topic, &rc, TOPIC_ANY_AGE));
+    TEST_ASSERT_TRUE(vt_link_read_rc(vt, &rc));
     TEST_ASSERT_EQUAL_INT16(660, rc.ch[0]);
     TEST_ASSERT_EQUAL_INT(VT_MODE_C, rc.mode);
 }
@@ -177,7 +173,7 @@ static void test_other_commands_ignored(void)
     const size_t n = kbm_frame(f, 0x0302u, 0u);
     vt_link_on_bytes(vt, f, (uint32_t)n);
     KbmState kbm;
-    TEST_ASSERT_FALSE(kbm_state_read(&kbm_topic, &kbm, TOPIC_ANY_AGE));
+    TEST_ASSERT_FALSE(vt_link_read_kbm(vt, &kbm));
     TEST_ASSERT_EQUAL_UINT32(1, vt->ignored_frames);
 }
 

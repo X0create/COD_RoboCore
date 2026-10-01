@@ -20,9 +20,9 @@
 static const float accel_lpf_coef[3] = { 1.929454039488895f, -0.93178349823448126f,
                                          0.002329458745586203f };
 
-bool ins_init(Ins *ins, const InsConfig *cfg, ImuStateTopic *out)
+void ins_init(Ins *ins, const InsConfig *cfg)
 {
-    *ins = (Ins){ .cfg = cfg, .out = out, .phase = INS_PHASE_CALIBRATING };
+    *ins = (Ins){ .cfg = cfg, .phase = INS_PHASE_CALIBRATING };
     gyro_bias_reset(&ins->calib);
     gyro_bias_reset(&ins->still);
     quat_ekf_init(&ins->ekf, EKF_Q_QUAT, EKF_Q_BIAS, EKF_R_ACCEL);
@@ -30,7 +30,11 @@ bool ins_init(Ins *ins, const InsConfig *cfg, ImuStateTopic *out)
     {
         lpf2_init(&ins->accel_lpf[i], accel_lpf_coef);
     }
-    return imu_state_claim(out, "ins");
+}
+
+bool ins_read(const Ins *ins, ImuState *out)
+{
+    return snapshot_read(&ins->snap, &ins->state, out, sizeof(*out), IMU_STALE_MS);
 }
 
 Bmi088Status ins_start(Ins *ins)
@@ -68,7 +72,7 @@ InsEvent ins_step(Ins *ins)
     const ImuState st = update_attitude(ins, &s, rm_time_now_us());
 
     /* 5. 发布给 control、log */
-    imu_state_publish(ins->out, &st);
+    snapshot_write(&ins->snap, &ins->state, &st, sizeof(st));
     return INS_EVENT_NONE;
 }
 

@@ -29,7 +29,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 
 **一个时钟、带时间戳的数据**
 - 全工程只有一个时间基准 `rm_time_now_us()`：DWT 周期计数扩展成 64 位微秒，不回绕。
-- 模块之间用话题（topic）传数据：发布时连同时间戳一起写入，读取时可以要求“不超过多少毫秒”，过期就当作没有数据。
+- 数据由产生它的模块保存（连同时间戳），别人用 `dr16_read()`、`ins_read()` 这类函数整份拷贝；超过时限没更新就返回 false，当作没有数据。
 
 **统一的设备接口**
 - 电机接口用输出轴的国际单位（rad、rad/s、N·m）；DJI（M3508、M2006、GM6020）和达妙（MIT 模式、CAN FD）用同一套接口。
@@ -123,7 +123,6 @@ COD_RoboCore/
 │   ├── power/               RLS（功率模型辨识）
 │   └── ballistic/           （规划）弹道解算
 ├── 04_core/                 与业务无关的基础设施
-│   ├── msg/                 带时间戳的话题，以及各条消息：imu_state、rc_state、vt_rc_state、kbm_state
 │   ├── watchdog/            设备在线判断
 │   ├── log/                 RTT 日志（含 SEGGER RTT 源码）
 │   ├── os/                  临界区、延时、静态任务创建
@@ -158,7 +157,7 @@ COD_RoboCore/
 
 | 任务 | 周期 | 优先级 | 做什么 |
 | --- | --- | --- | --- |
-| `ins_task` | 1 kHz | 6（最高） | 读 BMI088，零偏标定与在线修正，四元数 EKF 算姿态，IMU 恒温加热，发布 `imu_state` |
+| `ins_task` | 1 kHz | 6（最高） | 读 BMI088，零偏标定与在线修正，四元数 EKF 算姿态，IMU 恒温加热，保存最新姿态（`ins_read()` 读） |
 | `comm_rx_task` | 有数据就运行 | 5 | 中断收到 CAN 帧 / 串口字节 / USB 数据后被唤醒，交给对应设备解析；CAN bus-off 恢复 |
 | `control_task` | 1 kHz | 4 | 读输入 → 安全门 → 各机构计算 → 全车停改写 → 发电机指令（下图 ①–⑤） |
 | `detect_task` | 100 Hz | 3 | 报告设备上线 / 离线（只报告，不参与安全判断） |
@@ -219,7 +218,7 @@ cmake --preset h723-debug && cmake --build --preset h723-debug
 4. 需要新机构（云台、发射……）时在 `01_applic/modules/` 里加，再在第 2、3 步里接上。
 5. 加了新的 `.c` 文件：在 CMake 里加，Keil 里拖进对应分组（或运行 `python3 tools/keil_sync.py`）。
 
-多板的车（如哨兵的云台板、底盘板）每块板一份仓库副本，用 `02_devices/board_link/` 交换话题（规划）。
+多板的车（如哨兵的云台板、底盘板）每块板一份仓库副本，用 `02_devices/board_link/` 交换数据（规划）。
 
 分层规则、命名和安全相关代码的写法见 `docs/CODING_STANDARD.md`。
 

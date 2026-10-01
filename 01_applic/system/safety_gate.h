@@ -15,7 +15,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "04_core/msg/rc_state.h"
+#include "02_devices/remote/dr16.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -63,7 +63,7 @@ void safety_gate_set_system_ready(SafetyGate *gate);
 /**
  * @brief   每个控制周期调用一次
  * @param   rc         本周期读到的遥控快照；遥控丢失（话题过期）时传 NULL
- * @param   imu_ready  本周期 imu_state 是否读得到且不旧（imu_state_read(…, IMU_STALE_MS)）
+ * @param   imu_ready  本周期 ins_read() 是否读到（IMU 就绪）
  */
 SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, bool imu_ready,
                                   uint64_t now_us);

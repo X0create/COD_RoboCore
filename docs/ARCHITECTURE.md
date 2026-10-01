@@ -53,7 +53,7 @@
 ### 必须满足的硬性要求
 
 - **分层单向依赖**：上层可以用下层，下层绝不 include 上层。
-- **应用之间不互相 include**：云台、底盘、发射之间只通过话题交换数据。
+- **应用之间不互相 include**：云台、底盘、发射之间不直接访问对方，需要的数据由 control_task 读出后传入（ADR 0058）。
 - **芯片无关**：05_platform/ 以外的代码不出现 `stm32h7xx_hal.h`、`HAL_`、寄存器名。
 - **静态内存**：初始化之后不再分配内存；全局变量只写常量初值，硬件初始化在显式 `xxx_init()` 里（见运行时契约）。
 - **可在 PC 上测试**：算法、控制器、协议解析都能用 gcc 在电脑上跑单元测试。
@@ -98,7 +98,7 @@
 
 **不采用的做法**
 
-- 字符串名字的话题（basic\_framework 用字符串匹配订阅，UIML 的软总线也一样）：拼错名字不报错。本模板每个话题是**一对类型明确的函数**（`robot_cmd_publish()` / `robot_cmd_read()`），参数类型由编译器检查。
+- 字符串名字的话题（basic\_framework 用字符串匹配订阅，UIML 的软总线也一样）：拼错名字不报错。本模板由产生数据的模块提供**类型明确的读取函数**（`dr16_read()`、`ins_read()`），参数类型由编译器检查。
 - 运行时 `malloc` 注册实例：改为静态分配的结构体。
 - 平台层用 ops 函数表 + 不透明上下文（UniC）：灵活，但多一层间接，不利于新队员阅读；改为同名函数、链接时选择实现（ADR 0017）。
 - 代码生成框架（XRobot）和 C++20 模板库（rpl）：性能好，但与“普通 C、新队员能直接读懂”的首要要求冲突。
@@ -114,7 +114,7 @@ flowchart TD
     SUB["01_applic/modules/<机构><br/>云台 / 底盘 / 发射 / 腿 / INS"]
     DEV["02_devices<br/>电机 / IMU / 遥控 / 裁判 / 视觉"]
     ALG["03_algorithm<br/>PID / 滤波 / 四元数 / LQR"]
-    CORE["04_core<br/>话题与消息 / 看门狗 / 日志 / 参数 / 错误"]
+    CORE["04_core<br/>快照 / 看门狗 / 日志 / 参数 / 错误"]
     PLAT["05_platform<br/>CAN / UART / SPI / 时间 / Flash 接口"]
     H7["05_platform/stm32h7"]
     F4["05_platform/stm32f4"]
@@ -142,7 +142,7 @@ flowchart TD
 | 01_applic/modules/<机构> | 一个机构的完整闭环（云台、底盘、发射、腿、INS） | 02_devices、03_algorithm、04_core | include 其他机构；只能走话题 |
 | 02_devices | 一个外部设备的协议和状态（在线、原始值 → SI 单位） | 05_platform 接口、03_algorithm、04_core | HAL、具体芯片头文件 |
 | 03_algorithm | 纯计算，输入输出全走参数 | 标准库、CMSIS-DSP（可选） | RTOS、HAL、全局变量 |
-| 04_core | 话题与各条消息（04_core/msg）、看门狗、日志、参数存储、OS 封装 | 05_platform 接口、FreeRTOS | 任何具体设备 |
+| 04_core | 快照（util/snapshot）、看门狗、日志、参数存储、OS 封装 | 05_platform 接口、FreeRTOS | 任何具体设备 |
 | 05_platform | 外设驱动的抽象接口 + 每种芯片一份实现 | HAL（仅实现目录） | 任何上层 |
 
 依赖规则靠两道检查：① CMake 每层一个库目标，并只把本层的 `include/` 目录导出给允许使用它的上层，可以挡住大部分越层 include，但挡不住相对路径和同层互相引用；② `tools/check_deps.py` 扫描所有 `#include`，对照上表检查方向，包括“机构之间不互相 include”，在 CI 里运行。
@@ -187,7 +187,7 @@ COD_RoboCore/
 │   └── ballistic/
 ├── 04_core/
 │   ├── os/                      # 任务创建、临界区（静态分配）
-│   ├── msg/                     # topic（话题通用实现）+ 各条消息 rc_state imu_state robot_cmd …（只有 .h，实例在 robot.c）；event_queue spsc_ring
+│   ├── msg/                     # （规划）event_queue spsc_ring
 │   ├── watchdog/                # 设备在线检测、任务心跳、喂 IWDG
 │   ├── error/                   # RM_ASSERT、RM_CHECK、ErrorCode、HardFault 记录
 │   ├── log/                     # SEGGER RTT 日志
@@ -278,43 +278,37 @@ bool can_read(CanBusId bus, CanFrame *out);         // 取一帧中断收下的�
   - **D3 域的外设（SPI6、LPUART1、I2C4、ADC3 等）由 BDMA 服务，BDMA 只能访问 SRAM4（`0x38000000`）**。这些外设的 DMA 缓冲区要用另一个宏 `RM_BDMA_BUF` 放进 SRAM4 段。COD-H7-Template 的分散加载文件里已经有 `.SRAM4` 段，并且初始化了 BDMA 和 ADC3。
   - 为什么选“不可缓存”而不是 Cache 维护，详见 ADR 0021。
 
-### 2. 消息中心：每个话题一对函数
+### 2. 共享数据：谁产生谁保存，`xxx_read()` 读取（ADR 0058）
+
+跨任务的数据不经过中间的“话题”对象，而是**由产生它的模块自己保存最新一份**，别人调用这个模块的读取函数整份拷贝出来：
 
 ```c
-// 04_core/msg/robot_cmd.h —— 消息类型 + 操作函数；话题实例不在这里
+// 02_devices/remote/dr16.h —— 数据类型和产生它的驱动放在一起
+typedef struct { int16_t ch[5]; RcSwitch sw[2]; /* ... */ } RcState;
+
 typedef struct {
-    float yaw_target_rad;    ///< 目标航向，W 系，逆时针为正
-    float pitch_target_rad;  ///< 目标仰角，抬头为正
-    float yaw_ff_rad_s;      ///< 航向角速度前馈
-    float pitch_ff_rad_s;    ///< 仰角角速度前馈
-    GimbalMode mode;
-} GimbalCmd;
+    /* ... 分帧状态 ... */
+    RcState  rc;     // 最新一帧合法数据，只由 dr16.c 写
+    Snapshot snap;   // rc 的写入时刻（04_core/util/snapshot）
+} Dr16;
 
-typedef struct {             ///< command 任务每轮决策只发布这一个
-    uint32_t   sequence;     ///< 每轮加 1
-    RobotMode  mode;
-    GimbalCmd  gimbal;
-    ChassisCmd chassis;
-    ShootCmd   shoot;
-} RobotCmd;
-
-typedef struct { Topic base; RobotCmd data; } RobotCmdTopic;   // 一份话题实例；类型不同的话题不能混传
-
-bool robot_cmd_claim(RobotCmdTopic *t, const char *owner);                 // 初始化时认领发布权
-void robot_cmd_publish(RobotCmdTopic *t, const RobotCmd *cmd);
-bool robot_cmd_read(const RobotCmdTopic *t, RobotCmd *out, uint32_t max_age_ms);  // 超时或从未发布返回 false
+bool dr16_read(const Dr16 *self, RcState *out);   // 200 ms 内有合法帧才返回 true
 
 // 使用：control_task 周期开头
-if (!robot_cmd_read(&robot_cmd_topic, &inputs.cmd, 20)) { inputs.cmd_valid = false; }
+RcState rc;
+bool rc_online = dr16_read(&dr16, &rc);
+ImuState imu;
+bool imu_ready = ins_read(&ins, &imu);
 ```
 
-话题怎么定义、怎么传给子系统、能在什么上下文调用，见“运行时契约”第 2 小节。
+在 IDE 里对 `dr16_read` 按“跳到定义”就到了数据所在的模块，再“查找用法”就能看到写入的地方，中间没有别的文件。
 
 - **最新值语义**：控制量只关心最新一帧，不用队列，不会积压。
-- **类型明确**：每种消息一组普通函数，第一个参数是话题实例指针，参数类型由编译器检查；不用字符串名字，也不用 `void *` 通用接口。这是和 basic\_framework 最大的区别。
-- **线程安全**：函数内部在临界区里拷贝数据和时间戳（消息 ≤ 256 字节），调用方不用自己加锁；只能在任务里调用，中断里禁止。
-- **带时间戳**：每次发布记录 64 位微秒时间，读取方判断数据是否过期，过期就走安全门。
-- **事件**（按键单击、UI 刷新）另用 `event_queue`，定长，满了丢新事件并计数；急停、解锁这类不能丢的信号作为状态放在话题里，不走事件队列。
+- **类型明确**：读取函数的参数是具体的模块对象和数据类型，由编译器检查；不用字符串名字，也不用 `void *` 通用接口。这是和 basic\_framework 最大的区别。
+- **线程安全**：`snapshot_write()` / `snapshot_read()` 在临界区里拷贝数据和时间戳（数据 ≤ 256 字节），调用方不用自己加锁；只能在任务里调用，中断里禁止。
+- **带时间戳**：每次写入记录 64 位微秒时间；超时时限由产生数据的模块定（遥控 200 ms、IMU 20 ms），写在它的头文件里，读取函数超时就返回 false，读取方走安全门。
+- **只有一个写入者**：数据是模块对象的成员，只有这个模块的 `.c` 写它，不需要运行时“认领”。
+- **事件**（按键单击、UI 刷新）另用 `event_queue`，定长，满了丢新事件并计数；急停、解锁这类不能丢的信号作为状态保存，不走事件队列。
 
 ### 3. 看门狗（在线检测）
 
@@ -717,7 +711,6 @@ void startup_task(void *argument)
 | --- | --- | --- |
 | CAN、SPI、UART | `board.c` | 设备驱动 |
 | 电机、IMU、遥控对象 | `robot.c` 定义配置、组装并调用 `xxx_init()` | 对应子系统或采集任务 |
-| 话题实例 | `robot.c` | 认领它的发布者、注释里列出的读取者 |
 | PID 等算法状态 | 所属子系统（放在子系统结构体里） | 该子系统 |
 | 任务 | `create_tasks()` | control_task 按固定顺序调用各子系统 |
 
@@ -725,67 +718,41 @@ void startup_task(void *argument)
 
 **占用总线的时间要覆盖整个事务，而不只是一次传输。** 一个事务如果由“先写地址、再读数据”两次传输组成，片选拉低的整段时间都必须独占总线。否则另一个设备可能插在两次传输之间，两个片选同时为低，两个芯片同时驱动 MISO，读到的数据是错的，而且不会有任何报错（UniC 在 BMI088 上遇到过）。所以“拉片选”和“占用总线”必须是同一个操作：`spi_select()` 取得总线并返回 `bool`，`spi_deselect()` 释放。
 
-### 2. 消息层与话题的并发规则
+### 2. 共享数据的并发规则
 
-**消息放在 04_core/msg/，是纯消息层**（ADR 0045：原 msgs/ 并入）。
+**数据类型和产生它的模块放在一起**（ADR 0058：取代 0013、0045 的 `04_core/msg/`）。`RcState` 在 `dr16.h`，`ImuState` 在 `ins.h`，
+`VtRcState` / `KbmState` 在 `vt_link.h`；以后的 `RobotCmd` 在 command 模块、`GimbalState` 在 gimbal 模块。
 
-- **只定义类型和操作函数，不定义话题实例。** 每种消息一个 .h：消息结构体、`XxxTopic` 类型和 `xxx_claim()` / `xxx_publish()` / `xxx_read()` 三个 `static inline` 函数（内部调用 `04_core/msg/topic` 的通用实现，函数体显式写出，不用宏生成）。
-- 只能 include `<stdint.h>`、`<stdbool.h>` 和 04_core/msg 内部；不放控制逻辑，不依赖 algorithm、HAL。
-- devices、app 可以 include 消息；algorithm、platform 不引用。
-- 每个消息结构体用 `_Static_assert(sizeof(RobotCmd) <= 256, "...")` 限制大小。
+- 模块对象里放“最新一份数据 + `Snapshot`”，提供 `xxx_read(const Xxx *self, T *out)`；超时时限是这个模块头文件里的常量。
+- 每个数据结构体用 `_Static_assert(sizeof(T) <= 256, "...")` 限制大小（临界区拷贝时间）。
+- 读取方只 include 产生方的头文件；机构之间仍不互相 include，需要别的机构的数据时由 `robot.c` / control_task 读出来传进去。
 
-**话题实例在 `robot.c` 里分配，有几份由这台车决定。** 消息类型全队共用，但“具体哪个云台的状态”是一份独立的话题实例。双云台哨兵就分配 `front_gimbal_state` 和 `rear_gimbal_state` 两份，子系统在 `xxx_init()` 时拿到并保存自己要用的话题指针。这就是普通 C 的“结构体 + 指针”：PC 测试可以同时创建两个云台模块，各用各的话题；子系统也不会被绑死在某一个全局通道上。
+**有几份由这台车决定。** 双云台哨兵就有 `front_gimbal`、`rear_gimbal` 两个对象，各自保存自己的 `GimbalState`，
+`gimbal_read_state(&front_gimbal, &s)` 和 `gimbal_read_state(&rear_gimbal, &s)` 互不干扰。PC 测试可以同时创建两个对象。
 
 ```c
 // 01_applic/modules/gimbal/gimbal.h
 typedef struct {
-    Motor            *yaw_motor;    // 由 robot.c 在初始化时指定
-    Motor            *pitch_motor;
-    GimbalStateTopic *state_out;    // 本云台发布的话题实例
-    Pid               yaw_angle_pid, yaw_speed_pid;      // 算法状态归本子系统所有
-    Pid               pitch_angle_pid, pitch_speed_pid;
+    Motor      *yaw_motor;    // 由 robot.c 在初始化时指定
+    Motor      *pitch_motor;
+    Pid         yaw_angle_pid, yaw_speed_pid;      // 算法状态归本子系统所有
+    Pid         pitch_angle_pid, pitch_speed_pid;
+    GimbalState state;        // 本云台的最新状态，只由 gimbal.c 写
+    Snapshot    snap;
 } Gimbal;
 
-bool gimbal_init(Gimbal *self, Motor *yaw, Motor *pitch, GimbalStateTopic *state_out);
-void gimbal_step(Gimbal *self, const ControlInput *in, float dt_s);  // in->stop_all 见运行时契约第 5 节
-
-// 01_applic/modules/gimbal/gimbal.c
-bool gimbal_init(Gimbal *self, Motor *yaw, Motor *pitch, GimbalStateTopic *state_out)
-{
-    self->yaw_motor = yaw;  self->pitch_motor = pitch;  self->state_out = state_out;
-    if (!motor_supports_torque(yaw) || !motor_supports_torque(pitch)) {
-        return false;                                  // 配置不匹配：初始化时就拒绝，不等解锁后每毫秒才发现
-    }
-    return gimbal_state_claim(state_out, "gimbal");   // 已被别的模块认领则返回 false
-}
-
-// 哨兵云台板的 01_applic/robot/robot.c —— 话题实例和“谁发布、谁读取”集中写在这里
-static GimbalStateTopic front_gimbal_state;   // 发布：front_gimbal   读取：command、board_link
-static GimbalStateTopic rear_gimbal_state;    // 发布：rear_gimbal    读取：command
-
-bool robot_init(void)
-{
-    if (!motor_init(&front_yaw, &front_yaw_config) || /* ... 其余电机 ... */ false) { return false; }
-    if (!gimbal_init(&front_gimbal, &front_yaw, &front_pitch, &front_gimbal_state)) { return false; }
-    if (!gimbal_init(&rear_gimbal,  &rear_yaw,  &rear_pitch,  &rear_gimbal_state))  { return false; }
-    /* ... */
-    return true;                      // 任何一步失败：app_main 记录原因，系统保持不可解锁
-}
+bool gimbal_init(Gimbal *self, Motor *yaw, Motor *pitch);   // 配置不匹配返回 false
+void gimbal_step(Gimbal *self, const ControlInput *in, float dt_s);
+bool gimbal_read_state(const Gimbal *self, GimbalState *out);
 ```
 
-**一个话题实例只有一个发布者：初始化时认领，而不是“谁先发布算谁的”。**
-
-- 发布方在自己的 `xxx_init()` 里调用 `xxx_claim(topic, "模块名")`。同一个实例被认领第二次就返回 `false`，`robot_init()` 里 `RM_ASSERT`——上电就报错，和两个模块是否在同一个任务里无关。
-- `robot.c` 里每个话题实例旁边用注释写明“发布：谁 / 读取：谁”，和 `docs/conventions.md` 的话题表一致，审查时对照。
-- 需要多个来源时（例如遥控和视觉都想控制云台），由 command 任务仲裁后发布一个 `RobotCmd`。
-
-**子系统不自己读输入。** control_task 在周期开头把话题和电机反馈读成一份 `ControlInput` 快照（其中包括本周期是否全车停 `stop_all`），按顺序传给各子系统的 `xxx_step()`；同一周期内不再重新读。这样每个子系统看到的是同一时刻的世界。
+**子系统不自己读输入。** control_task 在周期开头把遥控、姿态和电机反馈读成本周期的输入（其中包括本周期是否全车停 `stop_all`），按顺序传给各子系统的 `xxx_step()`；同一周期内不再重新读。这样每个子系统看到的是同一时刻的世界。
 
 **并发与中断契约。**
 
 | 操作 | 任务中 | RTOS 管理的中断 | 高于 RTOS 的中断 | 实现 |
 | --- | --- | --- | --- | --- |
-| `xxx_publish()` / `xxx_read()` | 可以 | 禁止 | 禁止 | 任务临界区内拷贝数据和时间戳 |
+| `snapshot_write()` / `xxx_read()` | 可以 | 禁止 | 禁止 | 任务临界区内拷贝数据和时间戳 |
 | `event_queue_push()` | 可以 | `event_queue_push_from_isr()` | 禁止 | 任务版用任务临界区，ISR 版用 ISR 临界区 |
 | `event_queue_pop()` | 可以 | 禁止 | 禁止 | 任务临界区 |
 | `spsc_ring_push()` | —— | 可以 | 可以 | 无锁：只有一个生产者写 head、一个消费者写 tail |
@@ -794,7 +761,7 @@ bool robot_init(void)
 - **中断优先级分两档。** “RTOS 管理的中断”指优先级数值 ≥ `configMAX_SYSCALL_INTERRUPT_PRIORITY` 的中断（不比它更紧急），只有它们能调用 `...FromISR` 接口。更紧急的中断不调用任何 RTOS 接口，只能写 `spsc_ring`。每个中断属于哪一档，写在 `06_boards/<板子>/board.h` 的中断优先级表里。
 - **临界区分两套封装。** 任务里用 `rm_critical_enter()` / `rm_critical_exit()`（内部是 `taskENTER_CRITICAL` / `taskEXIT_CRITICAL`）；ISR 里用 `rm_isr_critical_enter()` / `rm_isr_critical_exit(mask)`（内部是 `taskENTER_CRITICAL_FROM_ISR`，返回当前屏蔽状态，退出时原样恢复）。两者不能混用。拷贝 256 字节在 F407 上小于 2 µs。不用序列锁：单核上高优先级读者打断低优先级写者时会自旋死锁。
 - **环形缓冲只允许单生产者、单消费者。** 生产者只写 head、消费者只写 tail，更新索引前加内存屏障。两个中断要往同一处送数据，就用两个环形缓冲。
-- **中断里只做两件事**：把数据放进环形缓冲，或者通知任务。话题由被通知的任务发布（例如 IMU 中断只唤醒 ins_task）。
+- **中断里只做两件事**：把数据放进环形缓冲，或者通知任务。数据由被通知的任务解析和保存（例如 IMU 中断只唤醒 ins_task）。
 - **时间戳**是 `uint64_t` 微秒（DWT 计数加软件扩展到 64 位，不会回绕），和数据在同一个临界区里写入和读出，读到的数据和它的时间一定对得上。所有时间戳都来自 `rm_time_now_us()`，这一个时钟。
 - **跨设备的时刻对齐**（视觉）：上位机和下位机的时钟不同步，所以不比较两边的绝对时间。
   - 下位机每次发送姿态时附上本机时间戳；
@@ -802,14 +769,14 @@ bool robot_init(void)
   - 下位机在姿态历史环形缓冲（约 100 ms）里找到那一时刻的姿态来补偿。找不到（太旧或太新）就当作这帧数据过期。
   - 上位机协议的帧格式参考 `standard_robot_pp_ros2`：`0x5A` + 长度 + ID + CRC8 帧头、CRC16 帧尾，每包带 `time_stamp`。
 - **所有跨任务共享的状态**（电机反馈、在线标志、看门狗时间戳、错误计数）都按上面的规则整体拷贝，`volatile` 不能代替同步。
-- H7 的 DMA 缓冲区不当话题用，只在 platform 层内部使用（见核心机制第 1 节）。
+- H7 的 DMA 缓冲区不当共享数据用，只在 platform 层内部使用（见核心机制第 1 节）。
 - **串口接收统一用“DMA 循环接收 + 空闲中断”**：
   - DMA 把数据写进 AXI SRAM 里的环形缓冲；空闲中断或 DMA 半满、全满中断只通知 comm\_rx 任务；
   - 帧同步、CRC 校验、解析都在任务里做；
   - CRC 失败的数据不写进任何业务结构体（rpl 的做法）。
   - DR16、裁判系统、图传、视觉串口都用这一套。
 
-**EventQueue 满了怎么办。** 丢弃新事件、计数、记 `RM_CHECK` 警告。急停、遥控丢失、解锁这些“不能丢”的信号**不走事件队列**，而是作为状态（电平）放在话题里，每个周期重新读，不存在“丢事件”的问题。事件队列只用于按键单击、UI 刷新这类丢了也不危险的边沿事件。
+**EventQueue 满了怎么办。** 丢弃新事件、计数、记 `RM_CHECK` 警告。急停、遥控丢失、解锁这些“不能丢”的信号**不走事件队列**，而是作为状态（电平）保存在产生它的模块里，每个周期重新读，不存在“丢事件”的问题。事件队列只用于按键单击、UI 刷新这类丢了也不危险的边沿事件。
 
 ### 3. 错误处理
 
@@ -1153,9 +1120,9 @@ typedef struct {
 
 公开接口的 Doxygen 注释必须写：`@param` 的单位和坐标系，以及这个函数能在什么上下文调用（任务 / 中断）。如果以后发现某类单位错误反复出现，再单独为那一类量加轻量包装，不推翻现在的决定。
 
-### 话题表（步兵 + 哨兵跨板）
+### 共享数据表（步兵 + 哨兵跨板）
 
-| 话题 | 类型 | 发布者（任务） | 订阅者 | 周期 | max\_age | 跨板 |
+| 数据 | 类型 | 产生方（任务） | 读取方 | 周期 | max\_age | 跨板 |
 | --- | --- | --- | --- | --- | --- | --- |
 | imu | `ImuState` | ins | gimbal、chassis / leg、command | 1 kHz | 5 ms | 否 |
 | rc | `RcState` | Dr16（comm\_rx） | command | 约 70 Hz | 100 ms | 否 |
@@ -1164,7 +1131,7 @@ typedef struct {
 | robot\_cmd | `RobotCmd`（sequence + mode + gimbal + chassis + shoot） | command | control_task 里的全部子系统 | 500 Hz | 20 ms | 哨兵：只跨板传 mode 和 chassis 部分 |
 | gimbal\_state | `GimbalState` | gimbal（control） | chassis、command、vision | 1 kHz | 5 ms | 哨兵：是 |
 
-话题表维护在 `docs/conventions.md`，按**话题实例**列：双云台哨兵的 `gimbal_state` 是 `front_gimbal_state`、`rear_gimbal_state` 两行，各有自己的发布者和读取者。新增或修改话题时同步更新。
+共享数据表按**对象**列：双云台哨兵的 `GimbalState` 是 `front_gimbal`、`rear_gimbal` 两行，各有自己的读取方。新增或修改题时同步更新。
 
 ### 主控能力矩阵
 
@@ -1210,9 +1177,9 @@ CMake 是唯一的“真相来源”：它同时生成板子固件和 PC 测试�
 | `GimbalAngles`、`BodyTilt` | 随机姿态下与数值微分对比 |
 | 底盘运动学 | 正解 ∘ 逆解 = 恒等 |
 | 裁判 / 遥控 / 达妙协议 | 录制的真实帧，含 CRC 错误帧、截断帧 |
-| 话题、看门狗 | 超时、过期判定；同一实例被认领两次时 `claim` 返回 false；两份实例互不干扰 |
+| 快照、看门狗 | 超时、过期判定；读取失败时不改 out；两份实例互不干扰 |
 | 模式状态机 | 状态 × 事件全表遍历 |
-| 话题、event\_queue 并发 | host 上多线程压力测试 + ThreadSanitizer；板上再用 tests/target 自测固件验证（中断抢占只有板上测得出） |
+| 快照、event\_queue 并发 | host 上多线程压力测试 + ThreadSanitizer；板上再用 tests/target 自测固件验证（中断抢占只有板上测得出） |
 | 参数存储 | host 假 Flash 模拟写到一半掉电、CRC 错、版本不匹配 |
 | 安全门 | 逐条触发全车停、机构停的条件，检查受影响的机构和恢复斜坡 |
 
@@ -1280,7 +1247,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
   - ⚠️ **来源缺口（2026-09-25 核对）**：`reference/bases/COD-H7-Template` 的所有分支里，**都没有** `Gimbal_Quat.c`、`IMU_Control.c`、《四元数云台控制实现说明》和 Python 对照数据，只有 `Quaternion.c`（EKF）、`Kalman_Filter.c` 和 `Document/Quaternion.pdf`。迁移前要先找到这些文件，找不到就把它们从“直接复用”改为“新写”，并先写出对照测试。
   - 旧 EKF 用 `pvPortMalloc` 分配矩阵内存、依赖 `arm_math`，“数学不动”的同时，内存分配方式必须改（见算法层表）。
 - **整理**：电机、遥控、IMU 驱动保留协议解析逻辑，整理成“配置 + 运行状态 + 函数”，接入 `motor_xxx()` 统一接口；驱动里原有的 PID 移到子系统。
-- **重写**：任务划分（改为统一 control_task + 输入快照）、全局变量通信（改为话题实例）、CAN 发送（改为发送队列 + 电机组打包）。
+- **重写**：任务划分（改为统一 control_task + 输入快照）、全局变量通信（改为模块自带数据 + `xxx_read()`）、CAN 发送（改为发送队列 + 电机组打包）。
 - **新写**：安全门（含最终出口检查）、执行器安全动作、错误处理、IWDG、定时监测——按本文设计实现，优先验证故障处理。
 - **丢弃**：模式号分支（改为状态机）、`osDelay` 周期（改为 `rm_task_delay_until()` 或定时器触发）。
 - **第一批代码只覆盖一条完整路径**：板级初始化 → CAN 与遥控接收 → 一个电机反馈 → 一个控制环 → 安全动作 → 指令发送。跑通后再决定哪些公共接口要抽出来；暂时用不到的通用机制（参数 Flash、板间通信等）后续再补。
@@ -1350,6 +1317,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0055 | 用户 2026-10-01：任务放在一起、任务调用其他文件。各兵种共用的任务集中到 **`01_applic/tasks/`**（`ins_task` 从 `modules/ins/`、`detect_task` / `indicator_task` 从 `system/` 移来）；兵种特有的任务（control、comm_rx、log）仍在 `robot/`（放进公共目录就要回调兵种代码，复制到每个兵种又违反“同种工作不散乱”）。`*_task.c` 只出现在这两处，`modules/` 只放计算，`system/` 只放上电顺序、安全门、接收公共部分 | 找任务只看两处；任务和计算分开 |
 | 0056 | 用户 2026-10-01：“写每个兵种的没什么意义，只需要写一个通用的”。去掉兵种这一层：`01_applic/robots/infantry/` 改为 **`01_applic/robot/`**，文件去掉兵种前缀（`robot_config.h`、`robot.h/.c`、`control_task.c`、`comm_rx_task.c`、`log_task.c`），删除规划中的 hero / engineer / heavy / wheel_leg / sentry 目录；去掉 `RM_ROBOT`，预设 `h723-infantry-debug` → **`h723-debug`**，Keil Target 用 CubeMX 原名 `dm_mc02`。本仓库是通用模板，做具体的车（含多板的每块板）就复制一份仓库改 `robot/`。取代 0051 ② 的兵种前缀规则和 0054 的 `robots/` 部分 | 模板里只有一套代码要维护；新车从完整可编译的模板开始 |
 | 0057 | 用户 2026-10-01 仍觉得不如老模板直观（任务分在两个目录）。去掉兵种层（0056）后“通用 / 兵种特有”的区分已不成立，**全部 6 个任务放进 `01_applic/tasks/`**（≈ 老模板 Application/Task）：`robot/robot_control_task.c` 等改名 `tasks/control_task.c`、`comm_rx_task.c`、`log_task.c`；`robot/` 只留参数和对象（`robot_config.h`、`robot.h/.c`）。取代 0055 的“两处” | 一个目录看全部任务，和老模板一一对应 |
+| 0058 | 用户 2026-10-01 仍觉得“话题 / 拷贝绕”，选**去掉话题层**：删除 `04_core/msg/`（`Topic`、`xxx_claim/publish/read`、`rc_state.h` 等四个消息头文件），数据类型移到产生它的模块（`RcState` → `dr16.h`，`ImuState` → `ins.h`，`VtRcState`/`KbmState` → `vt_link.h`）；模块对象自带“最新一份 + `Snapshot`”（`04_core/util/snapshot`，即原 topic 去掉认领），读取用 `dr16_read()`、`ins_read()`、`vt_link_read_rc/kbm()`，超时由产生方定。`robot.c` 不再有话题实例，`dr16_init`/`ins_init`/`vt_link_init` 不再会失败。取代 0013 的话题实例部分；其余章节里规划中的“话题”（`RobotCmd`、`GimbalState`、话题表）都按本条理解为“产生方保存 + 读取函数” | 跳到定义一步就到数据所在模块；数据是模块成员，天然只有一个写入者，不需要运行时认领 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
@@ -1523,7 +1491,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 
 接线沿用 COD-H7-Template：M3508 接 FDCAN1，ID 1；DR16 接 UART5。
 
-- [ ] `04_core/msg`：话题通用实现（临界区拷贝 + 时间戳 + 认领）；`04_core/msg/robot_cmd`、`04_core/msg/rc_state`（2026-09-28：`04_core/msg/topic` 与 `rc_state` 完成，`robot_cmd` 未做）
+- [ ] 共享数据：`04_core/util/snapshot`（临界区拷贝 + 时间戳）、`RcState`（dr16）完成；`RobotCmd` 未做（2026-10-01 ADR 0058 去掉话题层）
 - [x] `04_core/watchdog`：在线状态在读取时计算；清单打印（2026-09-28，detect_task 打印；上板待 V4）
 - [x] `02_devices/remote/dr16`：检查帧长和取值范围，输出 `RcState`；用录制帧和错误帧做单元测试（模糊测试推迟到阶段 5 以后）（2026-09-28，主机测试 9 项，帧由独立的组帧函数生成、并用 Python 算的字节核对；上板待 V10–V12）
 - [x] `02_devices/motor`：`motor.h` 统一接口 + `dji_motor.c`（先只做 M3508）、ID 冲突检查、反馈快照（2026-09-28：M3508 / M2006 / GM6020 反馈，M3508 / M2006 力矩指令，主机测试；上板待 V30–V32）

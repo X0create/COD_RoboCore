@@ -12,7 +12,7 @@
 上电 → app_main（初始化、建任务）→ 调度器启动 → startup_task（允许解锁，删除自己）
                                                    ↓
    ┌──────────── 6 个任务同时运行，各自按周期 ────────────┐
-   │ ins_task      1 ms   读 IMU → 算姿态 → 发布 imu_state   │
+   │ ins_task      1 ms   读 IMU → 算姿态 → 保存最新姿态    │
    │ comm_rx_task  有数据  解析遥控、电机反馈                 │
    │ control_task  1 ms   读输入 → 安全门 → 底盘 → 发电机指令 │
    │ detect_task   10 ms  打印设备上线 / 离线                │
@@ -34,10 +34,10 @@ main()（CubeMX 生成）
             初始化 DWT 计时器；失败就停住
             初始化 RTT 日志
             robot_init()：初始化这台车的全部对象              → 01_applic/robot/robot.c:robot_init
-                初始化 DR16 遥控（结果发布到 rc_state）
+                初始化 DR16 遥控（最新一帧保存在 dr16 里）
                 对 4 个轮子电机：检查配置、查 ID 冲突、加入电机组
                 初始化底盘（轮组类型、尺寸、PID 来自 robot_config.h）
-                初始化 ins（安装方向来自 robot_config.h，结果发布到 imu_state）
+                初始化 ins（安装方向来自 robot_config.h，最新姿态保存在 ins 里）
                 初始化安全门（解锁拨杆 = 右拨杆），模式 = Init
                 任何一步失败 → 停住，不建任何任务（电机不会收到指令）
             按任务表 robot_tasks[] 逐个创建 6 个任务；有一个失败就停住
@@ -90,7 +90,7 @@ CAN 接收中断（收到一帧）                                → 05_platfor
         距上次收到数据超过 6 ms → 当作新的一帧开头
         每凑满 18 字节：
             检查摇杆值在 364–1684、拨杆值合法
-            合法 → 减去中位 1024，发布到 rc_state，记下“刚收到过数据”
+            合法 → 减去中位 1024，保存为最新一帧（带时刻），记下“刚收到过数据”
             不合法 → 坏帧计数 +1
 ```
 
@@ -106,20 +106,20 @@ CAN 接收中断（收到一帧）                                → 05_platfor
 永远循环（每 1 ms）：
     ins_step()：                                         → 01_applic/modules/ins/ins.c:ins_step
         1. 读 BMI088（SPI2）
-           读失败，或加速度几乎为 0（坏帧）→ 关加热，失败计数 +1，这一周期不发布
+           读失败，或加速度几乎为 0（坏帧）→ 关加热，失败计数 +1，这一周期不更新
         2. 加热：每 1280 ms 用芯片温度算一次 PID，目标 40 °C
         3. 如果还在上电标定阶段：
                攒满 2000 个陀螺样本（2 s）
                抖动小、均值也小 → 把均值当零偏，进入运行阶段
                否则 → 报告原因（在动 / 零偏太大），重新攒
-               标定完成前不发布 imu_state（安全门因此一直全车停）
+               标定完成前不保存姿态，ins_read 一直返回 false（安全门因此一直全车停）
         4. 运行阶段：
                陀螺、加速度从芯片坐标转到机体坐标（安装方向）
                静止时每 1 s 修正一点航向零偏
                加速度二阶低通
                四元数 EKF（用实测的时间间隔）
                算出 yaw / pitch / roll、多圈 yaw
-        5. 发布到 imu_state
+        5. 保存为最新姿态（带时刻）
     把返回的事件（读失败、标定完成、标定被拒）写进日志
 ```
 
@@ -132,8 +132,8 @@ CAN 接收中断（收到一帧）                                → 05_platfor
     now = 当前时刻
 
     【第 1 步 读输入】
-    rc  = 从 rc_state 整份拷贝；超过 200 ms 没更新 → 遥控丢失
-    imu = 从 imu_state 整份拷贝；超过 20 ms 没更新 → IMU 未就绪
+    rc  = dr16_read()：整份拷贝最新一帧；超过 200 ms 没更新 → 遥控丢失
+    imu = ins_read()：整份拷贝最新姿态；超过 20 ms 没更新 → IMU 未就绪
 
     【第 2 步 安全门】                                   → 01_applic/system/safety_gate.c:safety_gate_update
     （见第 6 节）得到 stop_all（这一周期是否全车停）
@@ -247,8 +247,8 @@ log_task（每 1 s）：                                      → 01_applic/task
 
 | 数据 | 谁写 | 谁读 | 怎么保证安全 |
 | --- | --- | --- | --- |
-| `rc_state`（遥控） | comm_rx_task（DR16 解析） | control_task、log_task | 临界区里整份拷贝，带写入时刻；读的一方判断 200 ms 内才算在线 |
-| `imu_state`（姿态） | ins_task | control_task、log_task | 同上，20 ms 内才算就绪 |
+| 遥控（`dr16` 对象里） | comm_rx_task（DR16 解析） | control_task、log_task（`dr16_read`） | 临界区里整份拷贝，带写入时刻；200 ms 内才算在线 |
+| 姿态（`ins` 对象里） | ins_task | control_task、log_task（`ins_read`） | 同上，20 ms 内才算就绪 |
 | 电机反馈 | comm_rx_task（`motor_receive`） | control_task（底盘）、log_task | 临界区里整份拷贝；20 ms 内收到过才算在线 |
 | 电机指令 | control_task（底盘） | control_task（`motor_group_send`） | 写和发在同一个任务里 |
 | 安全门模式 | control_task | indicator_task、log_task | 单个值，读写是原子的；只用来提示和打印 |

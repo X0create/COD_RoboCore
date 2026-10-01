@@ -16,8 +16,6 @@
 #include "02_devices/motor/motor.h"
 #include "02_devices/motor/motor_group.h"
 #include "02_devices/remote/dr16.h"
-#include "04_core/msg/imu_state.h"
-#include "04_core/msg/rc_state.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -25,9 +23,6 @@ extern "C"
 #endif
 
 /* ---------------- 对象（定义在 robot.c） ---------------- */
-
-extern RcStateTopic rc_state;
-extern ImuStateTopic imu_state;
 
 extern Dr16 dr16;
 extern Motor wheel_motor[CHASSIS_WHEELS]; /* 轮 0–3：左前、左后、右后、右前 */

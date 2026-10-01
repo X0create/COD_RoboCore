@@ -21,7 +21,7 @@
 #include "03_algorithm/attitude/gyro_bias.h"
 #include "03_algorithm/attitude/quat_ekf.h"
 #include "03_algorithm/filter/lpf.h"
-#include "04_core/msg/imu_state.h"
+#include "04_core/util/snapshot.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -43,6 +43,26 @@ extern "C"
 #define INS_STILL_MAX_STD  0.03f /* rad/s，静止噪声约 0.013 */
 #define INS_STILL_MAX_RATE 0.02f /* rad/s（约 1.1 °/s），大于冷热零偏差 0.012；均值更大当作在转 */
 #define INS_STILL_GAIN     0.1f /* 每个静止窗口修掉残余的 10%，时间常数约 10 s */
+
+/** 超过这么久没有新姿态就算 IMU 未就绪（ins 1 kHz，20 ms 即连续 20 次没有更新） */
+#define IMU_STALE_MS 20u
+
+typedef struct
+{
+    float q[4]; /* 机体系 → 世界系，[w x y z]，已归一化 */
+    /* ZYX 欧拉角，只用于显示和调试，控制用四元数（《架构设计》坐标系约定）。
+     * 都是绕对应轴右手为正：yaw 从上往下看逆时针为正；pitch 绕 +Y（朝左）为正，即**低头为正**，
+     * 与云台“抬头为正”的约定（ADR 0006）相反；roll 绕 +X（朝前）为正，即左侧抬起为正 */
+    float yaw_rad;
+    float pitch_rad;
+    float roll_rad;
+    float yaw_total_rad; /* 多圈航向（不回绕） */
+    float gyro_rad_s[3]; /* 机体系角速度，已减上电标定的零偏 */
+    float accel_m_s2[3]; /* 机体系加速度，二阶低通后 */
+    float temperature_c; /* IMU 芯片温度 */
+} ImuState;
+
+_Static_assert(sizeof(ImuState) <= 256, "消息不超过 256 字节（运行时契约第 2 节）");
 
 typedef struct
 {
@@ -68,7 +88,8 @@ typedef enum
 typedef struct
 {
     const InsConfig *cfg;
-    ImuStateTopic *out;
+    ImuState state; /* 最新姿态（标定完成后才写入），只通过 ins_read() 读 */
+    Snapshot snap;  /* state 的写入时刻 */
     Bmi088 imu;
     InsPhase phase;
     GyroBias calib;
@@ -84,11 +105,16 @@ typedef struct
 } Ins;
 
 /**
- * @brief   认领 ImuState 话题，初始化滤波器和 EKF
- * @return  false：话题已被别的模块认领
+ * @brief   初始化滤波器和 EKF
  * @pre     初始化阶段调用
  */
-RM_NODISCARD bool ins_init(Ins *ins, const InsConfig *cfg, ImuStateTopic *out);
+void ins_init(Ins *ins, const InsConfig *cfg);
+
+/**
+ * @brief   读最新姿态（在临界区里整份拷贝）
+ * @return  false：IMU 未就绪（还没标定完，或 IMU_STALE_MS 内没有更新），out 不被修改
+ */
+RM_NODISCARD bool ins_read(const Ins *ins, ImuState *out);
 
 /** 初始化 BMI088（阻塞约 170 ms，在 ins_task 里调用），失败返回原因，调用者稍后重试 */
 Bmi088Status ins_start(Ins *ins);

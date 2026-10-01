@@ -20,7 +20,6 @@ static const InsConfig rot_z90 = { .install_rotation = { 0, -1, 0, 1, 0, 0, 0, 0
 static const InsConfig chip_x_up = { .install_rotation = { 0, 1, 0, 0, 0, 1, 1, 0, 0 } };
 
 static Ins ins;
-static ImuStateTopic topic;
 
 static void set16(SpiDevice dev, uint8_t reg, int16_t v)
 {
@@ -43,8 +42,7 @@ static void sensor(int16_t gx, int16_t gy, int16_t gz)
 
 static void start(const InsConfig *cfg)
 {
-    topic = (ImuStateTopic){ 0 };
-    TEST_ASSERT_TRUE(ins_init(&ins, cfg, &topic));
+    ins_init(&ins, cfg);
     TEST_ASSERT_EQUAL_INT(BMI088_OK, ins_start(&ins));
 }
 
@@ -82,11 +80,11 @@ static void test_publishes_only_after_calibration(void)
     sensor(10, -5, 3); /* 零偏约 0.01 rad/s 量级 */
     TEST_ASSERT_EQUAL_INT(INS_EVENT_NONE, steps(INS_CALIB_SAMPLES - 1u));
     ImuState st;
-    TEST_ASSERT_FALSE(imu_state_read(&topic, &st, TOPIC_ANY_AGE));
+    TEST_ASSERT_FALSE(ins_read(&ins, &st));
 
     TEST_ASSERT_EQUAL_INT(INS_EVENT_CALIBRATED, steps(1u));
     steps(1u);
-    TEST_ASSERT_TRUE(imu_state_read(&topic, &st, IMU_STALE_MS));
+    TEST_ASSERT_TRUE(ins_read(&ins, &st));
     for (int i = 0; i < 3; i++)
     {
         TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, st.gyro_rad_s[i]);
@@ -109,7 +107,7 @@ static void test_moving_rejects_then_retries(void)
         }
     }
     ImuState st;
-    TEST_ASSERT_FALSE(imu_state_read(&topic, &st, TOPIC_ANY_AGE));
+    TEST_ASSERT_FALSE(ins_read(&ins, &st));
 
     sensor(0, 0, 0);
     TEST_ASSERT_EQUAL_INT(INS_EVENT_CALIBRATED, steps(INS_CALIB_SAMPLES));
@@ -132,7 +130,7 @@ static void test_install_rotation_applied(void)
     sensor(100, 0, 0);
     steps(1u);
     ImuState st;
-    TEST_ASSERT_TRUE(imu_state_read(&topic, &st, IMU_STALE_MS));
+    TEST_ASSERT_TRUE(ins_read(&ins, &st));
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, st.gyro_rad_s[0]);
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 100.0f * GYRO_LSB, st.gyro_rad_s[1]);
 }
@@ -146,7 +144,7 @@ static void test_bad_frames_stop_publishing(void)
     set16(SPI_DEV_IMU_ACCEL, 0x16, 0); /* 加速度全零 */
     TEST_ASSERT_EQUAL_INT(INS_EVENT_READ_FAILED, steps(IMU_STALE_MS + 1u));
     ImuState st;
-    TEST_ASSERT_FALSE(imu_state_read(&topic, &st, IMU_STALE_MS));
+    TEST_ASSERT_FALSE(ins_read(&ins, &st));
     TEST_ASSERT_EQUAL_FLOAT(0.0f, fake_pwm_duty(PWM_IMU_HEATER));
 
     fake_spi_set_reg(SPI_DEV_IMU_GYRO, 0x00, 0xFF); /* 陀螺 ID 错 */
@@ -169,7 +167,7 @@ static void test_uses_measured_dt(void)
         t_s += 0.002f;
     }
     ImuState st;
-    TEST_ASSERT_TRUE(imu_state_read(&topic, &st, IMU_STALE_MS));
+    TEST_ASSERT_TRUE(ins_read(&ins, &st));
     /* 第一次更新用标称 1 ms，其余 249 次各 2 ms */
     TEST_ASSERT_FLOAT_WITHIN(5e-3f, rate * (t_s - 0.001f), st.yaw_rad);
 }
@@ -181,7 +179,7 @@ static void test_level_attitude(void)
     sensor(0, 0, 0);
     steps(INS_CALIB_SAMPLES + 3000u);
     ImuState st;
-    TEST_ASSERT_TRUE(imu_state_read(&topic, &st, IMU_STALE_MS));
+    TEST_ASSERT_TRUE(ins_read(&ins, &st));
     TEST_ASSERT_FLOAT_WITHIN(1e-2f, 0.0f, st.pitch_rad);
     TEST_ASSERT_FLOAT_WITHIN(1e-2f, 0.0f, st.roll_rad);
 }
@@ -199,9 +197,9 @@ static void test_still_tracks_yaw_bias(void)
 
     ImuState before;
     ImuState after;
-    TEST_ASSERT_TRUE(imu_state_read(&topic, &before, IMU_STALE_MS));
+    TEST_ASSERT_TRUE(ins_read(&ins, &before));
     steps(10000u);
-    TEST_ASSERT_TRUE(imu_state_read(&topic, &after, IMU_STALE_MS));
+    TEST_ASSERT_TRUE(ins_read(&ins, &after));
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, before.yaw_rad, after.yaw_rad); /* 10 s 内漂移 < 1 mrad */
 }
 

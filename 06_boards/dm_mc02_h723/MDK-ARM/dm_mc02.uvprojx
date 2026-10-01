@@ -1023,16 +1023,6 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>04_core/msg</GroupName>
-          <Files>
-            <File>
-              <FileName>topic.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\04_core\msg\topic.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
           <GroupName>04_core/os</GroupName>
           <Files>
             <File>
@@ -1049,6 +1039,11 @@
               <FileName>crc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\04_core\util\crc.c</FilePath>
+            </File>
+            <File>
+              <FileName>snapshot.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\04_core\util\snapshot.c</FilePath>
             </File>
           </Files>
         </Group>

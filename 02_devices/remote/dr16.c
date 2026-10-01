@@ -60,14 +60,15 @@ bool dr16_decode(const uint8_t frame[DR16_FRAME_LEN], RcState *out)
     return true;
 }
 
-bool dr16_init(Dr16 *self, RcStateTopic *out)
+void dr16_init(Dr16 *self)
 {
-    self->out = out;
-    self->len = 0u;
-    self->have_last = false;
-    self->bad_frames = 0u;
+    *self = (Dr16){ 0 };
     watchdog_register(&self->wd, "dr16", RC_LOST_TIMEOUT_MS);
-    return rc_state_claim(out, "dr16");
+}
+
+bool dr16_read(const Dr16 *self, RcState *out)
+{
+    return snapshot_read(&self->snap, &self->rc, out, sizeof(*out), RC_LOST_TIMEOUT_MS);
 }
 
 void dr16_on_bytes(Dr16 *self, const uint8_t *data, uint32_t len, uint64_t now_us)
@@ -93,7 +94,7 @@ void dr16_on_bytes(Dr16 *self, const uint8_t *data, uint32_t len, uint64_t now_u
             RcState state;
             if (dr16_decode(self->frame, &state))
             {
-                rc_state_publish(self->out, &state);
+                snapshot_write(&self->snap, &self->rc, &state, sizeof(state));
                 watchdog_feed(&self->wd);
             }
             else

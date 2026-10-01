@@ -101,8 +101,8 @@ startup_task()                                  最高优先级，第一个运�
 ```
 for (;;)
 ├─ 1. 读输入
-│  ├─ rc_state_read(&rc_state, ...)             04_core/msg/rc_state.h           200 ms 没更新 = 遥控丢失
-│  └─ imu_state_read(&imu_state, ...)           04_core/msg/imu_state.h          20 ms 没更新 = IMU 未就绪
+│  ├─ dr16_read(&dr16, &rc)                     02_devices/remote/dr16.c         200 ms 没更新 = 遥控丢失
+│  └─ ins_read(&ins, &imu)                      01_applic/modules/ins/ins.c      20 ms 没更新 = IMU 未就绪
 ├─ 2. safety_gate_update(&safety_gate, ...)     01_applic/system/safety_gate.c   → stop_all（全车停）
 ├─ 3. chassis_cmd_from_rc(&rc)                  本文件                    摇杆 → 目标底盘速度
 │  └─ chassis_step(&chassis, ...)               01_applic/modules/chassis/chassis.c
@@ -132,7 +132,7 @@ for (;;)
    ├─ bmi088_heater_step()                      加热 PID
    ├─ （上电前 2 s）calibrate_gyro()            陀螺零偏标定，静止才采用
    └─ update_attitude()                         安装旋转 → 零偏在线修正 → 加速度低通 → quat_ekf_update → 欧拉角、多圈航向
-      └─ imu_state_publish(&imu_state, ...)     control、log 读（发布在 ins_step 第 5 步）
+      └─ snapshot_write(&ins->snap, ...)        保存最新姿态（ins_step 第 5 步），control、log 用 ins_read 读
 ```
 
 ### comm_rx_task（收到数据就运行）：`01_applic/tasks/comm_rx_task.c:comm_rx_task_entry`
@@ -147,7 +147,7 @@ comm_rx_task：
    ├─ comm_rx_wait()                            等中断通知，最多 10 ms
    ├─ 每一路 CAN：can_read() 取一帧            05_platform/can/can_stm32h7.c
    │  └─ motor_receive(&wheel_motor[i], …)      02_devices/motor/motor.c     总线和反馈 ID 对上就解码（dji / dm_decode_feedback）→ 存反馈、喂狗
-   ├─ uart_read(UART_5) → dr16_on_bytes()       02_devices/remote/dr16.c     凑满 18 字节 → dr16_decode → rc_state_publish
+   ├─ uart_read(UART_5) → dr16_on_bytes()       02_devices/remote/dr16.c     凑满 18 字节 → dr16_decode → 保存到 dr16.rc
    └─ comm_rx_recover_bus_off()                 01_applic/system/comm_rx_common.c      bus-off 的总线每 100 ms 重启一次
 ```
 
@@ -167,8 +167,8 @@ comm_rx_task：
 
 | 数据 | 写 | 读 | 方式 |
 | --- | --- | --- | --- |
-| 遥控 `rc_state` | comm_rx（dr16） | control、log | 话题：整份拷贝，带时间戳判断新旧 |
-| 姿态 `imu_state` | ins | control、log | 话题 |
+| 遥控 `dr16.rc` | comm_rx（dr16） | control、log | `dr16_read()`：整份拷贝，带时间戳判断新旧 |
+| 姿态 `ins.state` | ins | control、log | `ins_read()`，同上 |
 | 电机反馈 `wheel_motor[i].fb` | comm_rx（`motor_receive`） | control（`motor_read_feedback`） | 临界区拷贝，按时间戳判在线 |
 | 电机指令 | control（`motor_set_torque`） | control（`motor_group_send`） | 同一任务内 |
 | 安全门 `safety_gate.mode` | control | indicator（提示音）、log（打印） | 直接读，单字节读写是原子的 |

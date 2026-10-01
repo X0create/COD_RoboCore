@@ -14,8 +14,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "04_core/msg/kbm_state.h"
-#include "04_core/msg/vt_rc_state.h"
+#include "04_core/util/snapshot.h"
 #include "04_core/watchdog/watchdog.h"
 
 #ifdef __cplusplus
@@ -23,14 +22,56 @@ extern "C"
 {
 #endif
 
-#define VT13_FRAME_LEN     21u
-#define VT_LINK_BUF_LEN    64u  /* 图传链路上最长的 0xA5 帧是 0x0302 的 39 字节 */
-#define VT_LINK_TIMEOUT_MS 200u /* 只用于上线 / 离线日志 */
+/** 挡位开关（取值同 VT13 协议） */
+typedef enum
+{
+    VT_MODE_C = 0,
+    VT_MODE_N = 1,
+    VT_MODE_S = 2,
+} VtMode;
 
 typedef struct
 {
-    VtRcStateTopic *rc_out;
-    KbmStateTopic *kbm_out;
+    int16_t ch[4]; /* 摇杆，已减中位 1024，约 ±660；各通道对应哪根摇杆待上板核对 */
+    int16_t wheel;     /* 拨轮，已减中位 */
+    VtMode mode;       /* 挡位开关 */
+    bool pause;        /* 暂停（急停）键 */
+    bool custom_left;  /* 自定义键：左 */
+    bool custom_right; /* 自定义键：右 */
+    bool trigger;      /* 扳机键 */
+    int16_t mouse_x;
+    int16_t mouse_y;
+    int16_t mouse_z;
+    uint8_t mouse_left; /* 鼠标左、右、中键，各 2 位原始值 */
+    uint8_t mouse_right;
+    uint8_t mouse_middle;
+    uint16_t keys; /* 位定义同 RcState 的 RC_KEY_* */
+} VtRcState;
+
+_Static_assert(sizeof(VtRcState) <= 256, "消息不超过 256 字节（运行时契约第 2 节）");
+
+typedef struct
+{
+    int16_t mouse_x;
+    int16_t mouse_y;
+    int16_t mouse_z;
+    bool mouse_left;
+    bool mouse_right;
+    uint16_t keys; /* 位定义同 RcState 的 RC_KEY_* */
+} KbmState;
+
+_Static_assert(sizeof(KbmState) <= 256, "消息不超过 256 字节（运行时契约第 2 节）");
+
+#define VT13_FRAME_LEN     21u
+#define VT_LINK_BUF_LEN    64u /* 图传链路上最长的 0xA5 帧是 0x0302 的 39 字节 */
+#define VT_LINK_TIMEOUT_MS 200u /* 这么久没收到就算掉线（vt_link_read_*() 返回 false） */
+
+typedef struct
+{
+    VtRcState rc; /* 最新一帧 VT13 遥控器数据，只通过 vt_link_read_rc() 读 */
+    Snapshot rc_snap;
+    KbmState kbm; /* 最新一帧键鼠数据，只通过 vt_link_read_kbm() 读 */
+    Snapshot kbm_snap;
     Watchdog wd;
     uint8_t buf[VT_LINK_BUF_LEN];
     uint32_t len;
@@ -38,8 +79,14 @@ typedef struct
     uint32_t ignored_frames; /* 校验通过但不处理的命令（调试用） */
 } VtLink;
 
-/** @return false：话题已被认领  @pre 初始化阶段调用 */
-RM_NODISCARD bool vt_link_init(VtLink *self, VtRcStateTopic *rc_out, KbmStateTopic *kbm_out);
+/** 初始化、登记看门狗  @pre 初始化阶段调用 */
+void vt_link_init(VtLink *self);
+
+/** 读最新的 VT13 遥控器数据  @return false：VT_LINK_TIMEOUT_MS 内没收到 */
+RM_NODISCARD bool vt_link_read_rc(const VtLink *self, VtRcState *out);
+
+/** 读最新的键鼠数据  @return false：VT_LINK_TIMEOUT_MS 内没收到 */
+RM_NODISCARD bool vt_link_read_kbm(const VtLink *self, KbmState *out);
 
 /** 喂入从串口读到的一段字节（comm_rx_task 里调用） */
 void vt_link_on_bytes(VtLink *self, const uint8_t *data, uint32_t len);
