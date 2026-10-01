@@ -99,9 +99,39 @@ def set_tag(text, tag, value, count=0):
 
 
 def find_targets(text, block):
-    if block == "Target":  # .uvprojx：空格缩进
-        return re.findall(r"    <Target>\n.*?\n    </Target>\n", text, flags=re.S)
-    return re.findall(r"\t<Target>\n.*?\n\t</Target>\n", text, flags=re.S)  # .uvoptx：制表符缩进
+    # CubeMX 和 Keil 的缩进不同（空格 / 制表符），Keil 保存时还会加空行，所以不按缩进匹配
+    return re.findall(r"^[ \t]*<Target>\n.*?\n[ \t]*</Target>\n", text, flags=re.S | re.M)
+
+
+def check_projx(text, robots):
+    """只比较会影响编译的内容（与格式无关，Keil 重新保存工程不算变化）。返回不一致的说明列表"""
+    problems = []
+    targets = {re.search(r"<TargetName>([^<]*)</TargetName>", t).group(1): t for t in find_targets(text, "Target")}
+    for robot, (files, defines, includes) in robots.items():
+        t = targets.get(robot)
+        if t is None:
+            problems.append(f"没有 Target {robot}")
+            continue
+        have = set()
+        for g in re.findall(r"<Group>\s*<GroupName>(0[1-5]_[^<]*)</GroupName>(.*?)</Group>", t, flags=re.S):
+            if "<IncludeInBuild>0</IncludeInBuild>" in g[1].split("<Files>")[0]:
+                continue  # 这个分组在本 Target 不参与编译
+            have.update(p.replace("\\", "/") for p in re.findall(r"<FilePath>([^<]*)</FilePath>", g[1]))
+        want = {os.path.relpath(os.path.join(REPO, f), MDK).replace("\\", "/") for f in files}
+        for f in sorted(want - have):
+            problems.append(f"{robot}：Keil 工程缺少 {f}")
+        for f in sorted(have - want):
+            problems.append(f"{robot}：Keil 工程多了 {f}（CMake 不编它）")
+        cads = re.search(r"<Cads>.*?</Cads>", t, flags=re.S).group(0)
+        if re.search(r"<Define>([^<]*)</Define>", cads).group(1) != ",".join(defines + KEIL_DEFINES):
+            problems.append(f"{robot}：宏定义与 CMake 不一致")
+        if re.search(r"<IncludePath>([^<]*)</IncludePath>", cads).group(1) != ";".join(keil_path(d) for d in includes):
+            problems.append(f"{robot}：头文件路径与 CMake 不一致")
+        if f"<ScatterFile>{keil_path(os.path.join(BOARD, 'dm_mc02.sct'))}</ScatterFile>" not in t:
+            problems.append(f"{robot}：没有使用 dm_mc02.sct")
+        if "RVDS" in t:
+            problems.append(f"{robot}：FreeRTOS 仍是 RVDS 移植层（应为 GCC）")
+    return problems
 
 
 def pick_template(targets):
@@ -170,8 +200,17 @@ def build_optx(text, robots):
 
 
 def main():
-    check = "--check" in sys.argv
     robots = {r: load_robot(r) for r in ROBOTS}
+    if "--check" in sys.argv:
+        with open(PROJX, encoding="utf-8", newline="") as f:
+            problems = check_projx(f.read().replace("\r\n", "\n"), robots)
+        if problems:
+            print("Keil 工程与 CMake 不一致（在 Keil 里补上，或运行 python3 tools/keil_sync.py）：")
+            print("\n".join("  " + p for p in problems))
+            return 1
+        print("Keil 工程是最新的")
+        return 0
+    check = False
     changed = []
     for path, build in ((PROJX, build_projx), (OPTX, build_optx)):
         with open(path, encoding="utf-8", newline="") as f:
