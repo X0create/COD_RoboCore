@@ -1,9 +1,10 @@
 /**
- * @file    test_bench_config.c
- * @brief   台架验证固件（01_applic/bench）速度环参数换算的等价性：旧工程原始单位的 PID 与换算到国际单位的 PID，在同一个被控对象上闭环，
- *          每一步的输出（换回电流原始值）一致，包括积分限幅和输出限幅起作用的阶段
+ * @file    test_infantry_config.c
+ * @brief   步兵驱动轮速度环参数换算的等价性：旧工程（COD-H7-Template Control_Task.c）原始单位的 PID 与
+ *          infantry_config.h 里换算到国际单位的 PID，在同一个被控对象上闭环，每一步的输出（换回电流原始值）一致，
+ *          包括积分限幅和输出限幅起作用的阶段
  */
-#include "01_applic/bench/bench_config.h"
+#include "01_applic/infantry/infantry_config.h"
 
 #include "unity.h"
 
@@ -26,7 +27,7 @@ static void test_si_pid_matches_old_raw_pid(void)
     const PidParam old_param = {
         .kp = 13.0f, .ki = 0.1f, .integral_limit = 5000.0f, .output_limit = 12000.0f
     };
-    const PidParam si_param = speed_pid_param;
+    const PidParam si_param = chassis_config.drive_speed_pid;
     Pid old_pid, si_pid;
     pid_init(&old_pid, PID_POSITION, &old_param);
     pid_init(&si_pid, PID_POSITION, &si_param);
@@ -36,12 +37,12 @@ static void test_si_pid_matches_old_raw_pid(void)
     bool saturated = false;
     for (int k = 0; k < 3000; k++)
     {
-        /* 遥控通道：满杆正转 → 回中 → 半杆反转 */
-        const int16_t ch = (k < 1000) ? 660 : ((k < 2000) ? 0 : -330);
+        /* 目标转子转速：正转 → 停 → 反转（单位 rpm，两边按同一比例换算） */
+        const float target_rpm = (k < 1000) ? 3300.0f : ((k < 2000) ? 0.0f : -1650.0f);
 
-        const float out_old = pid_calc(&old_pid, (float)ch * 5.0f, rpm_old);
-        const float out_si =
-            pid_calc(&si_pid, (float)ch * BENCH_SPEED_PER_CH, rpm_si / DJI_M3508_RPM_PER_RAD_S);
+        const float out_old = pid_calc(&old_pid, target_rpm, rpm_old);
+        const float out_si = pid_calc(&si_pid, target_rpm / DJI_M3508_RPM_PER_RAD_S,
+                                      rpm_si / DJI_M3508_RPM_PER_RAD_S);
         const float out_si_raw = out_si * DJI_M3508_RAW_PER_NM;
 
         TEST_ASSERT_FLOAT_WITHIN(1.0f, out_old, out_si_raw); /* 1 个原始单位 ≈ 量程的 0.006% */
@@ -55,11 +56,10 @@ static void test_si_pid_matches_old_raw_pid(void)
 
 static void test_converted_values(void)
 {
-    const PidParam p = speed_pid_param;
+    const PidParam p = chassis_config.drive_speed_pid;
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, 0.8729f, p.kp);
     TEST_ASSERT_FLOAT_WITHIN(1e-3f, 4.3945f, p.output_limit);
     TEST_ASSERT_FLOAT_WITHIN(1e-2f, 27.27f, p.integral_limit);
-    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 0.027266f, BENCH_SPEED_PER_CH);
 }
 
 int main(void)

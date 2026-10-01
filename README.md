@@ -101,8 +101,7 @@ COD_RoboCore/
 │   ├── chassis/             机构：底盘（全向轮 / 麦轮 / 舵轮）
 │   ├── ins/                 机构：惯性导航（标定、零偏在线修正、EKF、发布姿态）和 1 kHz 的 ins_task
 │   ├── gimbal/ shoot/ …     （规划）云台、发射、轮腿
-│   ├── infantry/            兵种：步兵（第一版只有底盘）
-│   └── bench/               台架验证固件：一台 M3508、一台达妙、DR16、图传、USB 视觉链路
+│   └── infantry/            兵种：步兵（第一版只有底盘）
 │                            每个兵种目录（文件名带兵种前缀）：<兵种>_config.h、<兵种>_robot.h、<兵种>_robot.c（对象 + robot_init + 任务表）、control / comm_rx / log 三个任务
 ├── 02_devices/              具体设备驱动（≈ 老模板 Components/Device）
 │   ├── motor/               统一电机接口、DJI、达妙、电机组发送
@@ -137,7 +136,7 @@ COD_RoboCore/
 ├── cmake/                   交叉编译工具链、板级编译选项、警告设置
 ├── tools/                   gen_readme_diagrams.py（生成本页的图）；（规划）新建兵种、依赖检查
 ├── docs/                    架构设计与实施计划、编码规范、开发环境、与旧模板的差异、待验证清单；images/ 放本页的图
-└── CMakePresets.json        三个预设：host-tests（电脑测试）、h723-bench-debug（台架验证固件）、h723-infantry-debug（步兵）
+└── CMakePresets.json        两个预设：host-tests（电脑测试）、h723-infantry-debug（步兵固件）
 ```
 
 各层目录（platform、core、algorithm……）都有自己的 `README.md`，说明这一层放什么、不放什么。
@@ -188,15 +187,15 @@ cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset
 **2. 编译 DM-MC02 固件**（WSL，仓库根目录；`~/tools/arm-gnu-toolchain-*` 下的编译器会被自动找到）：
 
 ```bash
-cmake --preset h723-bench-debug && cmake --build --preset h723-bench-debug
+cmake --preset h723-infantry-debug && cmake --build --preset h723-infantry-debug
 ```
 
-输出 `build/h723-bench-debug/COD_RoboCore.elf`，编译必须 0 警告。
+输出 `build/h723-infantry-debug/COD_RoboCore.elf`，编译必须 0 警告。
 
 **3. 烧录并看日志**：Ozone 打开这个 ELF → **Download & Reset** → F5 运行 → **View → Terminal** 看 RTT 日志。
 上电后约 2 s 内不要动板子（陀螺零偏标定）。看到 `startup done`、每秒一行 `alive N, mode safe` 就是跑起来了。
 
-> 习惯 Keil 的可以用 Keil 烧录调试：打开 `06_boards/dm_mc02_h723/mdk/dm_mc02.uvprojx`，F7 会调用上面的 CMake 编译（见该目录 `README.md`）。
+> 习惯 Keil 的可以直接用 Keil 编译、烧录、调试：打开 `06_boards/dm_mc02_h723/MDK-ARM/dm_mc02.uvprojx`（Keil 自己的编译器 AC6，和 CMake 编同一组文件，见 `06_boards/dm_mc02_h723/README.md`“Keil”）。
 
 > 目前请用 Ozone 烧录：经 J-Link GDB 服务器（CLion）烧录会显示成功但实际没写入，原因还在查，见 `docs/DEV_ENVIRONMENT.md` 11.2 节。
 
@@ -213,7 +212,7 @@ cmake --preset h723-bench-debug && cmake --build --preset h723-bench-debug
 
 ## 注意事项
 
-- **固件会给电机发指令**（bench、infantry 都是）。 未解锁时持续发零电流，解锁后按遥控转动。接电机前先把电机固定在台架上、输出轴不带负载、断电开关放在手边；只看反馈时手扶即可，让电机转起来时不行。
+- **固件会给电机发指令。** 未解锁时持续发零电流，解锁后按遥控转动。接电机前先把电机固定在台架上、输出轴不带负载、断电开关放在手边；只看反馈时手扶即可，让电机转起来时不行。
 - **不要随手暂停正在控制电机的程序。** 调试器暂停后 CAN 指令停发，电调怎么反应还没有实测。
 - **未上板的功能不要直接上车。** 以上表的验证状态为准，“🧪”只代表电脑测试通过。
 

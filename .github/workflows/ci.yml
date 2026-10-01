@@ -70,9 +70,10 @@ jobs:
           sha256sum -c "$TOOLCHAIN.tar.xz.sha256asc"
           tar -xf "$TOOLCHAIN.tar.xz" -C ~/tools
 
-      - name: 编译固件（台架验证、步兵）
+      - name: 编译固件（步兵）
         run: |
-          cmake --preset h723-bench-debug
-          cmake --build --preset h723-bench-debug
           cmake --preset h723-infantry-debug
           cmake --build --preset h723-infantry-debug
+
+      - name: Keil 工程与 CMake 文件列表一致
+        run: python3 tools/keil_sync.py --check

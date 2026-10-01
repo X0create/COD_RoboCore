@@ -1,6 +1,10 @@
 {
   "version": 6,
-  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "host-tests",
@@ -13,37 +17,35 @@
       }
     },
     {
-      "name": "h723-bench-debug",
-      "displayName": "DM-MC02 台架验证固件（arm-none-eabi-gcc，Debug）",
+      "name": "h723-infantry-debug",
+      "displayName": "DM-MC02 步兵固件（arm-none-eabi-gcc，Debug）",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/h723-bench-debug",
+      "binaryDir": "${sourceDir}/build/h723-infantry-debug",
       "toolchainFile": "${sourceDir}/cmake/toolchain-arm-gcc.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "RM_BOARD": "dm_mc02",
-        "RM_ROBOT": "bench"
-      }
-    },
-    {
-      "name": "h723-infantry-debug",
-      "displayName": "DM-MC02 步兵固件（arm-none-eabi-gcc，Debug）",
-      "inherits": "h723-bench-debug",
-      "binaryDir": "${sourceDir}/build/h723-infantry-debug",
-      "cacheVariables": {
         "RM_ROBOT": "infantry"
       }
     }
   ],
   "buildPresets": [
-    { "name": "host-tests", "configurePreset": "host-tests" },
-    { "name": "h723-bench-debug", "configurePreset": "h723-bench-debug" },
-    { "name": "h723-infantry-debug", "configurePreset": "h723-infantry-debug" }
+    {
+      "name": "host-tests",
+      "configurePreset": "host-tests"
+    },
+    {
+      "name": "h723-infantry-debug",
+      "configurePreset": "h723-infantry-debug"
+    }
   ],
   "testPresets": [
     {
       "name": "host-tests",
       "configurePreset": "host-tests",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      }
     }
   ]
 }

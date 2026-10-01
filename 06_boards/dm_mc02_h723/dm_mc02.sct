@@ -1,0 +1,24 @@
+; Keil (armlink) scatter file for MDK-ARM/dm_mc02.uvprojx: the same memory layout as dm_mc02.ld (GNU ld, CMake build).
+; Kept outside MDK-ARM/ so CubeMX does not touch it; tools/keil_sync.py points the Keil targets here (ADR 0053).
+; Keep the two files in step:
+;   - code and read-only data in FLASH 0x08000000, 1 MB
+;   - .data / .bss / stack / heap in DTCM 0x20000000, 128 KB (stack 0x4000 and heap 0x2000 are set in
+;     MDK-ARM/startup_stm32h723xx.s, the same as _Min_Stack_Size / _Min_Heap_Size in dm_mc02.ld)
+;   - .dma_buf in AXI SRAM (RAM_D1) 0x24000000, not initialised (ADR 0021): DMA1/DMA2 cannot reach DTCM, and
+;     MPU_Config() in main.c makes 0x24000000 + 512 KB non-cacheable. Buffers are put there by RM_DMA_BUF
+;     (05_platform/stm32h7/dma_buf.h), which also aligns them to 32 bytes.
+
+LR_FLASH 0x08000000 0x00100000 {
+  ER_FLASH 0x08000000 0x00100000 {
+    *.o (RESET, +First)
+    *(InRoot$$Sections)
+    .ANY (+RO)
+    .ANY (+XO)
+  }
+  RW_DTCM 0x20000000 0x00020000 {
+    .ANY (+RW +ZI)
+  }
+  RW_DMA_BUF 0x24000000 UNINIT 0x00050000 {
+    *(.dma_buf)
+  }
+}

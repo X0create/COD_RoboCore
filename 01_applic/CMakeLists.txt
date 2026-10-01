@@ -1,5 +1,5 @@
-# 当前构建的兵种（01_applic/ 下的目录名），由预设选择：h723-bench-debug 为台架验证固件，h723-infantry-debug 为步兵
-set(RM_ROBOT "bench" CACHE STRING "兵种目录名（01_applic/ 下）")
+# 当前构建的兵种（01_applic/ 下的目录名），由预设选择：h723-infantry-debug 为步兵
+set(RM_ROBOT "infantry" CACHE STRING "兵种目录名（01_applic/ 下）")
 
 # 与芯片无关的部分（安全门、底盘、ins），电脑测试和固件都链接它
 add_library(rm_app_logic STATIC

@@ -164,7 +164,6 @@ COD_RoboCore/
 │   ├── system/                  # 各兵种共用：app_main（上电顺序）safety_gate indicator_task detect_task comm_rx（ADR 0050）
 │   ├── ins/  gimbal/  chassis/  shooter/  leg/     # 机构（含各自的任务，如 ins_task）；功率控制属于 chassis / leg 内部，见“功率控制”一节
 │   ├── infantry/                # 兵种：infantry_config.h infantry_robot.h infantry_robot.c infantry_control_task.c infantry_comm_rx_task.c infantry_log_task.c
-│   ├── bench/                   # 台架验证固件（一台 M3508、一台达妙、DR16、图传、USB）
 │   ├── hero/
 │   ├── wheel_leg/
 │   ├── sentry_gimbal/           # 多板机器人：每块板一个目录，共用一份 board_link_table.c
@@ -208,7 +207,8 @@ COD_RoboCore/
 │   │   ├── dm_mc02.ld                                # 自己的链接脚本（由 CubeMX 的 .ld 复制而来，加 DMA 段等），生成器改不到
 │   │   ├── board.h / board.c    # 板级资源表、中断优先级表、board_init()/board_start()
 │   │   ├── REGEN_CHECKLIST.md   # 每次 CubeMX 重新生成后的检查清单（见“关键点”）
-│   │   └── mdk/dm_mc02.uvprojx  # Keil 工程：只烧录调试，F7 调 CMake 编译（ADR 0052）
+│   │   ├── MDK-ARM/dm_mc02.uvprojx  # Keil 工程（CubeMX 生成 + tools/keil_sync.py，AC6 编译，ADR 0053）
+│   │   └── dm_mc02.sct          # Keil 的分散加载文件，与 dm_mc02.ld 同样的内存布局
 │   └── dji_c_f407/              # 同上
 ├── tests/
 │   ├── host/                    # PC 单元测试（Unity，C 语言），含多线程压力测试
@@ -1193,13 +1193,13 @@ CMake 是唯一的“真相来源”：它同时生成板子固件和 PC 测试�
 - **编译选项**：`project(... LANGUAGES C CXX)`，CXX 只用于 tests 和可选模块。C 文件 C11 + GNU 扩展（与 CubeMX 生成工程一致）；可选 C++ 模块 `-std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics`；共用 `-ffunction-sections -fdata-sections`；手写代码通过 `rm_target_warnings()` 统一开启 `-Wall -Wextra -Wshadow -Wundef -Wdouble-promotion -Wfloat-conversion -Wstrict-prototypes -Wmissing-prototypes -Werror`（`cmake/warnings.cmake`，2026-09-27 已实现），CubeMX 生成代码和第三方库不套用。
 - **输出**：.elf .hex .bin .map，并打印 Flash / RAM / DTCM / AXI SRAM 占用。
 
-### Keil（ADR 0052：只烧录和调试）
+### Keil（ADR 0053）
 
-- 2026-10-01 起：`06_boards/dm_mc02_h723/mdk/dm_mc02.uvprojx`，Target `bench` / `infantry`。Keil 里按 F7 调 WSL 的 CMake 编译，再把 ELF 当作 `.axf` 下载、调试；Keil 自己不编译源码，所以不需要同步文件列表。用法和原理见该目录的 `README.md`。
-- 以下是“Keil 也独立编译（AC6）”的方案，暂不做：
-
-- 每块板一个 `.uvprojx`，每个兵种一个 Target（预定义宏不同，文件组不同）；编译器用 AC6（armclang）、C 文件 `-std=c11`（可选 C++ 模块用 `-std=c++17`），源文件编码设为 UTF-8。
-- `tools/check_keil_sync.py`：对比 CMake 源文件列表和 `.uvprojx`，CI 里运行，防止有人加了文件却只改了一边。
+- `06_boards/dm_mc02_h723/MDK-ARM/dm_mc02.uvprojx`：CubeMX 按 MDK-ARM 生成，再由 `tools/keil_sync.py` 加入 01–05 层源文件、改用 GCC 版 FreeRTOS 移植层、
+  链接用 `06_boards/dm_mc02_h723/dm_mc02.sct`（与 `dm_mc02.ld` 同样的内存布局）。Keil 用 AC6 编译，和 CMake 是同一组源文件，可以随时二选一。
+- 文件列表的权威仍是 CMake：`tools/keil_sync.py --check` 在 `build/check.sh` 和 CI 里对比两边，漏改 Keil 工程会报出来。
+- CubeMX 平时只按 CMake 生成；重新生成 Keil 工程后必须再按 CMake 生成一次（CubeMX 会删掉另一种工具链的文件），规则见 `06_boards/dm_mc02_h723/README.md`“Keil”。
+- 两个编译器的固件不完全一样（优化、浮点、链接方式），上板验证时写明用的是哪一个。
 
 ### PC 单元测试（`tests/`，Unity）
 
@@ -1346,7 +1346,8 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0049 | 用户 2026-10-01 评审（批判性改）后：① **CAN 接收显式分派**：去掉 `can_subscribe*()`、`can_dispatch()` 和电机反馈回调，平台层改为全放行标准帧 + `can_read()`（同老模板 bsp_can.c 的全放行），设备层新增 `motor_receive(m, bus, &frame)`，兵种 `comm_rx_task.c` 里直接写 `can_read(CAN_BUS_1) → motor_receive(&wheel_motor[i])`；ID 冲突仍在 `motor_init()` 检查；② `motor_group_flush` 改名 **`motor_group_send`**，`motor.h` 开头写明“收 → 读 → 写 → 发”的生命周期；`motor_set_torque` 不改名（与老模板先写 SendValue、再由 CAN_Task 发送的顺序一致，问题出在发送函数名不像发送）；③ ins.c 先写 `ins_step()` 五步主流程再写各步骤，发布从 `update_attitude()` 移回主流程；④ 任务表改为一张 `task_table[]`（名字、入口、优先级、栈一行写全），逐个创建、失败时打印任务名；⑤ daemon 任务改名 **detect**（同老模板 Detect_Task；FreeRTOS 里 daemon 指定时器服务任务，容易混）；`04_core/watchdog` 保留名字（阶段 1 还要在这里汇总任务心跳喂 IWDG），头文件写明不是硬件看门狗；⑥ 与兵种无关的参数（EKF、加热、超时）不挪进 config.h，位置写进 `01_applic/README.md`“参数在哪里” | 读接收任务就能看到每路 CAN 交给哪个电机；函数名与行为一致 |
 | 0050 | 用户 2026-10-01 提出“05_platform 和 01_applic 太乱”，并定下原则：**一个参数一个定义位置、一个状态一个权威来源、一项职责一个负责模块，同种工作不散乱**。据此：① `05_platform` **按外设分目录**：`can/`、`uart/`…每个目录里是接口 `<外设>.h`、芯片实现 `<外设>_<芯片>.c`、辅助代码（原 `common/`），include 写 `05_platform/can/can.h`；芯片实现里 CubeMX / HAL 头文件一律用尖括号（同目录有同名接口头文件）；② `01_applic/common` → **`01_applic/system`**：上电顺序只有一份 `system/app_main.c`（兵种提供 `robot_init()` 和 `robot_tasks[]`），取代 ADR 0045 里每个兵种各一份；③ 心跳任务照 UniC `app_indicator` 拆成 **`system/indicator_task.c`**（状态灯、蜂鸣器、低电量，从打开外设到周期更新都在这一个文件，电池参数也移到这里）和兵种的 `log_task.c`（只打印），任务 5 → 6 个；④ 两份相同的 `ins_task.c` 合成 `01_applic/ins/ins_task.c`（`Ins *` 经任务参数传入）；CAN bus-off 恢复从 detect 移到 comm_rx（CAN 的负责模块），detect 只报告上线 / 离线；⑤ 安全门改为全车唯一实例 `safety_gate`（`system/safety_gate.c`），indicator、log 直接读，不另存副本；`mode_name` 合成 `safety_gate_mode_name()`；⑥ 参数去重：π 只在 `03_algorithm/math/math_const.h`（原 6 处）；M3508 / C620 换算常数只在 `motor.h`（原 dji_motor.c 与两个 config.h 共 3 处）；轮子所在总线只在 config.h（comm_rx 读每一路 CAN，电机按自己的总线认领） | 改一个参数、查一个状态、找一项工作，都只有一个地方 |
 | 0051 | 用户 2026-10-01 要求：① 所有任务名加 `_task`（任务表里的名字 `"ins_task"` 等，Ozone FreeRTOS 窗口里显示的就是它；文档统一写 `ins_task`），不是任务的 `system/comm_rx.c` 改名 `comm_rx_common.c`；② 兵种目录里同名文件分不清，文件名都加兵种前缀：`infantry_config.h`、`infantry_robot.{h,c}`、`infantry_control_task.c`、`infantry_comm_rx_task.c`、`infantry_log_task.c`（bench 同理）；③ `01_app` 改名 **`01_applic`**（`tests/host/01_applic` 同） | IDE 标签页、任务窗口里一眼分清是哪个兵种、哪个任务 |
-| 0052 | 用户 2026-10-01 要同时用 Keil，选“只烧录调试”：`06_boards/dm_mc02_h723/mdk/` 放 Keil 工程（Target bench / infantry，J-Link，照 COD-H7-Template 的器件与 Flash 设置），F7 的 Before Build 调 `build_with_cmake.bat` 在 WSL 里 CMake 编译（失败即停），Keil 编译一个占位文件，After Build 用 CMake 的 ELF 覆盖 `.axf`，F8 和调试都用 GCC 的固件；调试信息改为 DWARF 4（`-gdwarf-4`）。Keil 用 AC6 独立编译（scatter、启动文件、文件列表同步）暂不做 | CMake 仍是唯一构建，Keil 和 Ozone、CLion 用同一份固件，不会出现两份行为不同的固件 |
+| 0052 | （已被 0053 取代）用户 2026-10-01 要同时用 Keil，选“只烧录调试”：`06_boards/dm_mc02_h723/mdk/` 放 Keil 工程（Target bench / infantry，J-Link，照 COD-H7-Template 的器件与 Flash 设置），F7 的 Before Build 调 `build_with_cmake.bat` 在 WSL 里 CMake 编译（失败即停），Keil 编译一个占位文件，After Build 用 CMake 的 ELF 覆盖 `.axf`，F8 和调试都用 GCC 的固件；调试信息改为 DWARF 4（`-gdwarf-4`）。Keil 用 AC6 独立编译（scatter、启动文件、文件列表同步）暂不做 | CMake 仍是唯一构建，Keil 和 Ozone、CLion 用同一份固件，不会出现两份行为不同的固件 |
+| 0053 | 用户 2026-10-01 改为“Keil 也能完整编译、可随时切换，并用 CubeMX 生成 Keil 工程”，同时**删除 bench**（台架验证固件，只留步兵）。取代 0052（Keil 只调试、`mdk/` 目录，已被 CubeMX 生成时删掉）：Keil 工程 = CubeMX 按 MDK-ARM 生成的 `MDK-ARM/dm_mc02.uvprojx` + `tools/keil_sync.py`（加入 01–05 层源文件、宏定义和头文件路径取自 CMake 的 compile_commands.json；FreeRTOS 改用 GCC 移植层；链接用 `dm_mc02.sct`，DMA 缓冲区在 0x24000000；AC6、gnu11、-O0；J-Link；`RTT_USE_ASM=0`）。平时打开即可编译，不需要跑脚本；加文件时 CMake 和 Keil 各加一次，`keil_sync.py --check` 在 check.sh / CI 里防漏。CubeMX 平时只按 CMake 生成，重新生成 Keil 工程后必须再按 CMake 生成一次（实测 CubeMX 会删掉另一种工具链的文件）。bench 的达妙、图传、USB 视觉接线代码在提交 `4ee963f` | 习惯 Keil 的队员可以直接在 Keil 里改代码、编译、调试；CubeMX 仍是唯一的外设配置入口 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 

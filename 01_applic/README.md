@@ -8,7 +8,6 @@
 | `chassis/` | 机构 | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮，读实测 → 算目标 → 算输出（ADR 0043） |
 | `ins/` | 机构 | 惯性导航：`ins.c`（BMI088 → 零偏标定 → EKF → 发布 `imu_state`）、`ins_task.c`（1 kHz 任务，各兵种共用） |
 | `infantry/` | 兵种 | 步兵（预设 `h723-infantry-debug`）。第一版只有底盘：四轮全向轮，遥控直接给底盘速度 |
-| `bench/` | 兵种 | 台架验证固件（预设 `h723-bench-debug`）：一台 M3508 速度环、一台达妙 DM8009、DR16、图传、USB 视觉链路，用于 `docs/VERIFICATION_TODO.md` 的逐项验证 |
 
 ## 兵种目录（以 `infantry/` 为例）
 
@@ -27,7 +26,7 @@ infantry/
 - 上电顺序各兵种相同，在 `system/app_main.c`：`app_main()` 调用本兵种的 `robot_init()`，再按 `robot_tasks[]` 创建任务。
 - 读一个兵种：先看 `<兵种>_robot.c`（对象和任务表），再看各 `*_task.c`。调用关系总图见 `docs/CALL_FLOW.md`。
 - 兵种目录内的对象定义在 `<兵种>_robot.c`、声明在 `<兵种>_robot.h`，只给本目录的文件用（相当于老模板的全局变量，ADR 0044）。
-- 兵种目录里的文件名都带兵种前缀（`infantry_config.h`、`bench_config.h`），IDE 里同时打开几个兵种也分得清。
+- 兵种目录里的文件名都带兵种前缀（`infantry_config.h`、`infantry_robot.c`），IDE 里同时打开几个兵种也分得清。
 - 新兵种：复制 `infantry/`，文件名前缀改成新兵种名，在 `CMakePresets.json` 里加一个预设（`RM_ROBOT` = 目录名）。
 
 ## 一处定义

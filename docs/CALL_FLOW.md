@@ -1,6 +1,6 @@
 # 调用关系地图（新旧模板对照）
 
-更新时间：2026-09-30。对象以步兵 `01_applic/infantry/` 为例；台架验证固件 `01_applic/bench/` 的结构相同。
+更新时间：2026-09-30。对象以步兵 `01_applic/infantry/` 为例。
 
 读代码时先看本文，找到要看的那一步，再按 `文件:函数` 跳过去。
 标 **⚡函数指针** 的地方，IDE 的“转到定义”跳不过去，按本文写的目标函数手动打开。
@@ -45,7 +45,7 @@ COD-H7-Template/
 | `BSP/bsp_*.c` | `05_platform/stm32h7/*.c`（接口在 `05_platform/*.h`） | 中断回调只收数据、唤醒 comm_rx_task，不在中断里解析 |
 | `Components/Algorithm/`、`Controller/` | `03_algorithm/`（`control/pid`、`filter/lpf`、`attitude/quat_ekf` …） | |
 | `Components/Device/` | `02_devices/`（`motor/`、`remote/dr16`、`imu/bmi088` …） | |
-| `Application/` | `01_applic/` | 机构（`chassis/`、`ins/`）、各兵种共用（`system/`）、兵种（`infantry/`、`bench/`）平铺在这一层 |
+| `Application/` | `01_applic/` | 机构（`chassis/`、`ins/`）、各兵种共用（`system/`）、兵种（`infantry/`）平铺在这一层 |
 | `Application/Task/INS_Task.c` | `01_applic/ins/ins_task.c` + `ins.c` | 各兵种共用 |
 | `Application/Task/Control_Task.c` | `01_applic/<兵种>/<兵种>_control_task.c` + `01_applic/chassis/chassis.c` | |
 | `Application/Task/CAN_Task.c` | `<兵种>_control_task.c` 第 4 步 → `02_devices/motor/motor_group.c` | 发送与控制同一周期，不再单独一个任务 |
