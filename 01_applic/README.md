@@ -1,18 +1,30 @@
 # 01_applic/
 
-业务层，相当于老模板的 `Application/`。三类目录平铺在这一层：
+业务层，相当于老模板的 `Application/`。分三类子目录（ADR 0054）：
 
-| 目录 | 类别 | 内容 |
-| --- | --- | --- |
-| `system/` | 各兵种共用的框架部分 | `app_main.c`（上电顺序，只有这一份）、`safety_gate.c`（全车唯一的安全门）、`indicator_task.c`（状态灯、蜂鸣器、低电量）、`detect_task.c`（设备上线 / 离线报告）、`comm_rx_common.c`（接收的公共部分：中断唤醒、打开接收、CAN bus-off 恢复） |
-| `chassis/` | 机构 | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮，读实测 → 算目标 → 算输出（ADR 0043） |
-| `ins/` | 机构 | 惯性导航：`ins.c`（BMI088 → 零偏标定 → EKF → 发布 `imu_state`）、`ins_task.c`（1 kHz 任务，各兵种共用） |
-| `gimbal/`、`shooter/`、`leg/`、`arm/` | 机构（规划） | 云台、发射、轮腿、机械臂（工程） |
-| `infantry/` | 兵种 | 步兵（预设 `h723-infantry-debug`）。第一版只有底盘：四轮全向轮，遥控直接给底盘速度 |
-| `hero/`、`engineer/`、`heavy/`、`wheel_leg/` | 兵种（规划） | 英雄、工程、重装（规则未出）、平衡步兵 |
-| `sentry_gimbal/`、`sentry_chassis/` | 兵种（规划，多板） | 哨兵的云台板和底盘板，用 `02_devices/board_link/` 交换话题 |
+```
+01_applic/
+├── system/      各兵种共用的框架：上电顺序、安全门、indicator、detect、接收公共部分
+├── modules/     机构，各兵种复用
+│   ├── chassis/  ins/
+│   └── gimbal/  shooter/  leg/  arm/          （规划）
+└── robots/      兵种，一台车（多板时一块板）一个目录
+    ├── infantry/
+    ├── hero/  engineer/  heavy/  wheel_leg/    （规划）
+    └── sentry/gimbal_board/  sentry/chassis_board/   （规划，多板）
+```
 
-## 兵种目录（以 `infantry/` 为例）
+| 目录 | 内容 |
+| --- | --- |
+| `system/` | `app_main.c`（上电顺序，只有这一份）、`safety_gate.c`（全车唯一的安全门）、`indicator_task.c`（状态灯、蜂鸣器、低电量）、`detect_task.c`（设备上线 / 离线报告）、`comm_rx_common.c`（接收的公共部分：中断唤醒、打开接收、CAN bus-off 恢复） |
+| `modules/chassis/` | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮，读实测 → 算目标 → 算输出（ADR 0043） |
+| `modules/ins/` | 惯性导航：`ins.c`（BMI088 → 零偏标定 → EKF → 发布 `imu_state`）、`ins_task.c`（1 kHz 任务，各兵种共用） |
+| `modules/gimbal/`、`shooter/`、`leg/`、`arm/` | （规划）云台、发射、轮腿、机械臂（工程） |
+| `robots/infantry/` | 步兵（预设 `h723-infantry-debug`）。第一版只有底盘：四轮全向轮，遥控直接给底盘速度 |
+| `robots/hero/`、`engineer/`、`heavy/`、`wheel_leg/` | （规划）英雄、工程、重装（规则未出）、平衡步兵 |
+| `robots/sentry/` | （规划，多板）哨兵：`gimbal_board/`、`chassis_board/` 各是一块板的固件，用 `02_devices/board_link/` 交换话题 |
+
+## 兵种目录（以 `robots/infantry/` 为例）
 
 只放本兵种和别的兵种不同的东西：
 
@@ -30,7 +42,7 @@ infantry/
 - 读一个兵种：先看 `<兵种>_robot.c`（对象和任务表），再看各 `*_task.c`。调用关系总图见 `docs/CALL_FLOW.md`。
 - 兵种目录内的对象定义在 `<兵种>_robot.c`、声明在 `<兵种>_robot.h`，只给本目录的文件用（相当于老模板的全局变量，ADR 0044）。
 - 兵种目录里的文件名都带兵种前缀（`infantry_config.h`、`infantry_robot.c`），IDE 里同时打开几个兵种也分得清。
-- 新兵种：复制 `infantry/`，文件名前缀改成新兵种名，在 `CMakePresets.json` 里加一个预设（`RM_ROBOT` = 目录名）。
+- 新兵种：复制 `robots/infantry/`，文件名前缀改成新兵种名，在 `CMakePresets.json` 里加一个预设（`RM_ROBOT` = `robots/` 下的目录，多板写到板子一级，如 `sentry/gimbal_board`）。
 
 ## 一处定义
 
@@ -62,6 +74,6 @@ infantry/
 
 ## 规则
 
-- 机构目录（`chassis/`、`ins/`）：一个机构的完整闭环，只用 devices、algorithm、core；机构之间不互相 include，只走话题。电脑上可测。
+- 机构目录（`modules/` 下）：一个机构的完整闭环，只用 devices、algorithm、core；机构之间不互相 include，只走话题。电脑上可测。
 - 兵种目录：选模块、填参数、创建任务；**禁止**写控制算法、直接操作外设。
 - `system/safety_gate` 和各机构是纯逻辑（库 `rm_app_logic`，电脑测试和固件都链接）；任务文件和 `app_main.c` 只用于固件（库 `rm_app`）。

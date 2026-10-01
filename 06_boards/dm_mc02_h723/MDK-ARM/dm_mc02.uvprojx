@@ -733,52 +733,52 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>01_applic/chassis</GroupName>
+          <GroupName>01_applic/modules/chassis</GroupName>
           <Files>
             <File>
               <FileName>chassis.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\chassis\chassis.c</FilePath>
+              <FilePath>..\..\..\01_applic\modules\chassis\chassis.c</FilePath>
             </File>
           </Files>
         </Group>
         <Group>
-          <GroupName>01_applic/infantry</GroupName>
-          <Files>
-            <File>
-              <FileName>infantry_comm_rx_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\infantry\infantry_comm_rx_task.c</FilePath>
-            </File>
-            <File>
-              <FileName>infantry_control_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\infantry\infantry_control_task.c</FilePath>
-            </File>
-            <File>
-              <FileName>infantry_log_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\infantry\infantry_log_task.c</FilePath>
-            </File>
-            <File>
-              <FileName>infantry_robot.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\infantry\infantry_robot.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>01_applic/ins</GroupName>
+          <GroupName>01_applic/modules/ins</GroupName>
           <Files>
             <File>
               <FileName>ins.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\ins\ins.c</FilePath>
+              <FilePath>..\..\..\01_applic\modules\ins\ins.c</FilePath>
             </File>
             <File>
               <FileName>ins_task.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\ins\ins_task.c</FilePath>
+              <FilePath>..\..\..\01_applic\modules\ins\ins_task.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>01_applic/robots/infantry</GroupName>
+          <Files>
+            <File>
+              <FileName>infantry_comm_rx_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\01_applic\robots\infantry\infantry_comm_rx_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>infantry_control_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\01_applic\robots\infantry\infantry_control_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>infantry_log_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\01_applic\robots\infantry\infantry_log_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>infantry_robot.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\01_applic\robots\infantry\infantry_robot.c</FilePath>
             </File>
           </Files>
         </Group>

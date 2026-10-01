@@ -110,8 +110,8 @@
 
 ```mermaid
 flowchart TD
-    APP["01_applic/<兵种><br/>组装 + 模式状态机 + 任务"]
-    SUB["01_applic/<机构><br/>云台 / 底盘 / 发射 / 腿 / INS"]
+    APP["01_applic/robots/<兵种><br/>组装 + 模式状态机 + 任务"]
+    SUB["01_applic/modules/<机构><br/>云台 / 底盘 / 发射 / 腿 / INS"]
     DEV["02_devices<br/>电机 / IMU / 遥控 / 裁判 / 视觉"]
     ALG["03_algorithm<br/>PID / 滤波 / 四元数 / LQR"]
     CORE["04_core<br/>话题与消息 / 看门狗 / 日志 / 参数 / 错误"]
@@ -138,8 +138,8 @@ flowchart TD
 
 | 层 | 职责 | 可以 include | 禁止 |
 | --- | --- | --- | --- |
-| 01_applic/<兵种> | 选模块、填参数、模式状态机、创建任务 | 所有下层、01_applic/system、01_applic/<机构> | 写控制算法、直接碰外设 |
-| 01_applic/<机构> | 一个机构的完整闭环（云台、底盘、发射、腿、INS） | 02_devices、03_algorithm、04_core | include 其他机构；只能走话题 |
+| 01_applic/robots/<兵种> | 选模块、填参数、模式状态机、创建任务 | 所有下层、01_applic/system、01_applic/modules/<机构> | 写控制算法、直接碰外设 |
+| 01_applic/modules/<机构> | 一个机构的完整闭环（云台、底盘、发射、腿、INS） | 02_devices、03_algorithm、04_core | include 其他机构；只能走话题 |
 | 02_devices | 一个外部设备的协议和状态（在线、原始值 → SI 单位） | 05_platform 接口、03_algorithm、04_core | HAL、具体芯片头文件 |
 | 03_algorithm | 纯计算，输入输出全走参数 | 标准库、CMSIS-DSP（可选） | RTOS、HAL、全局变量 |
 | 04_core | 话题与各条消息（04_core/msg）、看门狗、日志、参数存储、OS 封装 | 05_platform 接口、FreeRTOS | 任何具体设备 |
@@ -160,14 +160,14 @@ COD_RoboCore/
 │   ├── board-dm_mc02.cmake      # 芯片型号、FPU、链接脚本
 │   ├── board-dji_c.cmake
 │   └── warnings.cmake           # -Wall -Wextra -Werror -Wdouble-promotion 等
-├── 01_applic/                      # 业务（≈ 老模板 Application/），机构和兵种平铺在这一层（ADR 0045）
-│   ├── system/                  # 各兵种共用：app_main（上电顺序）safety_gate indicator_task detect_task comm_rx（ADR 0050）
-│   ├── ins/  gimbal/  chassis/  shooter/  leg/  arm/     # 机构（含各自的任务，如 ins_task）；功率控制属于 chassis / leg 内部，见“功率控制”一节
-│   ├── infantry/                # 兵种：infantry_config.h infantry_robot.h infantry_robot.c infantry_control_task.c infantry_comm_rx_task.c infantry_log_task.c
-│   ├── hero/  engineer/  heavy/（重装，规则未出）
-│   ├── wheel_leg/
-│   ├── sentry_gimbal/           # 多板机器人：每块板一个目录，共用一份 board_link_table.c
-│   └── sentry_chassis/          # 步兵若分云台板和底盘板，同样拆成 infantry_gimbal/ + infantry_chassis/
+├── 01_applic/                   # 业务（≈ 老模板 Application/），分 system / modules / robots 三类（ADR 0054）
+│   ├── system/                  # 各兵种共用：app_main（上电顺序）safety_gate indicator_task detect_task comm_rx_common（ADR 0050）
+│   ├── modules/                 # 机构（含各自的任务，如 ins_task）；功率控制属于 chassis / leg 内部，见“功率控制”一节
+│   │   └── ins/  chassis/  gimbal/  shooter/  leg/  arm/
+│   └── robots/                  # 兵种，一台车（多板时一块板）一个目录
+│       ├── infantry/            # infantry_config.h infantry_robot.h/.c infantry_control_task.c infantry_comm_rx_task.c infantry_log_task.c
+│       ├── hero/  engineer/  heavy/（重装，规则未出）  wheel_leg/
+│       └── sentry/              # 多板：gimbal_board/ + chassis_board/，共用一份 board_link_table.c；步兵若分板同样拆成 infantry/gimbal_board/ + chassis_board/
 ├── 02_devices/
 │   ├── motor/                   # motor.h（统一接口）dji_motor dm_motor motor_group
 │   ├── imu/                     # bmi088
@@ -227,7 +227,7 @@ COD_RoboCore/
 
 **关键点**
 
-- **一个固件目标 = 01_applic/ 下一个兵种目录。** 新建兵种：复制 `01_applic/infantry/`、加 CMake 预设（以后由 `tools/new_robot.py <名字>` 完成，并打印剩余手工步骤：改 `<兵种>_config.h`、`<兵种>_robot.c`、`<兵种>_robot.h`、`<兵种>_control_task.c`、`<兵种>_comm_rx_task.c`、`<兵种>_log_task.c`）。兵种目录只放本兵种不同的东西：对象、`robot_init()` 和完整任务表在 `<兵种>_robot.c`，上电顺序各兵种共用 `01_applic/system/app_main.c`（ADR 0044、0050），调用关系见 `docs/CALL_FLOW.md`。
+- **一个固件目标 = 01_applic/ 下一个兵种目录。** 新建兵种：复制 `01_applic/robots/infantry/`、加 CMake 预设（以后由 `tools/new_robot.py <名字>` 完成，并打印剩余手工步骤：改 `<兵种>_config.h`、`<兵种>_robot.c`、`<兵种>_robot.h`、`<兵种>_control_task.c`、`<兵种>_comm_rx_task.c`、`<兵种>_log_task.c`）。兵种目录只放本兵种不同的东西：对象、`robot_init()` 和完整任务表在 `<兵种>_robot.c`，上电顺序各兵种共用 `01_applic/system/app_main.c`（ADR 0044、0050），调用关系见 `docs/CALL_FLOW.md`。
 - **一块板 = 06_boards/ 下一个目录 + 05_platform/ 下一份实现。** 资源和算力够用时，上层代码在 H723 和 F407 之间原样复用；每个目录在 <兵种>_config.h 里声明需要的能力（CAN 路数、CAN FD、控制频率），CMake 与板子能力比对，不支持的组合在构建时报错。
 - **多板是通用机制，不只属于哨兵**：步兵常分云台板和底盘板（24\_Wolf），平衡步兵用 MC02 底盘 + C 板云台（SPR），哨兵是双云台加底盘。每块板一个 01_applic/ 下的兵种目录，可以是不同的主控，共用 02_devices/board\_link 和同一份跨板话题表。
 - **CubeMX 重新生成只会改写 06_boards/<板子>/ 下的文件**，但**它会悄悄删掉它认为不属于用户的代码**。UniC 在同一块板上出过这些事故：
@@ -343,7 +343,7 @@ static Watchdog yaw_motor_wd = { .name = "yaw_motor", .timeout_ms = 20, .on_offl
 
 | 类别 | 放哪里 | 例子 | 改动方式 |
 | --- | --- | --- | --- |
-| 兵种结构参数 | `01_applic/<兵种>/<兵种>_config.h`，const 结构体 | 电机 ID、减速比、PID 参数、限位、轮距 | 改代码、重新编译 |
+| 兵种结构参数 | `01_applic/robots/<兵种>/<兵种>_config.h`，const 结构体 | 电机 ID、减速比、PID 参数、限位、轮距 | 改代码、重新编译 |
 | 标定值 | `04_core/param`，存 Flash（版本号 + CRC） | 云台零点、IMU 安装偏差、陀螺零偏初值 | 上电自动标定，或用遥控器组合键触发，掉电保存；调试时也可在 Ozone 里改（第一版不做串口命令行，ADR 0027） |
 | 调试量 | 带 `volatile` 的 `g_debug` 结构体 | 测试模式、临时目标 | Ozone / Keil Watch 在线修改 |
 
@@ -354,7 +354,7 @@ static Watchdog yaw_motor_wd = { .name = "yaw_motor", .timeout_ms = 20, .on_offl
   - RTT 自带的格式化函数**不支持 `%f`**，而且会错位吃掉后面的参数；浮点数要先放大成整数，并在日志里写明倍率（UniC 实测）。
   - 1 kHz 的路径上不打日志：打日志本身就会造成掉周期。
   - RTT 控制块在运行时初始化，J-Link/Ozone 要在固件跑起来之后才能连上 RTT。
-- **波形**：保留 VOFA JustFloat 输出，通道定义集中在 `01_applic/<兵种>/<兵种>_log_task.c`。
+- **波形**：保留 VOFA JustFloat 输出，通道定义集中在 `01_applic/robots/<兵种>/<兵种>_log_task.c`。
 - **计时**：`rm_time_now_us()` 基于 DWT 周期计数器，所有积分、微分都用实测 dt，不再假定固定 1 ms。
   - 这是全工程**唯一**的时间来源（见硬性要求）。RTOS tick 只用于任务延时，不用于判断数据新旧。
   - DWT 计数器是 32 位的，在 H723 的 550 MHz 下约 7.8 s 回绕一次。扩展成 64 位时，必须保证每个回绕周期内至少更新一次（例如在 tick 钩子里更新）；读取时用“读两次比较”或临界区，防止读到一半被打断。
@@ -465,7 +465,7 @@ void motor_set_torque(Motor *m, float torque_nm)
 | 电机内部控制器 | 按电机模式执行内置控制（如达妙 MIT） | —— 必须在子系统接口里写明 |
 
 ```c
-// 01_applic/gimbal/gimbal.c —— 串级关系写在子系统里，一眼看得出谁在控制
+// 01_applic/modules/gimbal/gimbal.c —— 串级关系写在子系统里，一眼看得出谁在控制
 speed_ref_rad_s = pid_step(&self->yaw_angle_pid, yaw_err_rad, dt_s) + yaw_ff_rad_s;
 torque_nm       = pid_step(&self->yaw_speed_pid, speed_ref_rad_s - fb.speed_rad_s, dt_s);
 motor_set_torque(self->yaw_motor, torque_nm);
@@ -656,9 +656,9 @@ command 任务第一步把它们统一成一个 `OperatorInput`（摇杆、拨�
 
 | 场景 | 做法 |
 | --- | --- |
-| 选兵种 | CMake 预设 `-DROBOT=infantry` 只编译 `01_applic/infantry/`（Keil 的做法见 ADR 0019 之后的“Keil”一节） |
+| 选兵种 | CMake 预设 `-DROBOT=infantry` 只编译 `01_applic/robots/infantry/`（Keil 的做法见 ADR 0019 之后的“Keil”一节） |
 | 选主控 | `-DBOARD=dm_mc02` 选 `06_boards/` 和 `05_platform/` 的实现；上层代码不出现板子宏 |
-| 兵种差异 | 全部写进 `01_applic/<兵种>/<兵种>_config.h`（电机、ID、参数）、<兵种>_robot.c（组装哪些子系统、任务表）、`*_task.c`（每个任务一个文件）；子系统代码对所有兵种相同，新兵种用 tools/new\_robot.py 从模板生成 |
+| 兵种差异 | 全部写进 `01_applic/robots/<兵种>/<兵种>_config.h`（电机、ID、参数）、<兵种>_robot.c（组装哪些子系统、任务表）、`*_task.c`（每个任务一个文件）；子系统代码对所有兵种相同，新兵种用 tools/new\_robot.py 从模板生成 |
 | 轮腿 | 用 `leg` 子系统替换 `chassis`，读同一个 `RobotCmd` 里的 chassis 部分；平衡控制（LQR）在控制任务内运行。LQR 增益按腿长拟合成多项式，在 MATLAB 里离线生成系数表（SPR 的做法），系数表作为 `<兵种>_config.h` 常量，拟合脚本放在 `tools/`。离地检测、跳跃、上台阶是 `leg` 的子状态，每个都要定义自己的安全动作 |
 | 多板（任意兵种） | 每块板一个 01_applic/ 下的兵种目录，两块板可以是不同主控；BoardLink 按表把指定话题映射到 CAN 帧（话题、帧 ID、发送周期），另一块板收到后原样发布。对子系统来说，话题来自本板还是另一块板没有区别。一个 CMake 预设可以同时构建一台车的全部板子 |
 
@@ -679,7 +679,7 @@ command 任务第一步把它们统一成一个 `OperatorInput`（摇杆、拨�
 **`app_main()` 的固定顺序。** CubeMX 生成的 `main()` 依次完成 MPU 配置、开启 Cache、`HAL_Init`、时钟配置和各个 `MX_xxx_Init`，然后调用 `MX_FREERTOS_Init()`，由它调用 `app_main()`；`app_main()` 返回后，生成的代码调用 `osKernelStart()`（见“目录结构 · 关键点”）。
 
 ```c
-// 01_applic/<兵种>/<兵种>_robot.c —— 顺序写死，不按兵种改
+// 01_applic/robots/<兵种>/<兵种>_robot.c —— 顺序写死，不按兵种改
 void app_main(void)                   // 调度器启动前，不开任何接收中断
 {
     rm_time_init();                   // 1. DWT 计时
@@ -739,7 +739,7 @@ void startup_task(void *argument)
 **话题实例在 `<兵种>_robot.c` 里分配，有几份由兵种决定。** 消息类型全队共用，但“具体哪个云台的状态”是一份独立的话题实例。双云台哨兵就分配 `front_gimbal_state` 和 `rear_gimbal_state` 两份，子系统在 `xxx_init()` 时拿到并保存自己要用的话题指针。这就是普通 C 的“结构体 + 指针”：PC 测试可以同时创建两个云台模块，各用各的话题；子系统也不会被绑死在某一个全局通道上。
 
 ```c
-// 01_applic/gimbal/gimbal.h
+// 01_applic/modules/gimbal/gimbal.h
 typedef struct {
     Motor            *yaw_motor;    // 由 <兵种>_robot.c 在初始化时指定
     Motor            *pitch_motor;
@@ -751,7 +751,7 @@ typedef struct {
 bool gimbal_init(Gimbal *self, Motor *yaw, Motor *pitch, GimbalStateTopic *state_out);
 void gimbal_step(Gimbal *self, const ControlInput *in, float dt_s);  // in->stop_all 见运行时契约第 5 节
 
-// 01_applic/gimbal/gimbal.c
+// 01_applic/modules/gimbal/gimbal.c
 bool gimbal_init(Gimbal *self, Motor *yaw, Motor *pitch, GimbalStateTopic *state_out)
 {
     self->yaw_motor = yaw;  self->pitch_motor = pitch;  self->state_out = state_out;
@@ -761,7 +761,7 @@ bool gimbal_init(Gimbal *self, Motor *yaw, Motor *pitch, GimbalStateTopic *state
     return gimbal_state_claim(state_out, "gimbal");   // 已被别的模块认领则返回 false
 }
 
-// 01_applic/sentry_gimbal/robot.c —— 话题实例和“谁发布、谁读取”集中写在这里
+// 01_applic/robots/sentry/gimbal_board/robot.c —— 话题实例和“谁发布、谁读取”集中写在这里
 static GimbalStateTopic front_gimbal_state;   // 发布：front_gimbal   读取：command、board_link
 static GimbalStateTopic rear_gimbal_state;    // 发布：rear_gimbal    读取：command
 
@@ -827,7 +827,7 @@ C 没有异常，文中所有“报错”都指下面三种之一，没有第四
 // algorithm 层：纯计算，不打日志、不调用错误宏，只返回状态
 AlgoStatus quat_ekf_update(QuatEkf *ekf, const ImuSample *sample, float dt_s);  // 发散时返回 ALGO_DIVERGED
 
-// 机构（01_applic/<机构>）：记录错误、决定怎么处理
+// 机构（01_applic/modules/<机构>）：记录错误、决定怎么处理
 if (!RM_CHECK(quat_ekf_update(&self->ekf, &sample, dt_s) == ALGO_OK, ERR_EKF_DIVERGED)) {
     quat_ekf_reset(&self->ekf);
 }
@@ -949,7 +949,7 @@ if (!RM_CHECK(quat_ekf_update(&self->ekf, &sample, dt_s) == ALGO_OK, ERR_EKF_DIV
 **全车停在发送出口统一执行。** 子系统照常计算；只要本周期需要全车停，发送前由出口把每个电机的指令改写成它的 `stop_action`。这样即使某个子系统漏判，也不会在全车停时发出运动指令。机构停只由子系统自己处理，出口不再检查第二遍。
 
 ```c
-// 01_applic/<兵种>/<兵种>_control_task.c 的循环体（ADR 0044：每个兵种自己写，四步直接可见）
+// 01_applic/robots/<兵种>/<兵种>_control_task.c 的循环体（ADR 0044：每个兵种自己写，四步直接可见）
 void control_step(void)
 {
     ControlInput input;
@@ -1091,7 +1091,7 @@ typedef struct {
 
 **接收方时间戳** = 本地收帧时间 − `age_ms`。这没有算上发送队列排队和总线仲裁的时间，所以不假设“延迟小于 1 ms”，而是靠两条规则保证有界：发送方的周期消息在队列里超过 2 个周期就丢弃（见第 6 小节）；订阅方的 `max_age_ms` 按“数据年龄 + 最大排队时间”设置。
 
-**每条跨板消息必须有编码表**，写在 `01_applic/sentry_*/board_link_table.c`，两块板共用这一份文件：
+**每条跨板消息必须有编码表**，写在 `01_applic/robots/sentry/board_link_table.c`，两块板共用这一份文件：
 
 | 内容 | 要求 |
 | --- | --- |
@@ -1333,21 +1333,22 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0036 | 用户 2026-09-28 确认：① 裁判系统命令解析**等用户提供官方《裁判系统串口协议附录 V2.0.0》**后再写（三份参考资料的 0x0201、0x0003 布局互相矛盾，见附录 A.5）；② 届时只解析有使用者的命令：0x0001、0x0201、0x0202、0x0207、0x0208；③ 裁判系统接 USART1（需在 CubeMX 把 USART1_RX 的 DMA 改为 Circular）、图传链路接 USART10（921600）；④ VT13 图传遥控器和 0x0304 键鼠**只解析、发布**，暂不参与解锁 / 急停，操作输入标准化时再定。与赛季无关的 0xA5 帧检查已做成 `02_devices/referee/ref_frame`，图传现用、裁判系统复用 | ① 不猜协议布局 ② 只做有人用的功能 ③ 旧工程两者共用 USART1、编译开关二选一 ④ 输入仲裁属于 command 任务 |
 | 0037 | 用户 2026-09-28 确认：视觉通信本步**只做通道和帧层**：`05_platform/usb_cdc`（接收经字节环形缓冲交给 comm_rx，发送拷贝进缓冲、忙时返回 false）+ 0x5A 帧（`02_devices/vision/vision_frame`：SOF、长度、ID、帧头 CRC8，整帧 CRC16，附录 A.6）+ `vision_link` 找帧计数；消息 ID、字段、下行姿态与时间戳对齐等视觉组确定协议后再做。样板把 USB 收到的字节原样回发，用于验证通道，协议确定后去掉。顺带修正：`MX_USB_DEVICE_Init()` 原本只在 CubeMX 的弱定义 `startup_task` 里，被框架覆盖后 USB 从未初始化，现由 `usb_cdc_start()` 调用 | 旧工程 MiniPC 是空壳，无协议可移植；视觉组上位机未定，不凭空定字段 |
 | 0038 | 用户 2026-09-28 确认：① 电池按 6S，**连续 1 s 低于 21.0 V 提示低电量**（回到 21.5 V 以上解除，持续时间与回差为 AI 补的默认值，写在兵种 <兵种>_config.h）；第一版只提示（日志 + 蜂鸣器），不限制动作（ADR 0027）；② 蜂鸣器响**启动音、解锁 / 上锁音和低电量音**（低电量每 2 s 两声）；③ RLS **按标准公式重写**（带遗忘因子、单输出、静态存储），暂不接入，等底盘功率控制。实现要点：`05_platform/adc` 按用途命名（`ADC_BATTERY`），DMA 缓冲区放 `.dma_buf`；`05_platform/pwm` 增加 `PWM_BUZZER` 和 `pwm_set_frequency()`（自动选分频） | 旧工程 bsp_adc 只换算电压、无使用者；没有蜂鸣器代码；RLS.c 无调用者且跑不起来（增益向量越界、λ 未赋值、维数不匹配） |
-| 0039 | 用户 2026-09-30 确认（三选一中选 C）：陀螺零偏**运行中静止时在线修正航向轴**。起因 V9 实测：上电即标定时芯片是冷的，加热到 40 °C 后静止航向漂约 0.67 °/s；热态复位重标定只有约 0.006 °/s。做法：保留上电 2 s 标定（IMU 尽快就绪）；运行中每 1 s 一个窗口，机体系三轴角速度标准差 < 0.03 rad/s 且均值 < 0.02 rad/s 判为静止，把机体 z 均值的 10% 并入零偏（时间常数约 10 s）；x、y 轴仍由 EKF 用重力估计。未选：A 等温度稳定再标定（冷启动要多等）、B 升温后再标一次。代价：比 0.02 rad/s 慢且平稳的真实转动会被部分当成零偏；阈值与增益为初值，待台架调整（V43） | `01_applic/ins` |
+| 0039 | 用户 2026-09-30 确认（三选一中选 C）：陀螺零偏**运行中静止时在线修正航向轴**。起因 V9 实测：上电即标定时芯片是冷的，加热到 40 °C 后静止航向漂约 0.67 °/s；热态复位重标定只有约 0.006 °/s。做法：保留上电 2 s 标定（IMU 尽快就绪）；运行中每 1 s 一个窗口，机体系三轴角速度标准差 < 0.03 rad/s 且均值 < 0.02 rad/s 判为静止，把机体 z 均值的 10% 并入零偏（时间常数约 10 s）；x、y 轴仍由 EKF 用重力估计。未选：A 等温度稳定再标定（冷启动要多等）、B 升温后再标一次。代价：比 0.02 rad/s 慢且平稳的真实转动会被部分当成零偏；阈值与增益为初值，待台架调整（V43） | `01_applic/modules/ins` |
 | 0040 | 用户 2026-09-30 授权“需要取舍的选更优的改”：PID **位置式加抗积分饱和**（条件积分：积分只累加到输出刚好等于 `output_limit` 为止，误差与输出同向时不再多攒；增量式不需要）。部分取代 ADR 0029 的“PID 先保持旧行为”；显式 dt、微分作用在测量值上仍按 0029 等台架对比 | 起因：IMU 加热冷态预热时比例项长时间饱和，积分攒满（限幅 1000）后到 40 °C 还要顶着 25% 占空比，造成过冲（V6、风险清单“加热无抗饱和的过冲”）；速度环堵转后同理会猛冲。条件积分只改变饱和时的行为，未饱和时与旧公式完全相同 | `03_algorithm/control/pid` |
 | 0041 | 用户 2026-09-30 授权选更优：参考 HNU_RM_SHARK_C / basic_framework 的 cmd 任务，**`OperatorInput`、`KeyTracker`、`RobotCmd` 和 command 任务与第一个真正的子系统（云台或底盘）一起做**，不先写字段；届时采用两点做法：① 模式切换要看子系统反馈（例如云台回中完成才进入陀螺仪模式、底盘在云台就绪后才跟随）；② 云台从失能进入受控时先用编码器闭环带斜坡回中，回中完成时记录 IMU 航向作零点，再切 IMU 闭环，编码器差值按最短方向算 | 现在只有样板的一台电机，`RobotCmd` 的云台 / 底盘 / 发射字段没有使用者，先写只能猜（违背“只写必要”）；解锁和急停仍只认 DR16（ADR 0032、0036） | 阶段 4、5 |
 | 0042 | 用户 2026-09-30 授权“选更优的改”：IMU 加热参数按**本板实测**重定：每 **1280 ms** 算一次（与 BMI088 温度寄存器更新同步）、上限 **8%**、kp **0.01 / °C**、积分时间 **10 s**。取代 ADR 0033 第二步的 UniC 参数（上限 25%、kp 0.05、每 100 ms） | 实测（`docs/data/heater_2026-09-30.csv`，电池供电）：稳态只需约 2% 占空比；25% 时加热片附近约 24 °C/s，芯片读数时间常数约 3 s；温度 1.28 s 才更新一次。UniC 参数在本板上冷启动冲到约 46 °C、稳定后 38–41 °C 摆动（上板与拟合模型一致）。三节点热模型（`tools/heater_model.py`，拟合误差 0.2 °C）上新参数：环境 15–35 °C、加热功率 ±30% 时峰值不超过 41.4 °C、稳态峰峰 < 0.1 °C；代价是冷启动到温慢一些（25 °C 环境约 10–20 s）。UniC 的 16% 稳态占空比可能是加热片供电电压不同。**上板复测（同日）**：9 s 到温、无过冲，稳态 40.125–40.25 °C，与模型一致 | `02_devices/imu/bmi088` |
-| 0043 | 用户 2026-09-30 决定：① **底盘三种轮组都做，轮腿暂不做**：一个 `01_applic/chassis` 按 `ChassisConfig.type` 选四轮全向轮 / 麦轮 / 舵轮，运动学在 `03_algorithm/kinematics/`（`omni`、`mecanum`、`steer`，共用 `chassis_vel.h`）；② 第一版**底盘直接读遥控**（`robot.c` 把摇杆换算成 `ChassisVel`），`OperatorInput` / `RobotCmd` / command 任务推迟到云台加入时（修订 ADR 0041“与第一个子系统一起做”的时机）；③ 新兵种目录 `01_applic/infantry/`、预设 `h723-infantry-debug`，样板 `_template` 保持不变。实现约定：轮号从左前起逆时针（全向轮 X 形同序）；平移斜坡按合成加速度限幅（分轴限幅会让斜向加速时方向先偏到 45°）；机构停 = 任一电机离线时目标改 0、按斜坡受控减速；全车停时斜坡起点对齐正解出的实测速度；舵轮转向电机须支持力矩指令且角度零点上电即确定（GM6020 的指令按 ADR 0031 ③ 仍待加） | 用户要求各种轮组都有；先让四个轮子转起来并上台架，指令层等有第二个子系统（云台）时再定字段，避免猜 | 阶段 5 |
-| 0044 | 用户 2026-09-30 选第 1 档（队友反映“函数嵌套太多，不如老模板直观”）：**兵种目录一个任务一个文件**，照老模板 `Application/Task/`：`01_applic/<兵种>/<兵种>_control_task.c`（循环体里直接写读输入 → 安全门 → 子系统 → 发送四步，取代 `common/control_task.c` + `robot_control_step()`）、`ins_task.c`、`heartbeat_task.c`（原步兵 `debug.c`，去掉 `DebugView` 指针结构）；`robot.c` 只放对象定义、`robot_init()`、`robot_start()` 和**任务表**（名字、优先级、栈、周期一处列全）；对象声明集中在同目录 `objects.h`，相当于老模板的全局变量（CODING_STANDARD 第 8 节的例外，只限兵种目录内）；新增 `docs/CALL_FLOW.md` 调用关系地图（含老模板结构）。comm_rx、detect 各兵种相同，仍在 `common/`。串口回调去掉 `void *ctx` 的强制转换，直接用对象。第 2 档（去掉函数指针注册、薄包装）暂不做，等队友看过再定 | 打开一个文件就能看到一个任务的完整循环；读代码先查地图再跳转。安全门、发送出口改写、话题都保留（ADR 0026） |
-| 0045 | 用户 2026-09-30 反映 0044 之后“还是太散，结构不清晰”，选**顶层合并**（对照老模板 Core / BSP / Components / Application）：① `subsystems/` 与 `robots/` 合成 **`01_applic/`**，机构（`chassis/`、`ins/`）、各兵种共用（`common/`）、兵种（`infantry/`、`bench/`）平铺在这一层；② `msgs/` 并入 **`04_core/msg/`**，每条消息只剩一个 .h（三个函数改为显式写出的 `static inline`）；③ `05_platform/include/platform/*.h` 拉平为 **`05_platform/*.h`**（`#include "05_platform/can/can.h"` 写法不变）；④ 兵种目录统一为 `config.h`、`robot.h`（合并 `objects.h`、`tasks.h`）、`robot.c`、每个任务一个 `*_task.c`；`robot.c` 里从上往下是对象 → `robot_init()` → **完整任务表**（5 个任务的优先级和栈都在这里，comm_rx、detect 不再各自藏栈）→ `app_main()` → `startup_task()`，原 `common/app_main.c`、`common/robot.h` 删除；公共任务文件统一命名 `comm_rx_task.c`、`detect_task.c`；`battery`、`buzzer` 对象移到 `robot.c`，`buzzer_init` 与启动音移到 startup_task；任务创建失败改为与初始化失败一样停机（原为只记日志）；⑤ 原 `_template` 实为台架验证固件（接了达妙、图传、USB 视觉），改名 **`01_applic/bench/`**、预设 `h723-bench-debug`；新兵种复制 `01_applic/infantry/` | 打开一个兵种目录、读 `robot.c` 一个文件就能看到全部对象、上电顺序和任务表；顶层从 8 个目录减到 6 个，与老模板一一对应 |
+| 0043 | 用户 2026-09-30 决定：① **底盘三种轮组都做，轮腿暂不做**：一个 `01_applic/modules/chassis` 按 `ChassisConfig.type` 选四轮全向轮 / 麦轮 / 舵轮，运动学在 `03_algorithm/kinematics/`（`omni`、`mecanum`、`steer`，共用 `chassis_vel.h`）；② 第一版**底盘直接读遥控**（`robot.c` 把摇杆换算成 `ChassisVel`），`OperatorInput` / `RobotCmd` / command 任务推迟到云台加入时（修订 ADR 0041“与第一个子系统一起做”的时机）；③ 新兵种目录 `01_applic/robots/infantry/`、预设 `h723-infantry-debug`，样板 `_template` 保持不变。实现约定：轮号从左前起逆时针（全向轮 X 形同序）；平移斜坡按合成加速度限幅（分轴限幅会让斜向加速时方向先偏到 45°）；机构停 = 任一电机离线时目标改 0、按斜坡受控减速；全车停时斜坡起点对齐正解出的实测速度；舵轮转向电机须支持力矩指令且角度零点上电即确定（GM6020 的指令按 ADR 0031 ③ 仍待加） | 用户要求各种轮组都有；先让四个轮子转起来并上台架，指令层等有第二个子系统（云台）时再定字段，避免猜 | 阶段 5 |
+| 0044 | 用户 2026-09-30 选第 1 档（队友反映“函数嵌套太多，不如老模板直观”）：**兵种目录一个任务一个文件**，照老模板 `Application/Task/`：`01_applic/robots/<兵种>/<兵种>_control_task.c`（循环体里直接写读输入 → 安全门 → 子系统 → 发送四步，取代 `common/control_task.c` + `robot_control_step()`）、`ins_task.c`、`heartbeat_task.c`（原步兵 `debug.c`，去掉 `DebugView` 指针结构）；`robot.c` 只放对象定义、`robot_init()`、`robot_start()` 和**任务表**（名字、优先级、栈、周期一处列全）；对象声明集中在同目录 `objects.h`，相当于老模板的全局变量（CODING_STANDARD 第 8 节的例外，只限兵种目录内）；新增 `docs/CALL_FLOW.md` 调用关系地图（含老模板结构）。comm_rx、detect 各兵种相同，仍在 `common/`。串口回调去掉 `void *ctx` 的强制转换，直接用对象。第 2 档（去掉函数指针注册、薄包装）暂不做，等队友看过再定 | 打开一个文件就能看到一个任务的完整循环；读代码先查地图再跳转。安全门、发送出口改写、话题都保留（ADR 0026） |
+| 0045 | 用户 2026-09-30 反映 0044 之后“还是太散，结构不清晰”，选**顶层合并**（对照老模板 Core / BSP / Components / Application）：① `subsystems/` 与 `robots/` 合成 **`01_applic/`**，机构（`chassis/`、`ins/`）、各兵种共用（`common/`）、兵种（`infantry/`、`bench/`）平铺在这一层；② `msgs/` 并入 **`04_core/msg/`**，每条消息只剩一个 .h（三个函数改为显式写出的 `static inline`）；③ `05_platform/include/platform/*.h` 拉平为 **`05_platform/*.h`**（`#include "05_platform/can/can.h"` 写法不变）；④ 兵种目录统一为 `config.h`、`robot.h`（合并 `objects.h`、`tasks.h`）、`robot.c`、每个任务一个 `*_task.c`；`robot.c` 里从上往下是对象 → `robot_init()` → **完整任务表**（5 个任务的优先级和栈都在这里，comm_rx、detect 不再各自藏栈）→ `app_main()` → `startup_task()`，原 `common/app_main.c`、`common/robot.h` 删除；公共任务文件统一命名 `comm_rx_task.c`、`detect_task.c`；`battery`、`buzzer` 对象移到 `robot.c`，`buzzer_init` 与启动音移到 startup_task；任务创建失败改为与初始化失败一样停机（原为只记日志）；⑤ 原 `_template` 实为台架验证固件（接了达妙、图传、USB 视觉），改名 **`01_applic/bench/`**、预设 `h723-bench-debug`；新兵种复制 `01_applic/robots/infantry/` | 打开一个兵种目录、读 `robot.c` 一个文件就能看到全部对象、上电顺序和任务表；顶层从 8 个目录减到 6 个，与老模板一一对应 |
 | 0046 | 用户 2026-09-30 要求像 COD_UniCFramework 一样给主要目录加编号：顶层按层次**从上往下**编号 `01_applic` `02_devices` `03_algorithm` `04_core` `05_platform` `06_boards`（`tests/host/` 下的子目录同名同号；`cmake/ docs/ tests/ tools/` 不编号）；**include 带编号**，从仓库根目录写起（`#include "05_platform/can/can.h"`），没有照 UniC 用文件名前缀（`plat_can.h`）加多个 include 目录，原因是 `05_platform/time/time.h` 会与标准库 `<time.h>` 撞名、且看 include 分不出层 | 打开仓库按编号从上往下就是从业务到硬件；依赖只能从编号小的指向编号大的，看 include 一眼能查方向 |
 | 0047 | 用户 2026-09-30 评审（对照老模板）后确认：① 兵种 `config.h` 的可调参数写成显式的 `static const` 配置表（`wheel_config[]` 每轮一行写全 ID、方向、总线、停机动作；`chassis_config` 里直接写 PID），不再用结构体宏套宏，`robot.c` 只使用这些表；② ins 内部函数按用途命名（`calibrate_gyro`、`update_attitude`），任务循环里计算和打印分成两句；③ 安全门里同时包含遥控在线和 IMU 就绪的条件改名 `inputs_ready`。通信回调显式化、电机发送流程集中见 0048 | 调参只改一个文件、每个轮子可单独改方向；名字与实际行为一致 |
 | 0048 | 用户 2026-09-30 评审确认：① **接收显式化**：去掉串口登记表和转发回调（`comm_rx_add_uart`、`CommRxUartHandler`、`on_dbus_bytes` 等），每个兵种一个 `comm_rx_task.c`，任务开头打开接收、循环里直接写“哪个串口 → 哪个解析器”（`uart_read(UART_5) → dr16_on_bytes`）；公共部分（中断唤醒、CAN 分发、打开接收）留在 `01_applic/system/comm_rx_common.c`；CAN 仍按电机反馈 ID 订阅（ID 冲突检查在 `motor_init()`）；`uart_read()` 对没打开的串口返回 0（取代原来 comm_rx 里的 started 标记）；② **电机发送集中**：`motor_group_send()` 写成 确定指令 → 编码 → 发送 → 清理 四步，“最终发什么”只在 `final_output()` 一处判断（停机动作 > 没写指令 > 离线 > 力矩），DJI、达妙编码都按它的结果；行为不变 | 读一个文件就知道串口接的是什么；“为什么电机最后发的是零”只看一个函数。安全门、发送出口改写、话题快照保留 |
 | 0049 | 用户 2026-10-01 评审（批判性改）后：① **CAN 接收显式分派**：去掉 `can_subscribe*()`、`can_dispatch()` 和电机反馈回调，平台层改为全放行标准帧 + `can_read()`（同老模板 bsp_can.c 的全放行），设备层新增 `motor_receive(m, bus, &frame)`，兵种 `comm_rx_task.c` 里直接写 `can_read(CAN_BUS_1) → motor_receive(&wheel_motor[i])`；ID 冲突仍在 `motor_init()` 检查；② `motor_group_flush` 改名 **`motor_group_send`**，`motor.h` 开头写明“收 → 读 → 写 → 发”的生命周期；`motor_set_torque` 不改名（与老模板先写 SendValue、再由 CAN_Task 发送的顺序一致，问题出在发送函数名不像发送）；③ ins.c 先写 `ins_step()` 五步主流程再写各步骤，发布从 `update_attitude()` 移回主流程；④ 任务表改为一张 `task_table[]`（名字、入口、优先级、栈一行写全），逐个创建、失败时打印任务名；⑤ daemon 任务改名 **detect**（同老模板 Detect_Task；FreeRTOS 里 daemon 指定时器服务任务，容易混）；`04_core/watchdog` 保留名字（阶段 1 还要在这里汇总任务心跳喂 IWDG），头文件写明不是硬件看门狗；⑥ 与兵种无关的参数（EKF、加热、超时）不挪进 config.h，位置写进 `01_applic/README.md`“参数在哪里” | 读接收任务就能看到每路 CAN 交给哪个电机；函数名与行为一致 |
-| 0050 | 用户 2026-10-01 提出“05_platform 和 01_applic 太乱”，并定下原则：**一个参数一个定义位置、一个状态一个权威来源、一项职责一个负责模块，同种工作不散乱**。据此：① `05_platform` **按外设分目录**：`can/`、`uart/`…每个目录里是接口 `<外设>.h`、芯片实现 `<外设>_<芯片>.c`、辅助代码（原 `common/`），include 写 `05_platform/can/can.h`；芯片实现里 CubeMX / HAL 头文件一律用尖括号（同目录有同名接口头文件）；② `01_applic/common` → **`01_applic/system`**：上电顺序只有一份 `system/app_main.c`（兵种提供 `robot_init()` 和 `robot_tasks[]`），取代 ADR 0045 里每个兵种各一份；③ 心跳任务照 UniC `app_indicator` 拆成 **`system/indicator_task.c`**（状态灯、蜂鸣器、低电量，从打开外设到周期更新都在这一个文件，电池参数也移到这里）和兵种的 `log_task.c`（只打印），任务 5 → 6 个；④ 两份相同的 `ins_task.c` 合成 `01_applic/ins/ins_task.c`（`Ins *` 经任务参数传入）；CAN bus-off 恢复从 detect 移到 comm_rx（CAN 的负责模块），detect 只报告上线 / 离线；⑤ 安全门改为全车唯一实例 `safety_gate`（`system/safety_gate.c`），indicator、log 直接读，不另存副本；`mode_name` 合成 `safety_gate_mode_name()`；⑥ 参数去重：π 只在 `03_algorithm/math/math_const.h`（原 6 处）；M3508 / C620 换算常数只在 `motor.h`（原 dji_motor.c 与两个 config.h 共 3 处）；轮子所在总线只在 config.h（comm_rx 读每一路 CAN，电机按自己的总线认领） | 改一个参数、查一个状态、找一项工作，都只有一个地方 |
+| 0050 | 用户 2026-10-01 提出“05_platform 和 01_applic 太乱”，并定下原则：**一个参数一个定义位置、一个状态一个权威来源、一项职责一个负责模块，同种工作不散乱**。据此：① `05_platform` **按外设分目录**：`can/`、`uart/`…每个目录里是接口 `<外设>.h`、芯片实现 `<外设>_<芯片>.c`、辅助代码（原 `common/`），include 写 `05_platform/can/can.h`；芯片实现里 CubeMX / HAL 头文件一律用尖括号（同目录有同名接口头文件）；② `01_applic/common` → **`01_applic/system`**：上电顺序只有一份 `system/app_main.c`（兵种提供 `robot_init()` 和 `robot_tasks[]`），取代 ADR 0045 里每个兵种各一份；③ 心跳任务照 UniC `app_indicator` 拆成 **`system/indicator_task.c`**（状态灯、蜂鸣器、低电量，从打开外设到周期更新都在这一个文件，电池参数也移到这里）和兵种的 `log_task.c`（只打印），任务 5 → 6 个；④ 两份相同的 `ins_task.c` 合成 `01_applic/modules/ins/ins_task.c`（`Ins *` 经任务参数传入）；CAN bus-off 恢复从 detect 移到 comm_rx（CAN 的负责模块），detect 只报告上线 / 离线；⑤ 安全门改为全车唯一实例 `safety_gate`（`system/safety_gate.c`），indicator、log 直接读，不另存副本；`mode_name` 合成 `safety_gate_mode_name()`；⑥ 参数去重：π 只在 `03_algorithm/math/math_const.h`（原 6 处）；M3508 / C620 换算常数只在 `motor.h`（原 dji_motor.c 与两个 config.h 共 3 处）；轮子所在总线只在 config.h（comm_rx 读每一路 CAN，电机按自己的总线认领） | 改一个参数、查一个状态、找一项工作，都只有一个地方 |
 | 0051 | 用户 2026-10-01 要求：① 所有任务名加 `_task`（任务表里的名字 `"ins_task"` 等，Ozone FreeRTOS 窗口里显示的就是它；文档统一写 `ins_task`），不是任务的 `system/comm_rx.c` 改名 `comm_rx_common.c`；② 兵种目录里同名文件分不清，文件名都加兵种前缀：`infantry_config.h`、`infantry_robot.{h,c}`、`infantry_control_task.c`、`infantry_comm_rx_task.c`、`infantry_log_task.c`（bench 同理）；③ `01_app` 改名 **`01_applic`**（`tests/host/01_applic` 同） | IDE 标签页、任务窗口里一眼分清是哪个兵种、哪个任务 |
 | 0052 | （已被 0053 取代）用户 2026-10-01 要同时用 Keil，选“只烧录调试”：`06_boards/dm_mc02_h723/mdk/` 放 Keil 工程（Target bench / infantry，J-Link，照 COD-H7-Template 的器件与 Flash 设置），F7 的 Before Build 调 `build_with_cmake.bat` 在 WSL 里 CMake 编译（失败即停），Keil 编译一个占位文件，After Build 用 CMake 的 ELF 覆盖 `.axf`，F8 和调试都用 GCC 的固件；调试信息改为 DWARF 4（`-gdwarf-4`）。Keil 用 AC6 独立编译（scatter、启动文件、文件列表同步）暂不做 | CMake 仍是唯一构建，Keil 和 Ozone、CLion 用同一份固件，不会出现两份行为不同的固件 |
 | 0053 | 用户 2026-10-01 改为“Keil 也能完整编译、可随时切换，并用 CubeMX 生成 Keil 工程”，同时**删除 bench**（台架验证固件，只留步兵）。取代 0052（Keil 只调试、`mdk/` 目录，已被 CubeMX 生成时删掉）：Keil 工程 = CubeMX 按 MDK-ARM 生成的 `MDK-ARM/dm_mc02.uvprojx` + `tools/keil_sync.py`（加入 01–05 层源文件、宏定义和头文件路径取自 CMake 的 compile_commands.json；FreeRTOS 改用 GCC 移植层；链接用 `dm_mc02.sct`，DMA 缓冲区在 0x24000000；AC6、gnu11、-O0；J-Link；`RTT_USE_ASM=0`）。平时打开即可编译，不需要跑脚本；加文件时 CMake 和 Keil 各加一次，`keil_sync.py --check` 在 check.sh / CI 里防漏。CubeMX 平时只按 CMake 生成，重新生成 Keil 工程后必须再按 CMake 生成一次（实测 CubeMX 会删掉另一种工具链的文件）。bench 的达妙、图传、USB 视觉接线代码在提交 `4ee963f` | 习惯 Keil 的队员可以直接在 Keil 里改代码、编译、调试；CubeMX 仍是唯一的外设配置入口 |
+| 0054 | 用户 2026-10-01 认为 01_applic 平铺 14 个目录太多：分三类子目录 **`system/`（共用框架）、`modules/`（机构：chassis、ins、gimbal、shooter、leg、arm）、`robots/`（兵种：infantry、hero、engineer、heavy、wheel_leg，哨兵两块板放 `robots/sentry/gimbal_board`、`chassis_board`）**，取代 0045 的平铺。include 写成 `01_applic/modules/chassis/chassis.h`；预设的 `RM_ROBOT` 是 `robots/` 下的目录（多板写到板子一级）；Keil 分组随之改名（`keil_sync.py`） | 一眼分清共用、机构、兵种；兵种增多时顶层不变 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
@@ -1557,12 +1558,12 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 5 | `Device/Motor.c`（DJI 部分）、`Task/CAN_Task.c` | `02_devices/motor/motor.h`、`motor.c`、`dji_motor`、`motor_group` | 代码完成（2026-09-28），主机测试 21 项；bench 只收反馈、不发指令；上板待 V30–V32 |
 | 6 | `Task/Control_Task.c` | `01_applic/system/safety_gate`、`01_applic/system/control_task`、`01_applic/bench/`（遥控 → 底盘电机转速） | 代码完成（2026-09-28），主机测试 9 项（含新旧 PID 闭环等价）；**固件开始发电机指令**，上板待 V33–V38（台架） |
 | 7 | `BSP/bsp_spi.c`、`bsp_gpio.c`、`bsp_pwm.c`、`Device/Bmi088.c` | `05_platform/…/spi`、`gpio`、`pwm`，`02_devices/imu/bmi088`（含加热恒温） | 代码完成（2026-09-28）：spi、pwm、bmi088、加热（UniC 参数）、`gyro_bias`；gpio 推迟到第 8 步（ADR 0033）；主机测试 15 项；上板待 V5、V6 |
-| 8 | `Algorithm/Quaternion.c`、`Task/INS_Task.c` | `03_algorithm/attitude/quat_ekf`、`01_applic/ins`、`04_core/msg/imu_state` | 代码完成（2026-09-28）：EKF（卡方公式改正、实测 dt）、上电零偏标定、安装旋转、IMU 未就绪全车停；轮询驱动（ADR 0034）；主机测试 16 项；上板待 V7–V9 |
+| 8 | `Algorithm/Quaternion.c`、`Task/INS_Task.c` | `03_algorithm/attitude/quat_ekf`、`01_applic/modules/ins`、`04_core/msg/imu_state` | 代码完成（2026-09-28）：EKF（卡方公式改正、实测 dt）、上电零偏标定、安装旋转、IMU 未就绪全车停；轮询驱动（ADR 0034）；主机测试 16 项；上板待 V7–V9 |
 | 9 | `Device/Motor.c`（达妙部分） | `02_devices/motor/dm_motor`（含 FDCAN2 的 FD 总线） | 代码完成（2026-09-28）：MIT、使能按期望状态对齐、FD 帧、跨品牌 ID 查重（ADR 0035）；样板接一台 DM8009；主机测试 18 项；上板待 V39–V42 |
 | 10 | `Device/Referee_System.c`、`Image_Transmission.c` | `02_devices/referee/referee`（协议 v2.0.0）、`02_devices/remote/vt_link` | 图传完成（2026-09-28）：`ref_frame`（0xA5 帧检查）、`vt_link`（VT13、0x0304），主机测试 11 项，上板待 V13、V14；**裁判系统等官方 V2.0.0 文档**（ADR 0036） |
 | 11 | `Device/MiniPC.c`、USB CDC | `05_platform/…/usb_cdc`、`02_devices/vision/vision_link` | 通道和帧层完成（2026-09-28，ADR 0037）：usb_cdc、byte_ring、vision_frame、vision_link；主机测试 8 项；上板待 V15；**消息字段等视觉组协议** |
 | 12 | `BSP/bsp_adc.c`、`Algorithm/RLS.c`、蜂鸣器 | `05_platform/…/adc`、`02_devices/battery`、`03_algorithm/power/rls`、`02_devices/buzzer` | 代码完成（2026-09-28，ADR 0038）：adc、battery（6S / 21.0 V）、buzzer（启动 / 解锁 / 上锁 / 低电量）、rls（标准公式重写，暂未接入）；主机测试 12 项；上板待 V16–V18 |
-| 13 | （旧工程只有一台电机的速度环） | `03_algorithm/kinematics/{omni,mecanum,steer}`、`01_applic/chassis`、`01_applic/infantry` | 代码完成（2026-09-30，ADR 0043）：三种运动学 + 底盘子系统 + 步兵固件（四轮全向轮）；主机测试 26 项；上板待 V45–V49（车架空） |
+| 13 | （旧工程只有一台电机的速度环） | `03_algorithm/kinematics/{omni,mecanum,steer}`、`01_applic/modules/chassis`、`01_applic/robots/infantry` | 代码完成（2026-09-30，ADR 0043）：三种运动学 + 底盘子系统 + 步兵固件（四轮全向轮）；主机测试 26 项；上板待 V45–V49（车架空） |
 
 ### 风险
 

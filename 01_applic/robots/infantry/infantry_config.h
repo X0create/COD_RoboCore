@@ -13,8 +13,8 @@
 
 #include <stdint.h>
 
-#include "01_applic/chassis/chassis.h"
-#include "01_applic/ins/ins.h"
+#include "01_applic/modules/chassis/chassis.h"
+#include "01_applic/modules/ins/ins.h"
 #include "02_devices/motor/motor.h"
 #include "03_algorithm/math/math_const.h"
 

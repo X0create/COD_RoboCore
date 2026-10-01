@@ -7,7 +7,7 @@
 
 规划中的辅助脚本与配置，例如：
 
-- `new_robot.py`：从 `01_applic/infantry/` 创建新兵种；
+- `new_robot.py`：从 `01_applic/robots/infantry/` 创建新兵种；
 - `keil_sync.py`：CubeMX 重新生成 Keil 工程、或增删源文件后，把 `06_boards/dm_mc02_h723/MDK-ARM/dm_mc02.uvprojx` 整理回可编译本框架的样子；`--check` 只检查（`build/check.sh`、CI 会跑）；
 - `check_deps.py`：检查 `#include` 是否符合分层依赖规则；
 - `check_forbidden.py`：检查禁用的写法；

@@ -4,7 +4,7 @@
  *          infantry_config.h 里换算到国际单位的 PID，在同一个被控对象上闭环，每一步的输出（换回电流原始值）一致，
  *          包括积分限幅和输出限幅起作用的阶段
  */
-#include "01_applic/infantry/infantry_config.h"
+#include "01_applic/robots/infantry/infantry_config.h"
 
 #include "unity.h"
 

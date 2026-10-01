@@ -4,7 +4,7 @@
  *          静止时在线修正航向零偏
  * @note    BMI088 由假 SPI 的寄存器模型提供数据（fake_spi.h）
  */
-#include "01_applic/ins/ins.h"
+#include "01_applic/modules/ins/ins.h"
 
 #include "fake_pwm.h"
 #include "fake_spi.h"

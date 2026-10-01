@@ -6,11 +6,11 @@
  *          3. 任务表 robot_tasks[]：6 个任务的优先级、栈、入口
  *          上电顺序（各兵种相同）在 01_applic/system/app_main.c：app_main() 调用 robot_init()，再按 robot_tasks[] 创建任务。
  *          本目录的任务：infantry_control_task.c、infantry_comm_rx_task.c（接线）、infantry_log_task.c；ins、detect、indicator_task 各兵种相同，
- *          在 01_applic/ins/ 和 01_applic/system/。调用关系总图见 docs/CALL_FLOW.md。
+ *          在 01_applic/modules/ins/ 和 01_applic/system/。调用关系总图见 docs/CALL_FLOW.md。
  */
 #include "infantry_robot.h"
 
-#include "01_applic/ins/ins_task.h"
+#include "01_applic/modules/ins/ins_task.h"
 #include "01_applic/system/app_main.h"
 #include "01_applic/system/comm_rx_common.h"
 #include "01_applic/system/detect_task.h"
@@ -100,7 +100,7 @@ static RmTask ins_task, control_task, detect_task, indicator_task,
 /* clang-format off */
 const AppTask robot_tasks[] = {
     /* 任务             名字              入口                  参数   优先级  栈                                          周期 */
-    { &ins_task,       "ins_task",       ins_task_entry,        &ins,  6u,  ins_stack,       STACK_WORDS(ins_stack)       }, /* 1 ms（01_applic/ins/ins_task.c） */
+    { &ins_task,       "ins_task",       ins_task_entry,        &ins,  6u,  ins_stack,       STACK_WORDS(ins_stack)       }, /* 1 ms（01_applic/modules/ins/ins_task.c） */
     { &comm_rx_task,   "comm_rx_task",   comm_rx_task_entry,    NULL,  5u,  comm_rx_stack,   STACK_WORDS(comm_rx_stack)   }, /* 收到 CAN / 串口就运行（infantry_comm_rx_task.c） */
     { &control_task,   "control_task",   control_task_entry,    NULL,  4u,  control_stack,   STACK_WORDS(control_stack)   }, /* 1 ms（infantry_control_task.c） */
     { &detect_task,    "detect_task",    detect_task_entry,     NULL,  3u,  detect_stack,    STACK_WORDS(detect_stack)    }, /* 10 ms（01_applic/system/detect_task.c） */

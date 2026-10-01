@@ -98,11 +98,13 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 COD_RoboCore/
 ├── 01_applic/                  业务（≈ 老模板 Application/）：机构 + 兵种
 │   ├── system/              各兵种共用：app_main.c（上电顺序）、安全门、indicator（灯 / 蜂鸣器 / 电池）、detect（上线 / 离线）、comm_rx_common.c
-│   ├── chassis/             机构：底盘（全向轮 / 麦轮 / 舵轮）
-│   ├── ins/                 机构：惯性导航（标定、零偏在线修正、EKF、发布姿态）和 1 kHz 的 ins_task
-│   ├── gimbal/ shooter/ leg/ arm/   （规划）云台、发射、轮腿、机械臂
-│   ├── infantry/            兵种：步兵（第一版只有底盘）
-│   └── hero/ engineer/ heavy/ wheel_leg/ sentry_gimbal/ sentry_chassis/   （规划）其他兵种
+│   ├── modules/             机构（各兵种复用）
+│   │   ├── chassis/         底盘（全向轮 / 麦轮 / 舵轮）
+│   │   ├── ins/             惯性导航（标定、零偏在线修正、EKF、发布姿态）和 1 kHz 的 ins_task
+│   │   └── gimbal/ shooter/ leg/ arm/   （规划）云台、发射、轮腿、机械臂
+│   └── robots/              兵种（一台车一个目录）
+│       ├── infantry/        步兵（第一版只有底盘）
+│       └── hero/ engineer/ heavy/ wheel_leg/ sentry/   （规划）其他兵种；哨兵两块板在 sentry/ 下
 │                            每个兵种目录（文件名带兵种前缀）：<兵种>_config.h、<兵种>_robot.h、<兵种>_robot.c（对象 + robot_init + 任务表）、control / comm_rx / log 三个任务
 ├── 02_devices/              具体设备驱动（≈ 老模板 Components/Device）
 │   ├── motor/               统一电机接口、DJI、达妙、电机组发送
@@ -208,7 +210,7 @@ cmake --preset h723-infantry-debug && cmake --build --preset h723-infantry-debug
 
 ## 新建一个兵种
 
-1. 复制 `01_applic/infantry/` 为 `01_applic/<兵种名>/`，把里面文件名的前缀 `infantry_` 和 include 里的文件名改成 `<兵种名>_`；在 `CMakePresets.json` 里照 `h723-infantry-debug` 加一个预设。
+1. 复制 `01_applic/robots/infantry/` 为 `01_applic/<兵种名>/`，把里面文件名的前缀 `infantry_` 和 include 里的文件名改成 `<兵种名>_`；在 `CMakePresets.json` 里照 `h723-infantry-debug` 加一个预设。
 2. 改 `<兵种>_config.h`：PID 参数、解锁用哪个拨杆、IMU 安装方向、电池参数等固定参数。
 3. 改 `<兵种>_robot.c`：`robot_init()` 里初始化设备和机构、任务表 `robot_tasks[]`；`<兵种>_robot.h` 同步声明新增的对象和任务。电机 ID、总线等参数改 `<兵种>_config.h`。
 4. 改 `<兵种>_control_task.c`：每个控制周期做什么（读输入 → 安全门 → 子系统 → 发送，四步写在循环里）。`<兵种>_log_task.c` 改打印内容。

@@ -26,7 +26,7 @@ BOARD = os.path.join(REPO, "06_boards", "dm_mc02_h723")
 MDK = os.path.join(BOARD, "MDK-ARM")
 PROJX = os.path.join(MDK, "dm_mc02.uvprojx")
 OPTX = os.path.join(MDK, "dm_mc02.uvoptx")
-ROBOTS = ["infantry"]
+ROBOTS = ["infantry"]  # 01_applic/robots/ 下的目录名，也是 Keil Target 名
 TEMPLATE_TARGET = "dm_mc02"  # CubeMX 生成的 Target 名
 
 # CMake 编、Keil 不编的文件：GCC 专用（newlib 桩函数、GNU 语法汇编）；Keil 用 MDK-ARM/startup_stm32h723xx.s

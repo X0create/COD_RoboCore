@@ -111,7 +111,7 @@ void gimbal_step(Gimbal *self, ...)
 - **必须**：头文件使用 `#pragma once`，并且能**单独编译**，即自己 include 所需的全部头文件。
 - **必须**：头文件带 `extern "C"` 保护，方便可选的 C++ 模块调用。
 - **应该**：一个模块对应一对 `xxx.c` / `xxx.h`，文件名与模块名一致，全部小写加下划线。
-- **必须**：兵种目录（`01_applic/<兵种>/`）里的文件名都带兵种前缀：`infantry_config.h`、`infantry_robot.c`、`infantry_control_task.c`，
+- **必须**：兵种目录（`01_applic/robots/<兵种>/`）里的文件名都带兵种前缀：`infantry_config.h`、`infantry_robot.c`、`infantry_control_task.c`，
   几个兵种同时打开时分得清（ADR 0051）。
 - **必须**：任务的文件、入口函数、任务名都以 `_task` 结尾：`detect_task.c`、`detect_task_entry`、任务名 `"detect_task"`；
   不是任务的文件不要以 `_task` 结尾（例：接收的公共函数叫 `comm_rx_common.c`，任务本身是 `<兵种>_comm_rx_task.c`）。
@@ -120,7 +120,7 @@ void gimbal_step(Gimbal *self, ...)
   2. C 标准库；
   3. 本项目其他层的头文件；
   4. 第三方库。
-- **必须**：本项目其他层的头文件从仓库根目录写起，**带层的编号**，如 `#include "05_platform/can/can.h"`、`#include "01_applic/chassis/chassis.h"`（ADR 0046）；
+- **必须**：本项目其他层的头文件从仓库根目录写起，**带层的编号**，如 `#include "05_platform/can/can.h"`、`#include "01_applic/modules/chassis/chassis.h"`（ADR 0046）；
   本模块自己的头文件和同目录的头文件只写文件名（如 `#include "chassis.h"`、`#include "<兵种>_robot.h"`）。
 - **必须**：芯片厂商的头文件（CubeMX 生成的 `adc.h`、`spi.h`、`fdcan.h`，HAL、CMSIS）用尖括号 `#include <adc.h>`。
   `05_platform/<外设>/` 里有本模块自己的同名接口头文件，引号会先在当前目录找到它。
@@ -285,7 +285,7 @@ float out = sin(angle_rad) * 0.5;
 
 - **必须**：不调用 `malloc` / `free` / `calloc` / `realloc`。所有对象静态分配，或由调用方提供存储。
 - **必须**：全局变量一律加 `static`，其他文件通过函数访问；全局变量只写常量初值，硬件相关的初始化放在显式的 `xxx_init()` 里。
-  **例外**（ADR 0044）：`01_applic/<兵种>/` 的对象（话题、设备、子系统、安全门）定义在 `<兵种>_robot.c`、声明在同目录 `<兵种>_robot.h`，
+  **例外**（ADR 0044）：`01_applic/robots/<兵种>/` 的对象（话题、设备、子系统、安全门）定义在 `<兵种>_robot.c`、声明在同目录 `<兵种>_robot.h`，
   供本目录一个任务一个文件的 `*_task.c` 直接使用；其他层不得 include `<兵种>_robot.h`。
 - **必须**：不写递归，不用变长数组（VLA）；较大的缓冲区（几百字节以上）不放在栈上。
 - **必须**：DMA 缓冲区用 `RM_DMA_BUF` 声明，BDMA 缓冲区用 `RM_BDMA_BUF` 声明（ADR 0021）。
@@ -335,7 +335,7 @@ Motor *yaw_motor = malloc(sizeof(Motor));
 - **应该**：能用 `static inline` 函数、`enum` 或 `const` 代替的，就不要写宏。
 - 必须写宏时，**必须**给参数和整体都加括号；多条语句**必须**用 `do { … } while (0)` 包起来。
 - **必须**：不写生成代码的宏（X-macro 等），也不用宏拼接函数名。
-- **必须**：兵种和主控的差异放在 `01_applic/<兵种>/<兵种>_config.h` 和 `06_boards/` 里处理；`02_devices/` 和 `01_applic/` 的机构目录里不写 `#ifdef INFANTRY` 这类判断。
+- **必须**：兵种和主控的差异放在 `01_applic/robots/<兵种>/<兵种>_config.h` 和 `06_boards/` 里处理；`02_devices/` 和 `01_applic/` 的机构目录里不写 `#ifdef INFANTRY` 这类判断。
 - **必须**：不用 `#if 0` 保留废弃代码，直接删除，需要时从 Git 历史里找回。
 
 ## 11. 中断与并发
@@ -391,7 +391,7 @@ Motor *yaw_motor = malloc(sizeof(Motor));
 | 位置 | 要求 |
 | --- | --- |
 | `06_boards/<板子>/` | **必须**有 `README.md`（资源分配、接线）和 `REGEN_CHECKLIST.md` |
-| `01_applic/<兵种>/` | **必须**有 `README.md`：电机 ID 和接线、CAN 拓扑（哪两个节点开了终端电阻）、标定步骤 |
+| `01_applic/robots/<兵种>/` | **必须**有 `README.md`：电机 ID 和接线、CAN 拓扑（哪两个节点开了终端电阻）、标定步骤 |
 | `02_devices/` 下的设备驱动 | **应该**有 `README.md`：协议来源和版本、注意事项（如达妙设置零点前必须先失能） |
 | `03_algorithm/`、`04_core/` 下的单个模块 | 头文件注释能说清楚用法的，**可以**不另写 README |
 

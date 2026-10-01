@@ -101,7 +101,7 @@ def architecture():
     s.text(24, 54, "左侧五层只能从上往下调用；右侧模块各层都可以使用。虚线框为规划中、尚无代码。", 12.5, INK2)
 
     layers = [
-        ("01_applic/<兵种>", "兵种", "这台车怎么组装、怎么控制", BLUE,
+        ("01_applic/robots/<兵种>", "兵种", "这台车怎么组装、怎么控制", BLUE,
          ["robot.c：对象 · 任务表", "control · comm_rx · log", "config.h"]),
         ("01_applic 共用", "system + 机构", "各兵种共用的框架和机构", AQUA,
          ["system：上电 · 安全门 · 指示 · 检测", "ins", "底盘", "*云台", "*发射"]),

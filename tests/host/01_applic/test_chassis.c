@@ -4,7 +4,7 @@
  *          目标按斜坡变化、各轮力矩方向符合逆解、输出限幅比例、一个轮子离线时受控减速且不给它写指令；
  *          麦轮按麦轮逆解驱动；舵轮转向电机转向目标朝向、转向电机离线同样受控减速
  */
-#include "01_applic/chassis/chassis.h"
+#include "01_applic/modules/chassis/chassis.h"
 
 #include "03_algorithm/math/math_const.h"
 
