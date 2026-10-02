@@ -528,6 +528,20 @@ git push -u origin main
   首次推送 `main` 全部历史成功。`main` 的上游仍是 `origin/main`。以后用 Git Bash 运行 `build/push.sh`，依次推 `origin` 和 `gitee`
   （`build/` 不进 Git，脚本内容：先查新提交里的敏感词和作者邮箱，再普通推送，不强制）。
 
+## 13. Windows Conda MuJoCo（2026-10-01，单电机闭环已验证）
+
+使用已有 `C:\Develop\Anaconda\envs\mujoco\python.exe`：Python 3.11.17、MuJoCo 3.14.0、64 位。
+无需在 WSL 安装 MuJoCo。仿真 Python 在 Windows 运行，调用的 C 控制库必须是 Windows 64 位 DLL，不能直接加载 WSL `.so`。
+
+仓库根目录运行 `tools/mujoco/run.ps1` 打开单电机演示；加 `-Check` 执行无窗口闭环检查。
+脚本用 CLion 自带的 Windows GCC / CMake / Ninja，独立构建 `build/mujoco-windows/pid_bridge.dll`，
+直接编译原有 PID 和低通滤波源码。不要用 PATH 中 STM32CubeCLT 的 CMake 或 ARM 编译器构建这个 DLL。
+固件和原有主机测试继续在 WSL 构建，预设不变。参数、CSV 与详细用法见 [仿真 README](../tools/mujoco/README.md)。
+
+实测：DLL 编译无警告，6 s 无窗口闭环通过；正转和反转阶段末段最大速度误差分别约 0.0050、0.0051 rad/s；
+全部周期的力矩限幅、关闭后的零力矩检查通过。原有主机测试 34/34、H723 增量构建、Keil 源文件同步检查通过。
+**图形窗口尚未打开验证；模型不代表实车，未验证底盘、电机协议或任何硬件行为。**
+
 ## 常见问题
 
 | 现象 | 原因和处理 |

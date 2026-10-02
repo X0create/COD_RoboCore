@@ -90,6 +90,7 @@
 
 | 日期 | 项目 | COD-H7-Template | 本模板 | 原因 | 验证 |
 | --- | --- | --- | --- | --- | --- |
+| 2026-10-01 | 电脑物理仿真入口 | 无 MuJoCo 入口 | `tools/mujoco/` 独立构建 Windows 64 位 DLL，Conda MuJoCo 直接调用原有 C PID；只有理想单转轴，不改固件任务和参数 | 先验证 C 与仿真的反馈 / 力矩闭环，后续再接底盘 | 编译：DLL 无警告；主机仿真：正反转跟踪、限幅、关闭后零力矩通过；原有 34/34 测试及 H723 构建通过；窗口 / 硬件未验证 |
 | 2026-09-28 | NVIC 代码生成 | 各中断都调用 HAL 处理函数 | 同左（重新启用 FreeRTOS 后 CubeMX 把 18 个中断的 “Call HAL handler” 关掉了，已勾回） | 否则 TIM2 时基、DMA、SPI2 中断函数为空 | 生成：31 / 31 调用 HAL（`REGEN_CHECKLIST.md` 第 1 条） |
 | 2026-09-27 | 构建 | Keil MDK（AC6） | **CMake + Ninja + arm-none-eabi-gcc 15.2.1**；Keil 工程也能编译（2026-10-01，ADR 0053）：CubeMX 生成的 `MDK-ARM/` + `tools/keil_sync.py`，FreeRTOS 用 GCC 移植层（旧工程 Keil 用 RVDS），内存布局用 `dm_mc02.sct` | 一套构建同时出固件和电脑测试（ADR 0019） | 编译：2026-09-28 固件编译通过，0 警告，FLASH 91384 B、DTCM 42400 B（只含 CubeMX 生成代码） |
 | 2026-09-27 | 编译警告 | —— | 手写代码开 `-Wall -Wextra … -Werror`，有警告即失败 | 0 警告要求由编译器保证 | 编译 |
