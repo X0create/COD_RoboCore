@@ -62,13 +62,14 @@ class ChassisViewer:
         glfw.poll_events()
 
     def on_key(self, window, key, _scancode, action, _mods):
-        if action != glfw.PRESS:
+        if action not in (glfw.PRESS, glfw.RELEASE):
             return
         if key == glfw.KEY_ESCAPE:
-            glfw.set_window_should_close(window, True)
+            if action == glfw.PRESS:
+                glfw.set_window_should_close(window, True)
         else:
             # 直接使用 GLFW 键码；Enter 为 KEY_ENTER，不经过 Simulate 的键码转换。
-            self.controls.key(key)
+            self.controls.key(key, pressed=action == glfw.PRESS)
 
     def on_cursor(self, window, xpos, ypos):
         previous_x, previous_y = self.last_cursor
@@ -96,9 +97,9 @@ class ChassisViewer:
         source = "MANUAL" if self.controls.manual else "AUTO"
         status = f"{source} | {mode} | vx {phase.cmd[0]:+.2f}  vy {phase.cmd[1]:+.2f}  wz {phase.cmd[2]:+.2f}"
         help_text = ("Enter: arm / take control     X: zero target\n"
-                     "W/S: forward/back     A/D: left/right     Q/E: turn\n"
+                     "Hold W/S: forward/back     A/D: left/right     Q/E: turn\n"
                      "Space: zero torque     Esc: close\n"
-                     "Commands stay active until changed; X to stop.\n"
+                     "Release movement keys: zero target / brake.\n"
                      "Mouse: left drag to orbit, wheel to zoom")
         mujoco.mjr_overlay(mujoco.mjtFont.mjFONT_NORMAL, mujoco.mjtGridPos.mjGRID_TOPLEFT,
                            viewport, status + "\n" + help_text, "", self.context)

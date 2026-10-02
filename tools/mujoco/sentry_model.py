@@ -21,6 +21,9 @@ class SentrySpec:
     # 0 = 左前 / 右后舵轮；1 = 左后 / 右前舵轮。
     diagonal: int = 0
     roller_count: int = 16
+    roller_radius_m: float = 0.012
+    # 轮地滚动阻力比（无量纲），仿真占位值；MuJoCo 的滚动系数为它乘接触半径，单位 m。
+    rolling_resistance_ratio: float = 0.02
 
     def is_steer(self, wheel):
         return wheel % 2 == self.diagonal
@@ -40,7 +43,9 @@ def build_model(spec, path):
     add(root, "option", integrator="implicitfast", cone="elliptic", iterations="50")
     add(add(root, "visual"), "global", offwidth=SNAPSHOT_SIZE[0], offheight=SNAPSHOT_SIZE[1])
     defaults = add(root, "default")
-    add(defaults, "geom", friction="0.9 0.002 0.0001", condim="3", solref="0.008 1")
+    # condim=6 才启用滚动摩擦；地面滚动系数为 0，由各轮 / 滚子提供自己的接触半径。
+    contact_friction = (0.9, 0.002)  # 滑动系数（无量纲）、扭转摩擦系数（m）。
+    add(defaults, "geom", friction=vec(*contact_friction, 0), condim="6", solref="0.008 1")
     add(defaults, "joint", damping="0.001", armature="0.0001")
     assets = add(root, "asset")
     add(assets, "texture", name="checker", type="2d", builtin="checker", width="256",
@@ -85,10 +90,11 @@ def build_model(spec, path):
         wheel = add(mount, "body", name=f"wheel_{name}")
         add(wheel, "joint", name=f"drive_{name}", type="hinge", axis="0 1 0",
             damping="0.001", armature="0.0005")
-        radius = spec.radius_m if steer else spec.radius_m - 0.012
+        radius = spec.radius_m if steer else spec.radius_m - spec.roller_radius_m
         add(wheel, "geom", type="cylinder", size=vec(radius, 0.021),
             quat="0.707106781 0.707106781 0 0", mass="0.65",
             rgba="1 0.45 0.05 1" if steer else "0.1 0.6 0.95 1",
+            friction=vec(*contact_friction, spec.rolling_resistance_ratio * spec.radius_m),
             contype="2" if steer else "0", conaffinity="1" if steer else "0")
         add(wheel, "geom", type="box", pos=vec(radius * 0.55, 0.024, 0),
             size="0.025 0.004 0.006", mass="0", rgba="1 1 1 1", contype="0", conaffinity="0")
@@ -101,7 +107,10 @@ def build_model(spec, path):
                                   quat=vec(math.cos(angle / 2), 0, math.sin(angle / 2), 0))
                 add(roller_body, "joint", type="hinge", axis="1 0 0", damping="0.00001",
                     armature="0.000001")
-                add(roller_body, "geom", type="ellipsoid", size="0.018 0.012 0.012",
+                add(roller_body, "geom", type="ellipsoid",
+                    size=vec(0.018, spec.roller_radius_m, spec.roller_radius_m),
+                    friction=vec(*contact_friction,
+                                 spec.rolling_resistance_ratio * spec.roller_radius_m),
                     mass="0.015", rgba="0.8 0.84 0.87 1", contype="2", conaffinity="1")
         add(motors, "motor", name=f"drive_motor_{name}", joint=f"drive_{name}", gear="1")
     ET.indent(root, space="  ")

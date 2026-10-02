@@ -102,23 +102,31 @@ class Controls:
         self.cmd = [0.0, 0.0, 0.0]
         self.armed = False
         self.down_steps = 0
+        self.held = set()
 
-    def key(self, key):
-        commands = {ord("W"): (0, 0.5), ord("S"): (0, -0.5),
-                    ord("A"): (1, 0.5), ord("D"): (1, -0.5),
-                    ord("Q"): (2, 0.7), ord("E"): (2, -0.7)}
+    def key(self, key, pressed=True):
+        movement = "WSADQE"
         with self.lock:
-            if key not in commands and key not in (ord("X"), 32, 257, 335):
+            if key in map(ord, movement):
+                if pressed:
+                    self.manual = True
+                    self.held.add(key)
+                else:
+                    self.held.discard(key)
+                active = lambda char: int(ord(char) in self.held)
+                speed_m_s, turn_rad_s = 0.5, 0.7
+                self.cmd = [speed_m_s * (active("W") - active("S")),
+                            speed_m_s * (active("A") - active("D")),
+                            turn_rad_s * (active("Q") - active("E"))]
+                return
+            if not pressed or key not in (ord("X"), 32, 257, 335):
                 return
             self.manual = True
-            if key in commands:
-                axis, value = commands[key]
-                self.cmd[axis] = value
-            elif key == ord("X"):
+            if key in (ord("X"), 32):
+                self.held.clear()
                 self.cmd = [0.0, 0.0, 0.0]
-            elif key == 32:
-                self.cmd = [0.0, 0.0, 0.0]
-                self.armed = False
+                if key == 32:
+                    self.armed = False
             else:
                 # 主线程先提供两个周期的“下”，再“中”，走原来的解锁边沿。
                 self.down_steps = 2
@@ -267,7 +275,8 @@ def main():
 
         controls = Controls()
         print("Auto: forward / left / turn / combined / stop. Keyboard: Enter=arm; "
-              "W/S=forward/back; A/D=left/right; Q/E=turn; X=zero target; Space=stop output.")
+              "hold W/S=forward/back; A/D=left/right; Q/E=turn; "
+              "release=zero target; X=zero target; Space=stop output.")
         with ChassisViewer(sim.model, sim.data, sim.body, controls) as viewer:
             step = 0
             wall_start = time.perf_counter()
