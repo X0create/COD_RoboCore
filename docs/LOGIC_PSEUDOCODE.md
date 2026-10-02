@@ -49,7 +49,7 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `motor/motor.c/.h` | 电机统一接口：收反馈、读快照、写力矩 / 停机动作；单位是输出轴的 rad、rad/s、N·m |
+| `motor/motor.c/.h` | 电机统一接口：收反馈、读快照、写力矩 / 停机动作，查某个 CAN ID 是否被电机占用；单位是输出轴的 rad、rad/s、N·m |
 | `motor/motor_group.c/.h` | 电机组：确定每个电机最终发什么，按控制帧打包发送（第 8 节） |
 | `motor/dji_motor.c/.h` | DJI 电机（M3508 / M2006 / GM6020）协议：反馈解码、控制帧编码 |
 | `motor/dm_motor.c/.h` | 达妙电机 MIT 协议：MIT 帧、使能 / 失能 / 清错命令、反馈解码 |
@@ -61,7 +61,8 @@
 | `vision/vision_link.c/.h` | 上位机链路：从字节流里找出 0x5A 帧（未接线，等视觉组定协议） |
 | `battery/battery.c/.h` | 电池电压换算和低电量判定（带持续时间和回差） |
 | `buzzer/buzzer.c/.h` | 蜂鸣器：按音符序列播放，不阻塞 |
-| `supercap/`、`actuator/`、`board_link/` | 规划中（超级电容、舵机 / 气泵、板间 CAN），只有 README |
+| `board_link/board_link.c/.h` | 板间 CAN 通信：一条消息一个 ID，帧头序号 + 数据年龄，收到后存下、超时离线；编码小工具（未接线，单板车用不到） |
+| `supercap/`、`actuator/` | 规划中（超级电容、舵机 / 气泵），只有 README |
 
 ### 03_algorithm 算法层
 

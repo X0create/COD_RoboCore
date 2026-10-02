@@ -183,6 +183,12 @@ typedef struct Motor
 RM_NODISCARD bool motor_init(Motor *m, const MotorConfig *cfg, MotorGroup *group,
                              const Motor **conflict);
 
+/**
+ * @brief   组内哪个电机在 bus 上占用 id（DJI：反馈 ID、控制帧 ID；达妙：CAN ID、Master ID）
+ * @return  占用它的电机；没有则 NULL。板间消息初始化时查 ID 冲突用（board_link_init）
+ */
+const Motor *motor_group_find_can_id(const MotorGroup *group, CanBusId bus, uint32_t id);
+
 /** 这台电机支持什么（能否力矩控制、力矩反馈是否精确、是否需要使能），按型号查表 */
 MotorCaps motor_caps(const Motor *m);
 

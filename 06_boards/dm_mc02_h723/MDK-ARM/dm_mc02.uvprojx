@@ -831,6 +831,16 @@
           </Files>
         </Group>
         <Group>
+          <GroupName>02_devices/board_link</GroupName>
+          <Files>
+            <File>
+              <FileName>board_link.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\02_devices\board_link\board_link.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
           <GroupName>02_devices/buzzer</GroupName>
           <Files>
             <File>

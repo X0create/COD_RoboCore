@@ -126,6 +126,20 @@ bool motor_init(Motor *m, const MotorConfig *cfg, MotorGroup *group, const Motor
     return true;
 }
 
+const Motor *motor_group_find_can_id(const MotorGroup *group, CanBusId bus, uint32_t id)
+{
+    for (const Motor *m = group->head; m != NULL; m = m->next)
+    {
+        uint32_t ids[2];
+        bus_ids(m->cfg, ids);
+        if (m->cfg->can_bus == bus && (ids[0] == id || ids[1] == id))
+        {
+            return m;
+        }
+    }
+    return NULL;
+}
+
 MotorCaps motor_caps(const Motor *m)
 {
     return is_dm(m->cfg) ? dm_caps() : dji_caps(m->cfg->type);

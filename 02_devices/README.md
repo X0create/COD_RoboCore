@@ -13,7 +13,7 @@
 | `battery/` | 电池电压（ADC），第一版只提示低电量 |
 | `actuator/` | PWM 执行器：舵机（弹舱盖、工程机构）、气泵、电磁阀 |
 | `buzzer/` | 蜂鸣器提示音，与状态灯闪烁码对应 |
-| `board_link/` | 板间 CAN 通信 |
+| `board_link/` | 板间 CAN 通信：一条消息一个 CAN ID，帧头序号 + 数据年龄，编码表规则见其 README |
 
 - 电机驱动只负责输出指令和解析反馈，PID 等闭环放在 app 的机构目录（如 `01_applic/modules/chassis`）。
 - **可以** include：platform 接口、algorithm、core（如 `04_core/watchdog`）。
