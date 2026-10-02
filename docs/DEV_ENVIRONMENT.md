@@ -552,7 +552,18 @@ DJI 编码器计数共享 `dji_motor.h` 的常数，固件解析行为不变。
 `-Diagonal lb_rf` 切换另一个舵轮对角线。
 模型尺寸 / 质量与转向 PID 为占位值，未取得实车 CAD；虚拟电调统一使用 M3508，不决定实车转向型号 / 零点。
 车架局部速度要用 `mjOBJ_XBODY`；`mjOBJ_BODY` 的惯性主轴可能与车架坐标不同，导致速度方向读错。
-**交互窗口键盘和硬件仍待验证；没有模拟 DR16 / INS、CAN 物理时序或电机电气动态。**
+**没有模拟 DR16 / INS、CAN 物理时序或电机电气动态；硬件仍待验证。**
+
+2026-10-01 修正控制窗口：`launch_passive` 的 key_callback 不会消耗内置快捷键，W / X / D
+同时触发线框 / 纹理 / 静态物体显示，用户反馈白屏与地板消失。底盘改用 `chassis_viewer.py`，
+以已有 GLFW 包直接分派键盘、渲染 MuJoCo 场景和操作提示，原有物理循环与 C 控制不变。
+`check_viewer.py` 在隐藏窗口通过原生 Windows 键消息验证 Enter / WASDQE / X / 空格 / Esc，
+车 / 地板像素与显示标志不变，W 前进 / X 减速 / D 横移通过；截图已检查。
+前台实体键盘与鼠标待用户复核。已构建 DLL 后，在仓库根目录执行：
+
+```powershell
+& 'C:\Develop\Anaconda\envs\mujoco\python.exe' -B tools/mujoco/check_viewer.py
+```
 
 ## 常见问题
 

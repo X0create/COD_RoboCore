@@ -263,27 +263,24 @@ def main():
         for step in range(total_steps):
             rows.append(sim.step(step, phase_at(step * controller.dt_s, phases), controller))
     else:
-        from mujoco import viewer as mujoco_viewer
+        from chassis_viewer import ChassisViewer
 
         controls = Controls()
         print("Auto: forward / left / turn / combined / stop. Keyboard: Enter=arm; "
               "W/S=forward/back; A/D=left/right; Q/E=turn; X=zero target; Space=stop output.")
-        with mujoco_viewer.launch_passive(sim.model, sim.data, key_callback=controls.key) as viewer:
-            with viewer.lock():
-                viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
-                viewer.cam.trackbodyid = sim.body
-                viewer.cam.distance = 2.0
-                viewer.cam.azimuth = 135
-                viewer.cam.elevation = -45
+        with ChassisViewer(sim.model, sim.data, sim.body, controls) as viewer:
             step = 0
             wall_start = time.perf_counter()
             render_steps = 16
             while viewer.is_running():
+                viewer.poll()
+                if not viewer.is_running():
+                    break
                 for _ in range(render_steps):
                     phase = controls.phase(phase_at(step * controller.dt_s, phases))
                     rows.append(sim.step(step, phase, controller))
                     step += 1
-                viewer.sync()
+                viewer.render(phase, ("Init", "Safe", "Manual")[controller.output.mode])
                 remaining = wall_start + step * controller.dt_s - time.perf_counter()
                 if remaining > 0:
                     time.sleep(remaining)

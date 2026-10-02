@@ -2,7 +2,7 @@
 
 已有：
 
-- `mujoco/`：Windows Conda MuJoCo 27 哨兵半舵半全向底盘，复用现有 C 底盘 / 电机 / 安全门；双击 `mujoco/run.cmd`，检查用 `run.cmd -Check`，单电机入口用 `-Demo SingleMotor`，见其 README。
+- `mujoco/`：Windows Conda MuJoCo 27 哨兵半舵半全向底盘，复用现有 C 底盘 / 电机 / 安全门；专用控制窗口避免显示快捷键冲突。双击 `mujoco/run.cmd`，检查用 `run.cmd -Check`，单电机入口用 `-Demo SingleMotor`，见其 README。
 - `gen_readme_diagrams.py`：生成 README 里的结构图（`docs/images/*.svg`）。改图改这个脚本再运行，不要手改 SVG。
 - `heater_model.py`：用上板数据（`docs/data/heater_2026-09-30.csv`）拟合 IMU 加热的热模型，并在模型上比较加热参数（ADR 0042）。
 
