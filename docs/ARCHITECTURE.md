@@ -215,7 +215,7 @@ COD_RoboCore/
 ├── tools/                       # new_robot.py check_forbidden.py check_deps.py check_linked.py vofa 配置 Ozone 工程模板（check_keil_sync.py 在 ADR 0019 之后加）
 │   └── mujoco/                  # Windows Conda 半舵半全向整车仿真；独立 DLL，调用原有 C 控制与最终发送出口
 ├── docs/
-│   ├── ARCHITECTURE.md（本文）  CODING_STANDARD.md  DEV_ENVIRONMENT.md
+│   ├── ARCHITECTURE.md（本文）  CODING_STANDARD.md  DEV_ENVIRONMENT.md  CONTRIBUTING.md
 │   ├── CHANGES_FROM_COD_H7_TEMPLATE.md  VERIFICATION_TODO.md  conventions.md  budget.md
 │   └── adr/                     # 决策记录，每个决策一个文件
 ├── .github/workflows/ci.yml
