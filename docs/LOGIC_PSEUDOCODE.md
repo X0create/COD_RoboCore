@@ -1,8 +1,147 @@
 # 中文逻辑伪代码
 
-更新时间：2026-10-01。用中文把整个固件“从上电到发电机指令”的逻辑写一遍，**只讲做什么，不讲 C 语法**。
+更新时间：2026-10-02。用中文把整个固件“从上电到发电机指令”的逻辑写一遍，**只讲做什么，不讲 C 语法**。
 每一段后面的 `→ 文件:函数` 是对应的真实代码，在 IDE 里打开后用“跳到定义 / 查找用法”继续看细节（见 `docs/CALL_FLOW.md`）。
 伪代码与代码不一致时以代码为准，并更新本文。
+
+先看“分层与文件”知道每样东西放在哪，再从第 0 节开始按运行顺序读逻辑。
+
+---
+
+## 分层与文件
+
+### 六层：谁调用谁
+
+```
+01_applic    应用层：这台车做什么（任务、安全门、底盘、姿态）            ≈ 老模板 Application/
+    ↓ 只能往下调用
+02_devices   设备层：每个外部设备的协议（电机、IMU、遥控……），换算成国际单位  ≈ Components/Device
+03_algorithm 算法层：纯计算（PID、滤波、EKF、运动学），不碰硬件和 RTOS    ≈ Components/Algorithm、Controller
+04_core      基础层：与设备无关的公共设施（任务创建、在线检测、日志、CRC）
+05_platform  平台层：外设接口（CAN、串口、SPI、PWM……），芯片差异全关在这里  ≈ BSP/
+06_boards    板级：CubeMX 生成的代码、链接脚本，每块板一个目录          ≈ Core/、Drivers/
+```
+
+规则：上层可以调用下层，下层不能调用上层；只有 05_platform 的芯片实现（`*_stm32h7.c`）和 06_boards 可以用 HAL。
+03_algorithm、02_devices 的协议解析、01_applic 的安全门和机构都不碰硬件，能在电脑上测试（`tests/host/`，目录与六层一一对应）。
+标“未接线”的文件已写好、有主机测试，但当前固件还没有调用它。
+
+### 01_applic 应用层
+
+| 文件 | 作用 |
+| --- | --- |
+| `system/app_main.c/.h` | 上电顺序：DWT 计时 → RTT 日志 → `objects_init()` → 按任务表建任务；`startup_task` 允许解锁后删除自己（第 1 节） |
+| `system/safety_gate.c/.h` | 安全门：Init → Safe → Manual，决定这一周期是否全车停（第 6 节） |
+| `config/params.h` | 这台车的全部可调参数：电机表、底盘尺寸与 PID、满杆速度、解锁拨杆、IMU 安装方向 |
+| `config/objects.c/.h` | 这台车的全部对象（遥控、IMU、电机、底盘）和 `objects_init()` |
+| `config/task_table.c` | 任务表：6 个任务的名字、入口、优先级、栈 |
+| `tasks/ins_task.c/.h` | 1 ms：初始化 BMI088，循环调用 `ins_step()`，把事件写进日志（第 4 节） |
+| `tasks/comm_rx_task.c/.h` | 收到数据就运行：打开 CAN、串口接收，把数据交给电机、DR16 解析；CAN bus-off 恢复（第 3 节） |
+| `tasks/control_task.c/.h` | 1 ms：读输入 → 安全门 → 底盘 → 发电机指令（第 5 节） |
+| `tasks/detect_task.c/.h` | 10 ms：打印设备上线 / 离线，只报告不停车（第 9 节） |
+| `tasks/indicator_task.c/.h` | 25 ms：状态灯、蜂鸣器、电池电压与低电量（第 9 节） |
+| `tasks/log_task.c/.h` | 1 s：通过 RTT 打印整车状态（第 9 节） |
+| `modules/chassis/chassis.c/.h` | 底盘：读实测 → 算目标（斜坡、运动学逆解）→ 各轮速度环 PID 出力矩（第 7 节） |
+| `modules/ins/ins.c/.h` | 惯性导航：读 BMI088 → 加热 → 零偏标定 → 安装旋转 → 低通 → EKF → 保存最新姿态，`ins_read()` 读 |
+| `modules/gimbal/`、`shooter/`、`leg/`、`arm/` | 规划中，只有 README |
+
+### 02_devices 设备层
+
+| 文件 | 作用 |
+| --- | --- |
+| `motor/motor.c/.h` | 电机统一接口：收反馈、读快照、写力矩 / 停机动作；单位是输出轴的 rad、rad/s、N·m |
+| `motor/motor_group.c/.h` | 电机组：确定每个电机最终发什么，按控制帧打包发送（第 8 节） |
+| `motor/dji_motor.c/.h` | DJI 电机（M3508 / M2006 / GM6020）协议：反馈解码、控制帧编码 |
+| `motor/dm_motor.c/.h` | 达妙电机 MIT 协议：MIT 帧、使能 / 失能 / 清错命令、反馈解码 |
+| `imu/bmi088.c/.h` | BMI088 驱动：寄存器配置、读加速度 / 陀螺 / 温度；加热 PID → PWM 占空比 |
+| `remote/dr16.c/.h` | DR16 遥控：分帧、校验、解析，保存最新一帧，`dr16_read()` 读（200 ms 没新帧算丢失） |
+| `remote/vt_link.c/.h` | 图传链路：VT13 遥控帧和键鼠帧解析（未接线） |
+| `referee/referee_frame.c/.h` | 裁判系统 0xA5 帧的检查，裁判系统和图传共用（裁判系统本身未接线） |
+| `vision/vision_frame.c/.h` | 与上位机通信的 0x5A 帧：检查与组帧 |
+| `vision/vision_link.c/.h` | 上位机链路：从字节流里找出 0x5A 帧（未接线，等视觉组定协议） |
+| `battery/battery.c/.h` | 电池电压换算和低电量判定（带持续时间和回差） |
+| `buzzer/buzzer.c/.h` | 蜂鸣器：按音符序列播放，不阻塞 |
+| `supercap/`、`actuator/`、`board_link/` | 规划中（超级电容、舵机 / 气泵、板间 CAN），只有 README |
+
+### 03_algorithm 算法层
+
+| 文件 | 作用 |
+| --- | --- |
+| `control/pid.c/.h` | 位置式 / 增量式 PID，不带 dt，有条件积分抗饱和；底盘速度环、IMU 加热在用 |
+| `control/ramp.c/.h` | 斜坡：每次最多变化固定步长；底盘加速度限制在用 |
+| `filter/lpf.c/.h` | 一阶、二阶低通；IMU 加速度低通在用 |
+| `filter/kalman.c/.h` | 线性卡尔曼的五个步骤，EKF 的基础 |
+| `attitude/quat_ekf.c/.h` | 四元数 EKF 姿态解算 |
+| `attitude/gyro_bias.c/.h` | 陀螺零偏标定：静止采样，用标准差判断是否静止 |
+| `kinematics/chassis_vel.h` | 底盘速度类型（vx、vy、wz），各运动学共用 |
+| `kinematics/omni.c/.h` | 四轮全向轮运动学（当前这台车用的） |
+| `kinematics/mecanum.c/.h` | 四轮麦轮运动学 |
+| `kinematics/steer.c/.h` | 四轮舵轮运动学 |
+| `kinematics/half_steer.c/.h` | 半舵半全向（对角两个舵轮 + 两个全向轮）运动学 |
+| `math/matrix.c/.h` | 小矩阵加减乘、转置、求逆，代替 CMSIS-DSP |
+| `math/math_const.h` | π 等数学常数，全仓库只在这里定义 |
+| `power/rls.c/.h` | 带遗忘因子的递推最小二乘，给以后的功率模型辨识用（未接线） |
+| `ballistic/` | 规划中（弹道解算），只有 README |
+
+### 04_core 基础层
+
+| 文件 | 作用 |
+| --- | --- |
+| `os/os.c/.h` | FreeRTOS 的薄封装：静态创建任务、按绝对时刻延时 |
+| `os/critical.h` | 临界区（不含 FreeRTOS 头文件，电脑测试也能编译） |
+| `os/delay.h` | 延时 |
+| `watchdog/watchdog.c/.h` | 软件看门狗：判断设备最近有没有发来数据，并保管它最新的一份数据（不是硬件 IWDG） |
+| `log/log.c/.h` | RTT 日志，E / W / I / D 四级，不支持 `%f` |
+| `log/SEGGER_RTT_Conf.h`、`log/segger_rtt/` | SEGGER RTT 的配置和第三方源码 |
+| `util/crc.c/.h` | 裁判系统协议的 CRC8 / CRC16 |
+| `error/`、`param/` | 规划中（断言与错误码、Flash 参数存储），只有 README |
+
+### 05_platform 平台层
+
+每个外设一个目录：`xxx.h` 是接口，`xxx_stm32h7.c` 是 H723 的实现，其余是与芯片无关、电脑上可测的辅助代码。
+
+| 文件 | 作用 |
+| --- | --- |
+| `can/can.h`、`can_stm32h7.c` | CAN / CAN FD 收发（FDCAN），接收中断把帧放进环形缓冲 |
+| `can/can_rx_ring.c/.h` | CAN 接收环形缓冲：中断写、任务读 |
+| `can/can_dlc.c/.h` | 数据字节数与 DLC 编码互相换算 |
+| `uart/uart.h`、`uart_stm32h7.c` | 串口 DMA 循环接收 + 空闲中断 |
+| `uart/dma_ring.c/.h` | 从 DMA 循环缓冲里取出新字节 |
+| `spi/spi.h`、`spi_stm32h7.c` | SPI 阻塞传输，设备按用途命名（`SPI_DEV_IMU_ACCEL` 等） |
+| `pwm/pwm.h`、`pwm_stm32h7.c` | PWM 输出，通道按用途命名（`PWM_IMU_HEATER` 等），设置占空比和频率 |
+| `adc/adc.h`、`adc_stm32h7.c` | ADC DMA 连续采样，读引脚电压 |
+| `time/time.h`、`time_stm32h7.c` | 全工程唯一的时间基准：上电以来的微秒数（DWT） |
+| `time/cycle_extend.c/.h` | 把会回绕的 32 位周期计数扩展成 64 位 |
+| `status_led/status_led.h`、`status_led_stm32h7.c` | 板载状态灯（MC02 是 SPI6 上的一颗 WS2812） |
+| `status_led/ws2812.c/.h` | WS2812 颜色到 SPI 字节的编码 |
+| `usb_cdc/usb_cdc.h`、`usb_cdc_stm32h7.c` | USB 虚拟串口，与上位机通信的默认通道（未接线） |
+| `usb_cdc/byte_ring.c/.h` | 字节环形缓冲：中断写、任务读 |
+| `stm32h7/dma_buf.h` | 把变量放进 DMA 专用段（不可缓存的 AXI SRAM） |
+| `compiler.h` | 编译器属性（`RM_NODISCARD` 等） |
+| `gpio/`、`flash/`、`iwdg/` | 规划中，只有 README |
+
+### 06_boards 板级
+
+| 文件 | 作用 |
+| --- | --- |
+| `dm_mc02_h723/dm_mc02.ioc` | CubeMX 工程：引脚、时钟、外设配置 |
+| `dm_mc02_h723/Core/`、`USB_DEVICE/`、`Drivers/`、`Middlewares/` | CubeMX 生成的代码和 HAL、FreeRTOS 源码；只在 `USER CODE` 区内改 |
+| `dm_mc02_h723/dm_mc02.ld` | 本项目用的链接脚本：由 CubeMX 的 `STM32H723xG_flash.ld` 复制，多了 DMA 段和检查，重新生成不会覆盖 |
+| `dm_mc02_h723/REGEN_CHECKLIST.md` | 每次在 CubeMX 里重新生成代码后逐条核对 |
+| `dji_c_f407/` | 规划中（大疆 C 板） |
+
+### 仓库里的其他目录
+
+| 目录 | 作用 |
+| --- | --- |
+| `CMakeLists.txt`、`cmake/` | 构建：固件和主机测试的入口、工具链、警告选项、板子选择 |
+| `tests/host/` | 电脑上跑的单元测试（Unity），`fakes/` 是假的 CAN / SPI / PWM / 时钟 / OS |
+| `tests/target/`、`tests/hil/` | 规划中（板上测试、硬件在环），只有 README |
+| `tools/heater_model.py` | IMU 加热热模型：用实测数据拟合，在模型上比较加热参数 |
+| `tools/keil_sync.py` | CubeMX 重新生成或增删源文件后，把 Keil 工程整理回能编译本框架的样子；`--check` 只检查 |
+| `tools/gen_readme_diagrams.py` | 生成 README 里的结构图（`docs/images/*.svg`），改图改脚本，不手改 SVG |
+| `tools/mujoco/` | MuJoCo 仿真：单电机 PID、哨兵半舵半全向底盘 |
+| `docs/` | 架构设计、编码规范、开发环境、与旧工程的差异、调用关系、本文、待上板验证清单 |
 
 ---
 
