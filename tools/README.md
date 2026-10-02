@@ -2,7 +2,7 @@
 
 已有：
 
-- `mujoco/`：Windows Conda MuJoCo 单电机闭环工具，直接调用原有 C PID；运行 `mujoco/run.ps1`，检查用 `-Check`，见其 README。
+- `mujoco/`：Windows Conda MuJoCo 单电机闭环工具，直接调用原有 C PID；双击 `mujoco/run.cmd`，终端检查用 `run.cmd -Check`，见其 README。
 - `gen_readme_diagrams.py`：生成 README 里的结构图（`docs/images/*.svg`）。改图改这个脚本再运行，不要手改 SVG。
 - `heater_model.py`：用上板数据（`docs/data/heater_2026-09-30.csv`）拟合 IMU 加热的热模型，并在模型上比较加热参数（ADR 0042）。
 

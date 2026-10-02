@@ -6,6 +6,11 @@ DLL 直接编译 `03_algorithm/control/pid.c` 和它依赖的 `filter/lpf.c`，�
 
 ## 运行
 
+**在资源管理器里双击 `run.cmd`**，会自动构建 DLL 并打开仿真窗口。
+结束后终端保留，方便查看输出；按任意键关闭终端。
+`.ps1` 是 PowerShell 脚本，双击可能只会打开编辑器；它需要在终端执行。
+`run.cmd` 优先使用 PowerShell 7，没有时使用 Windows PowerShell；只为当前启动进程设置执行策略，不修改系统配置。
+
 在仓库根目录的 PowerShell 执行：
 
 ```powershell
@@ -15,6 +20,8 @@ DLL 直接编译 `03_algorithm/control/pid.c` 和它依赖的 `filter/lpf.c`，�
 # 不打开窗口，执行闭环并检查跟踪误差、力矩限幅、关闭后的零力矩。
 .\tools\mujoco\run.ps1 -Check
 ```
+
+也可以在 CMD 中运行 `tools\mujoco\run.cmd -Check`，它同样执行无窗口检查。
 
 脚本默认使用 `C:\Develop\Anaconda\envs\mujoco\python.exe` 和
 `%LOCALAPPDATA%\Programs\CLion` 自带的 64 位 GCC、CMake、Ninja。

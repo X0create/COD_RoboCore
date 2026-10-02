@@ -533,7 +533,9 @@ git push -u origin main
 使用已有 `C:\Develop\Anaconda\envs\mujoco\python.exe`：Python 3.11.17、MuJoCo 3.14.0、64 位。
 无需在 WSL 安装 MuJoCo。仿真 Python 在 Windows 运行，调用的 C 控制库必须是 Windows 64 位 DLL，不能直接加载 WSL `.so`。
 
-仓库根目录运行 `tools/mujoco/run.ps1` 打开单电机演示；加 `-Check` 执行无窗口闭环检查。
+资源管理器双击 `tools/mujoco/run.cmd` 打开单电机演示；脚本结束后终端保留，按任意键关闭。
+`.ps1` 的双击动作可能是打开编辑器，需要在 PowerShell 执行；`run.cmd` 会自动调用 PowerShell，
+执行策略只作用于这次进程，不修改系统配置。终端运行 `tools/mujoco/run.cmd -Check` 执行无窗口闭环检查。
 脚本用 CLion 自带的 Windows GCC / CMake / Ninja，独立构建 `build/mujoco-windows/pid_bridge.dll`，
 直接编译原有 PID 和低通滤波源码。不要用 PATH 中 STM32CubeCLT 的 CMake 或 ARM 编译器构建这个 DLL。
 固件和原有主机测试继续在 WSL 构建，预设不变。参数、CSV 与详细用法见 [仿真 README](../tools/mujoco/README.md)。
