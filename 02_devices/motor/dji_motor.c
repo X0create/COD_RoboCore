@@ -5,10 +5,9 @@
  */
 #include "dji_motor.h"
 
-#define ENCODER_COUNTS 8192 /* 转子编码器一圈 8192 个计数 */
-#define ENCODER_HALF   4096
-#define RPM_TO_RAD_S   (RM_TWO_PI / 60.0f)
-#define RAD_PER_COUNT  (RM_TWO_PI / (float)ENCODER_COUNTS)
+#define ENCODER_HALF  (DJI_ENCODER_COUNTS / 2)
+#define RPM_TO_RAD_S  (RM_TWO_PI / 60.0f)
+#define RAD_PER_COUNT (RM_TWO_PI / (float)DJI_ENCODER_COUNTS)
 
 /*
  * 每种型号一行常数。力矩常数折算到转子（输出轴常数 ÷ 原装减速比），这样拆掉减速箱时只改 gear_ratio。
@@ -86,7 +85,7 @@ void dji_decode_feedback(const MotorConfig *cfg, DjiMotorState *state, const uin
 {
     /* 反馈帧：[0–1] 编码器 0–8191 | [2–3] 转速 rpm | [4–5] 实际电流原始值 | [6] 温度 °C（转子侧的值） */
     const DjiTypeParams *tp = &type_params[cfg->type];
-    const uint16_t encoder = (uint16_t)be16(&data[0]) % ENCODER_COUNTS;
+    const uint16_t encoder = (uint16_t)be16(&data[0]) % DJI_ENCODER_COUNTS;
     const int16_t rpm = be16(&data[2]);
     const int16_t current_raw = be16(&data[4]);
     const float dir = (float)cfg->direction;
@@ -118,7 +117,7 @@ void dji_decode_feedback(const MotorConfig *cfg, DjiMotorState *state, const uin
         (float)state->turns * RM_TWO_PI
         + (float)((int32_t)encoder - (int32_t)state->zero_encoder) * RAD_PER_COUNT;
     const int32_t signed_count =
-        (encoder >= ENCODER_HALF) ? (int32_t)encoder - ENCODER_COUNTS : encoder;
+        (encoder >= ENCODER_HALF) ? (int32_t)encoder - DJI_ENCODER_COUNTS : encoder;
 
     /* 换算到输出轴国际单位：角度、转速除以减速比，力矩 = 电流 × 转子力矩常数 × 减速比；乘 direction 统一正方向 */
     out->angle_rad = dir * rotor_rad / cfg->gear_ratio;

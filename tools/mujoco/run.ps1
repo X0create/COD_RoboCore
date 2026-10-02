@@ -1,6 +1,11 @@
 param(
     [switch]$Headless,
     [switch]$Check,
+    [ValidateSet('Chassis', 'SingleMotor')]
+    [string]$Demo = 'Chassis',
+    [ValidateSet('lf_rb', 'lb_rf')]
+    [string]$Diagonal = 'lf_rb',
+    [string]$Snapshot = '',
     [string]$PythonExe = 'C:\Develop\Anaconda\envs\mujoco\python.exe',
     [string]$ClionDir = (Join-Path $env:LOCALAPPDATA 'Programs\CLion')
 )
@@ -20,8 +25,13 @@ foreach ($toolPath in @($PythonExe, $cmakeExe, $gccExe, $ninjaExe)) {
     "-DCMAKE_C_COMPILER=$gccExe" "-DCMAKE_MAKE_PROGRAM=$ninjaExe" '-DCMAKE_BUILD_TYPE=Release'
 if ($LASTEXITCODE -ne 0) { throw 'CMake configure failed' }
 & $cmakeExe --build $buildDir
-if ($LASTEXITCODE -ne 0) { throw 'PID DLL build failed' }
-$pythonArgs = @('-B', (Join-Path $PSScriptRoot 'single_motor.py'))
+if ($LASTEXITCODE -ne 0) { throw 'Control DLL build failed' }
+$scriptName = if ($Demo -eq 'Chassis') { 'sentry_chassis.py' } else { 'single_motor.py' }
+$pythonArgs = @('-B', (Join-Path $PSScriptRoot $scriptName))
+if ($Demo -eq 'Chassis') {
+    $pythonArgs += @('--diagonal', $Diagonal)
+    if ($Snapshot) { $pythonArgs += @('--snapshot', $Snapshot) }
+}
 if ($Headless -or $Check) { $pythonArgs += '--headless' }
 if ($Check) { $pythonArgs += '--check' }
 & $PythonExe @pythonArgs

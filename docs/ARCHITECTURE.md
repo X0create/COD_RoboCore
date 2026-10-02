@@ -213,6 +213,7 @@ COD_RoboCore/
 │   ├── hil/                     # USB-CAN 回放与故障注入脚本
 │   └── data/                    # 录制的 IMU / CAN / 裁判数据
 ├── tools/                       # new_robot.py check_forbidden.py check_deps.py check_linked.py vofa 配置 Ozone 工程模板（check_keil_sync.py 在 ADR 0019 之后加）
+│   └── mujoco/                  # Windows Conda 半舵半全向整车仿真；独立 DLL，调用原有 C 控制与最终发送出口
 ├── docs/
 │   ├── ARCHITECTURE.md（本文）  CODING_STANDARD.md  DEV_ENVIRONMENT.md
 │   ├── CHANGES_FROM_COD_H7_TEMPLATE.md  VERIFICATION_TODO.md  conventions.md  budget.md

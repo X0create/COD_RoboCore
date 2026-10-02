@@ -528,21 +528,31 @@ git push -u origin main
   首次推送 `main` 全部历史成功。`main` 的上游仍是 `origin/main`。以后用 Git Bash 运行 `build/push.sh`，依次推 `origin` 和 `gitee`
   （`build/` 不进 Git，脚本内容：先查新提交里的敏感词和作者邮箱，再普通推送，不强制）。
 
-## 13. Windows Conda MuJoCo（2026-10-01，单电机闭环已验证）
+## 13. Windows Conda MuJoCo（2026-10-01，半舵半全向底盘已验证）
 
 使用已有 `C:\Develop\Anaconda\envs\mujoco\python.exe`：Python 3.11.17、MuJoCo 3.14.0、64 位。
 无需在 WSL 安装 MuJoCo。仿真 Python 在 Windows 运行，调用的 C 控制库必须是 Windows 64 位 DLL，不能直接加载 WSL `.so`。
 
-资源管理器双击 `tools/mujoco/run.cmd` 打开单电机演示；脚本结束后终端保留，按任意键关闭。
+资源管理器双击 `tools/mujoco/run.cmd` 打开对角线半舵半全向底盘，默认左前 / 右后舵轮。
+自动演示前进、横移、旋转和组合运动后停止出力，窗口继续保留；关闭窗口后终端按任意键关闭。
 `.ps1` 的双击动作可能是打开编辑器，需要在 PowerShell 执行；`run.cmd` 会自动调用 PowerShell，
 执行策略只作用于这次进程，不修改系统配置。终端运行 `tools/mujoco/run.cmd -Check` 执行无窗口闭环检查。
-脚本用 CLion 自带的 Windows GCC / CMake / Ninja，独立构建 `build/mujoco-windows/pid_bridge.dll`，
-直接编译原有 PID 和低通滤波源码。不要用 PATH 中 STM32CubeCLT 的 CMake 或 ARM 编译器构建这个 DLL。
+脚本用 CLion 自带的 Windows GCC / CMake / Ninja，独立构建 `build/mujoco-windows/chassis_bridge.dll`，
+直接编译原有 chassis、half_steer、PID、安全门、看门狗、DJI 协议和电机发送出口。
+虚拟 CAN 适配层把最终发送电流换算成模型关节力矩；全向轮有自由滚子，车体由接触动力学驱动。
+DJI 编码器计数共享 `dji_motor.h` 的常数，固件解析行为不变。
+不要用 PATH 中 STM32CubeCLT 的 CMake 或 ARM 编译器构建这个 DLL。
 固件和原有主机测试继续在 WSL 构建，预设不变。参数、CSV 与详细用法见 [仿真 README](../tools/mujoco/README.md)。
 
-实测：DLL 编译无警告，6 s 无窗口闭环通过；正转和反转阶段末段最大速度误差分别约 0.0050、0.0051 rad/s；
-全部周期的力矩限幅、关闭后的零力矩检查通过。原有主机测试 34/34、H723 增量构建、Keil 源文件同步检查通过。
-**图形窗口尚未打开验证；模型不代表实车，未验证底盘、电机协议或任何硬件行为。**
+仿真验证：两种舵轮对角线布局的 16 s 无窗口运动检查通过，电机反馈中断、虚拟遥控丢失、
+恢复后不能自行解锁和显式重新解锁检查通过；离屏模型预览已渲染检查。
+原单电机入口保留为 `-Demo SingleMotor`，6 s 回归通过。
+原有主机测试 34/34、H723 增量构建、Keil 源文件同步检查通过，新增 C 文件格式检查通过。
+交互控制：Enter 解锁、WASD 平移、QE 旋转、X 清零目标、空格全车零力矩；按键改变并保持指令。
+`-Diagonal lb_rf` 切换另一个舵轮对角线。
+模型尺寸 / 质量与转向 PID 为占位值，未取得实车 CAD；虚拟电调统一使用 M3508，不决定实车转向型号 / 零点。
+车架局部速度要用 `mjOBJ_XBODY`；`mjOBJ_BODY` 的惯性主轴可能与车架坐标不同，导致速度方向读错。
+**交互窗口键盘和硬件仍待验证；没有模拟 DR16 / INS、CAN 物理时序或电机电气动态。**
 
 ## 常见问题
 

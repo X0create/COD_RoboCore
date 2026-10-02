@@ -1,6 +1,6 @@
 /**
  * @file    dji_motor.h
- * @brief   DJI 电机（M3508 / M2006 / GM6020）的协议细节，只给 02_devices/motor/ 内部用
+ * @brief   DJI 电机（M3508 / M2006 / GM6020）的协议细节，设备内部和虚拟电调适配用
  * @note    子系统不要 include 本文件，只用 motor.h。协议见《架构设计》附录 A.2：
  *          反馈帧 8 字节大端：编码器 0–8191、转速 rpm、电流原始值、温度；控制帧每个电调 2 字节大端 int16。
  */
@@ -10,6 +10,9 @@
 #include <stdint.h>
 
 #include "motor.h"
+
+/** DJI 转子编码器一圈的计数；解码与仿真反馈编码共用这一处定义。 */
+#define DJI_ENCODER_COUNTS 8192
 
 #ifdef __cplusplus
 extern "C"
