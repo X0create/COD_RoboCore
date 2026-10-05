@@ -145,7 +145,8 @@ COD_RoboCore/
 ├── cmake/                   交叉编译工具链、板级编译选项、警告设置
 ├── tools/                   keil_sync.py（整理 Keil 工程）、gen_readme_diagrams.py（生成本页的图）；（规划）依赖检查
 ├── docs/                    架构设计与实施计划、编码规范、开发环境、与旧模板的差异、待验证清单；images/ 放本页的图
-└── CMakePresets.json        两个预设：host-tests（电脑测试）、h723-debug
+├── CMakePresets.json        两个预设：host-tests（电脑测试）、h723-debug；构建目录 build/<系统>/<预设>/
+└── LICENSE                  MIT
 ```
 
 各层目录（platform、core、algorithm……）都有自己的 `README.md`，说明这一层放什么、不放什么。
@@ -179,27 +180,34 @@ COD_RoboCore/
 
 | 工具 | 版本 |
 | --- | --- |
-| 系统 | Windows + WSL 2 + Ubuntu 24.04 |
-| 交叉编译器 | Arm GNU Toolchain 15.2.Rel1（`arm-none-eabi-gcc` 15.2.1） |
-| 构建 | CMake ≥ 3.25、Ninja |
-| 测试 | gcc + Unity（电脑侧），外设用手写的假实现替换 |
+| 系统 | Windows 原生，或 Linux / WSL 2（Ubuntu 24.04） |
+| 交叉编译器 | `arm-none-eabi-gcc`：Arm GNU Toolchain 15.2.Rel1，或 STM32CubeCLT 自带的（已验证 1.22 / GCC 14.3） |
+| 构建 | CMake ≥ 3.25、Ninja（CLion 自带） |
+| 测试 | 电脑上的 gcc（Windows 用 CLion 自带的 MinGW）+ Unity，外设用手写的假实现替换 |
 | 代码格式 | clang-format 18（已启用）；clang-tidy、cppcheck（规划） |
 | 烧录与调试 | SEGGER J-Link + Ozone（烧录、RTT 日志、实时看变量）；CLion（编辑、构建、断点） |
 | 板级配置 | STM32CubeMX 6.18（改完按 `06_boards/dm_mc02_h723/REGEN_CHECKLIST.md` 核对） |
 
-**1. 电脑上跑单元测试**（WSL，仓库根目录）：
+**CLion（推荐，Windows 原生）**：打开仓库根目录 → CLion 自动读取 `CMakePresets.json`，只有两个配置：
+
+| 配置 | 用途 | 怎么用 |
+| --- | --- | --- |
+| `h723-debug` | DM-MC02 固件 | 运行配置选 `COD_RoboCore`，按 **Ctrl+F9** 构建（不要按 ▶，ELF 不能在电脑上运行） |
+| `host-tests` | 电脑侧单元测试 | 运行配置选 `All CTest`，按 ▶ |
+
+工具链用 CLion 默认的 MinGW 即可；交叉编译器由 `cmake/toolchain-arm-gcc.cmake` 自动查找
+（环境变量 `ARM_TOOLCHAIN_BIN` → PATH → `C:/ST/STM32CubeCLT_*` 等默认安装位置），找不到时 CMake 会提示怎么做。
+
+**命令行**（仓库根目录，Windows 和 Linux / WSL 相同）：
 
 ```bash
-cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset host-tests
+cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset host-tests   # 单元测试
+cmake --preset h723-debug && cmake --build --preset h723-debug                               # 固件
 ```
 
-**2. 编译 DM-MC02 固件**（WSL，仓库根目录；`~/tools/arm-gnu-toolchain-*` 下的编译器会被自动找到）：
-
-```bash
-cmake --preset h723-debug && cmake --build --preset h723-debug
-```
-
-输出 `build/h723-debug/COD_RoboCore.elf`，编译必须 0 警告。
+构建目录按系统分开：`build/Windows/<预设>/`、`build/Linux/<预设>/`，同一份代码在 Windows 和 WSL 里轮流编译不会互相弄坏缓存。
+固件是 `build/<系统>/h723-debug/COD_RoboCore.elf`，编译必须 0 警告。
+CMake 报“CMakeCache.txt directory is different”时，删掉对应的 `build/` 子目录（或 CLion 里 **Reset Cache and Reload Project**）再来。
 
 **3. 烧录并看日志**：Ozone 打开这个 ELF → **Download & Reset** → F5 运行 → **View → Terminal** 看 RTT 日志。
 上电后约 2 s 内不要动板子（陀螺零偏标定）。看到 `startup done`、每秒一行 `alive N, mode safe` 就是跑起来了。
@@ -260,8 +268,10 @@ cmake --preset h723-debug && cmake --build --preset h723-debug
 - [basic_framework](https://github.com/HNUYueLuRM/basic_framework)（湖南大学跃鹿战队，MIT）
 - 其他开源项目的思路：taproot（GPL-3.0，只借鉴思路，未使用其代码）、StandardRobot++、RM2024-PowerModule 等
 
-如果复制了 MIT 许可项目的代码，会在对应文件中保留原作者的版权声明。
+从 COD-H7-Template、COD_UniCFramework 移植的代码，原作者的版权声明统一列在 `LICENSE` 末尾。
 
 ## 许可证
 
-待定。
+[MIT](LICENSE)。`06_boards/` 下的 ST HAL、CMSIS、FreeRTOS、USB 库和 `04_core/log/segger_rtt/` 保留各自的许可证（见各目录的 LICENSE）。
+
+本软件按“原样”提供，不保证接上电机、上车后的安全；使用者自行负责台架验证和人身、设备安全。

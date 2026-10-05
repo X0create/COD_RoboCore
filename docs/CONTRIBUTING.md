@@ -27,9 +27,9 @@
 
 ## 1. 第一天：把环境跑通
 
-1. 按 `docs/DEV_ENVIRONMENT.md` 第 1–5 节装好 WSL、交叉编译器和工具，每一步都有验证方法
-   （第 6–8 节是用 COD_UniCFramework 做的基线验证，新队员可以跳过）。
-2. 克隆仓库（地址见第 4.1 节），在 WSL 的仓库根目录依次运行：
+1. 按 `docs/DEV_ENVIRONMENT.md` 开头的“快速路线”装好 CLion 和交叉编译器（Windows 原生，不需要 WSL）；
+   要和 CI 完全一致的 Linux 环境时，再按第 1–5 节搭 WSL（第 6–8 节是用 COD_UniCFramework 做的基线验证，新队员可以跳过）。
+2. 克隆仓库（地址见第 4.1 节），用 CLion 打开后构建 `COD_RoboCore`、运行 `All CTest`；或在仓库根目录依次运行：
 
    ```bash
    cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset host-tests   # 电脑侧单元测试
