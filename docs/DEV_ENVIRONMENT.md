@@ -1,12 +1,42 @@
-# COD RoboCore 开发环境配置（Windows + WSL）
+# COD RoboCore 开发环境配置
 
-更新时间：2026-09-28（原为工作区根目录的 `Configuration Environment.md`，2026-09-28 移入仓库）
-适用：Windows 10/11 电脑，为 COD RoboCore 搭建编译、测试和调试环境。第 6–9 节是用 COD\_UniCFramework 做的基线验证，它的固件可作为“已知正常”的对照固件，排查硬件问题时先烧它。
+更新时间：2026-10-05
+适用：Windows 10/11 电脑，为 COD RoboCore 搭建编译、测试和调试环境。
 
 > 每一步都标了验证状态：**已验证**表示在一台电脑上实际跑过，**待验证**表示还没跑过。
 > 遇到和文档不一样的输出，先不要自己乱改，把完整输出发给懂的人看。
 
-## 0. 为什么要这样搭
+## 快速路线：Windows 原生 + CLion（推荐，已验证 2026-10-05）
+
+只编译、跑测试、烧录调试的话，**不需要 WSL**，装三样东西：
+
+| 软件 | 用途 | 说明 |
+| --- | --- | --- |
+| [CLion](https://www.jetbrains.com/clion/) | 写代码、编译、跑测试 | 自带 CMake、Ninja、MinGW（电脑侧 gcc），不用另装 |
+| 交叉编译器 `arm-none-eabi-gcc` | 编译固件 | 二选一：[STM32CubeCLT](https://www.st.com/en/development-tools/stm32cubeclt.html)（安装时勾选加入 PATH；已验证 1.22.0 / GCC 14.3.1）或 [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) 15.2.Rel1 的 Windows 安装包 |
+| SEGGER J-Link 软件包 + Ozone | 烧录、看 RTT 日志 | 见第 9、10 节 |
+
+步骤：
+
+1. `git clone` 仓库，CLion **File → Open** 选仓库根目录。
+2. **设置 → 构建、执行、部署 → 工具链**：保持默认的 **MinGW**（CLion 自带）在最上面。
+3. CLion 自动读取 `CMakePresets.json`，**设置 → CMake** 里启用 `h723-debug - h723-debug`（固件）和
+   `host-tests - host-tests`（单元测试）两项，删掉 CLion 自己加的 `Debug`。灰色的同名条目是预设原件，不用管。
+4. 编译固件：运行配置选 `COD_RoboCore`，按 **Ctrl+F9**。输出 `build/Windows/h723-debug/COD_RoboCore.elf`。
+   **不要按运行 ▶**：ELF 是单片机程序，电脑上运行不了。
+5. 跑单元测试：运行配置选 `All CTest`，按 **▶**。
+
+交叉编译器由 `cmake/toolchain-arm-gcc.cmake` 按顺序查找：环境变量 `ARM_TOOLCHAIN_BIN`（填 bin 目录）→ PATH →
+`C:/ST/STM32CubeCLT_*`、`C:/Program Files (x86)/Arm GNU Toolchain ...` 等默认安装位置。装在别处又没加 PATH 时，
+CMake 会报“找不到 arm-none-eabi-gcc”，按提示设置 `ARM_TOOLCHAIN_BIN` 后在 CLion 里 **Reset Cache and Reload Project**。
+
+构建目录按系统分开（`build/Windows/<预设>/`、`build/Linux/<预设>/`），同一份代码在 Windows 和 WSL 里轮流编译互不影响。
+看到 `CMakeCache.txt directory ... is different`（例如复制了别人的 `build/` 目录），删掉 `build/` 再 Reset Cache。
+
+格式检查（clang-format 18）和 CI 一致的环境在 Linux 上；只在 Windows 上开发时，提交后看 GitHub 上 CI 的格式检查结果即可。
+下面第 0–8 节是 WSL 路线，需要和 CI 完全一致的环境、或要跑格式检查脚本时再搭。
+
+## 0. 为什么要这样搭（WSL 路线）
 
 - UniC 框架只支持在 **Linux（Ubuntu 24.04）** 下编译和测试。
 - Windows 上用 **WSL**（Windows Subsystem for Linux）运行 Linux。它是 Windows 自带的功能，
@@ -206,8 +236,8 @@ ls ~/tools
 ### 5.4 加入 PATH，设置 `ARM_TOOLCHAIN_BIN`（已验证 2026-09-24）
 
 - `PATH`：系统查找命令的目录清单。加入后可直接输入 `arm-none-eabi-gcc`。
-- `ARM_TOOLCHAIN_BIN`：项目约定的变量，`.vscode/settings.json` 里 clangd 的 `--query-driver`
-  用它找编译器；不设会影响 VS Code 代码跳转和补全，不影响编译。
+- `ARM_TOOLCHAIN_BIN`：项目约定的变量，`cmake/toolchain-arm-gcc.cmake` 优先用它找编译器；
+  不设时会再找 `~/tools/arm-gnu-toolchain-*/bin` 和 PATH。
 - `~/.bashrc`：每次打开终端自动执行的配置脚本。
 
 **会改动：** 备份 `~/.bashrc` 为 `~/.bashrc.bak`，并在 `~/.bashrc` 末尾追加两行。
@@ -336,7 +366,7 @@ time ./tests/run_tests.sh /tmp/COD_UniCFramework-build-host
 | Connection | SWD；首次连接用 1 MHz；Host Interface 选 USB |
 | Program File | `\\wsl.localhost\Ubuntu-24.04\home\<用户名>\work\COD_UniCFramework\build\COD_UniFramework_H7.elf` |
 
-工程文件保存在 WSL 仓库之外（例如 `D:\RoboMaster\Ozone\MC02_H723.jdebug`），否则它会出现在 Git 的未跟踪文件里。
+工程文件保存在仓库之外（例如 `<你的目录>\Ozone\MC02_H723.jdebug`），否则它会出现在 Git 的未跟踪文件里。
 
 ### 手动在 `.jdebug` 的 `OnProjectLoad` 中补两行
 
@@ -400,9 +430,10 @@ RTT 之前，或者板上还是旧程序时，程序跑起来后就会停止。
 
 ## 10. 烧录 COD RoboCore 新模板固件（已验证 2026-09-28）
 
-新模板在 D 盘的仓库里构建（WSL 路径 `/mnt/d/...`），ELF 可以直接用 Windows 路径打开，不用 `\\wsl.localhost`。
+仓库放在 Windows 盘上（WSL 里是 `/mnt/<盘符>/...`），两种构建出的 ELF 都能直接用 Windows 路径打开，不用 `\\wsl.localhost`。
 
-1. WSL 中构建：在仓库根目录 `cmake --preset h723-debug && cmake --build --preset h723-debug`。
+1. 构建：CLion 里 Ctrl+F9，或仓库根目录 `cmake --preset h723-debug && cmake --build --preset h723-debug`。
+   ELF 在 `build/Windows/h723-debug/`（Windows 构建）或 `build/Linux/h723-debug/`（WSL 构建），Ozone 里打开对应的那个。
 2. Ozone 打开 `MC02_H723.jdebug`。2026-09-28 起它的 `OnProjectLoad` 已改为默认打开 COD RoboCore 的 ELF，
    并加了 `Project.AddPathSubstitute ("/mnt/d", "D:");`（ELF 里记的是 `/mnt/d/...`，不加则源码窗口找不到文件）。
    2026-09-29 起根目录 `CMakeLists.txt` 用 `-fdebug-prefix-map` 把调试信息里的 `/mnt/<盘符>/` 直接写成 `<盘符>:/`，
@@ -418,23 +449,15 @@ RTT 之前，或者板上还是旧程序时，程序跑起来后就会停止。
 Console 里在程序跑到 `rm_log_init()` 之前会刷 `RTT: Failed to load RTT control block at address ...`，这是正常的：
 RTT 控制块在运行时才写好。地址应与 ELF 中 `_SEGGER_RTT` 一致（2026-09-28 为 `0x2000322C`）。
 
-## 11. CLion 编译与写代码（CLion 2026.2，已验证 2026-09-28）
+## 11. CLion 编译与写代码（CLion 2026.2，Windows 原生 2026-10-05 已验证命令行等价构建）
 
-前提：WSL 里装好 `g++`、`gdb`（`sudo apt install -y g++ gdb`；项目是纯 C，但 CLion 检查工具链时需要它们）。
+编译和测试的步骤见开头“快速路线”。两个预设在 `CMakePresets.json` 里指定了 CLion 工具链 `MinGW`（CLion 自带，
+新装的 CLion 默认就叫这个名字），打开工程即用 Windows 原生构建，不受全局默认工具链影响。
 
-1. **设置 → 构建、执行、部署 → 工具链**：`+` → **WSL**，环境选 Ubuntu-24.04，其余自动检测
-   （`/usr/bin/cmake`、`/usr/bin/ninja`、`/usr/bin/gcc`、`/usr/bin/g++`、WSL GDB），并移到列表最上面作为默认。
-2. **File → Open** 选仓库根目录 `COD_RoboCore/`。**设置 → CMake** 里启用 `host-tests` 和 `h723-debug`
-   两个来自 `CMakePresets.json` 的配置文件，关掉 CLion 默认的 `Debug`。列表里灰色的同名条目是预设原件，不用管。
-3. **编译固件**：右边运行配置框选 `COD_RoboCore`，左边自动是 `h723-debug`，按 **Ctrl+F9（构建）**。
-   **不要按运行 ▶**：ELF 是单片机程序，电脑上执行会报 `Exec format error`；烧录和调试用 Ozone（第 10 节）。
-4. **跑单元测试**：右边运行配置框选 `All CTest`（左边会自动切到 `host-tests`），按 **运行 ▶**。
-   左边框只列出“当前选中的目标”所在的配置，所以要先选目标再看配置。
-5. **格式化**：CLion 检测到仓库的 `.clang-format` 后会自动启用 ClangFormat，**Ctrl+Alt+L** 即按项目规则格式化。
-   CLion 自带的 clang-format 版本可能与 CI 固定的 18.1.3 不同，提交前以 WSL 里 `clang-format-18` 的检查结果为准。
-
-交叉编译器由 `cmake/toolchain-arm-gcc.cmake` 在 `~/tools/arm-gnu-toolchain-*/bin` 中自动查找，CLion 不需要额外设置环境变量。
-构建目录与命令行共用（`build/host`、`build/h723-debug`）。
+- **想在 CLion 里用 WSL 构建**：设置 → CMake → 选中配置 → 工具链改成自己的 WSL 工具链（需在 WSL 里装好
+  `g++`、`gdb`、`cmake`、`ninja` 和第 5 节的交叉编译器）。构建目录自动变成 `build/Linux/...`，和 Windows 构建互不影响。
+- **格式化**：CLion 检测到仓库的 `.clang-format` 后会自动启用 ClangFormat，**Ctrl+Alt+L** 即按项目规则格式化。
+  CLion 自带的 clang-format 版本可能与 CI 固定的 18.1.3 不同，以 CI 的格式检查为准。
 
 ### 11.1 在 CLion 里烧录和调试（J-Link，2026-09-29 烧录已验证，断点见下）
 
@@ -476,18 +499,14 @@ GDB 服务器路径是 `custom-gdb-server` 的 `executable` 属性，实参是 `
 ### 11.2 CLion 调试配置文件（Segger J-Link）与“烧录没生效”的陷阱（2026-09-30）
 
 **实时监视、RTT 控制台只有“调试配置文件”方式才有**（设置 → 构建、执行、部署 → 调试器 → 调试配置文件 → `+` → Segger J-Link）。
-工程用 WSL 工具链编译，而调试工具都在 Windows 上，所以要这样搭（已跑通连接、断点、实时监视）：
+Windows 原生构建（2026-10-05 起）后，ELF 和源码路径都是 Windows 路径，搭法简化为：
 
-1. 工具链加一个 Windows“系统”工具链（本机名 `STM32CubeCLT`，编译器填 CubeCLT 的 `arm-none-eabi-gcc.exe`，只为通过检测，不参与编译）；
-   WSL 工具链保持默认。
-2. 外部工具 `WSL 构建固件`：`C:\Windows\System32\wsl.exe`，实参
-   `-d Ubuntu-24.04 --cd "$ProjectFileDir$" -- cmake --build --preset h723-debug`（保存在 `.idea/tools/`）。
-3. 自定义构建目标 `COD_RoboCore`：工具链选上面的 Windows 工具链，构建用 `WSL 构建固件`。
-4. Segger J-Link 调试配置文件：GDB 服务器 `JLinkGDBServerCL.exe`、设备 `STM32H723VG`、1000 kHz、调试器 CLion 自带 `gdb.exe`、
-   控制台端口 **19021**（填 2331 会和 GDB 端口冲突）。
-5. 运行配置“自定义构建应用程序”，目标选第 3 步，可执行文件选 ELF；右上角同时选这个配置和 Segger J-Link，点**调试**。
+1. Segger J-Link 调试配置文件：GDB 服务器 `JLinkGDBServerCL.exe`、设备 `STM32H723VG`、1000 kHz、调试器 CLion 自带 `gdb.exe`、
+   工具链选 `MinGW`、控制台端口 **19021**（填 2331 会和 GDB 端口冲突）。
+2. 运行配置选 CMake 目标 `COD_RoboCore`（配置 `h723-debug`），右上角同时选 Segger J-Link，点**调试**。
 
-直接用“CMake 应用程序”配置 + Segger 配置文件不行：CLion 按 WSL 处理，把 `/mnt/d/...` 路径交给 Windows 的 GDB。
+（**待验证**：上面是 Windows 原生构建后的推断做法。2026-09-30 用 WSL 构建时，CMake 应用程序配置会把 `/mnt/d/...`
+路径交给 Windows 的 GDB 而失败，只能用“外部工具调 WSL 构建 + 自定义构建目标”绕开；原生构建不再需要这层绕法，那套配置已删除。）
 
 **陷阱：经 J-Link GDB 服务器“烧录成功”，芯片里其实还是旧程序**（2026-09-30 实测，原因未查清）：
 `load`、`compare-sections` 都显示成功 / `matched`，连 `monitor flash erase` 后重烧也一样，但 CPU 跑的仍是旧固件——
@@ -503,7 +522,7 @@ Keil 工程是 CubeMX 按 MDK-ARM 生成的 `06_boards/dm_mc02_h723/MDK-ARM/dm_m
 打开它 → Target `dm_mc02` → F7 编译（Keil 自己的 AC6）→ F8 烧录 / Ctrl+F5 调试（J-Link）。和 CMake 编的是同一组源文件，两种固件都要上板验证。
 CubeMX 的使用规则见 `06_boards/dm_mc02_h723/README.md`“Keil”一节。
 
-- 本机 Keil：MDK Plus 5.41（Arm Compiler 6.22），装在 `D:\RoboMaster\CODSoftware\Keil`，`Keil.STM32H7xx_DFP` 4.1.3。
+- 已验证的 Keil：MDK Plus 5.41（Arm Compiler 6.22），`Keil.STM32H7xx_DFP` 4.1.3。
 - 命令行编译：`UV4.exe -b dm_mc02.uvprojx -t dm_mc02 -j0 -o log.txt`。
 - 调试信息为 DWARF 4（GCC 15 默认 5，Keil 不一定能读），见 `cmake/board-dm_mc02.cmake`。
 

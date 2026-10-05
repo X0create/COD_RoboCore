@@ -6,7 +6,12 @@ cmake-build-*/
 
 # ---- 编辑器与语言服务器 ----
 .idea/
+.vscode/
 .cache/
+
+# ---- AI 工具的本机技能 / 配置 ----
+.agents/
+.claude/
 *.swp
 *~
 

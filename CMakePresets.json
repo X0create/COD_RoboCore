@@ -10,21 +10,31 @@
       "name": "host-tests",
       "displayName": "电脑侧单元测试（gcc，Debug）",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/host",
+      "binaryDir": "${sourceDir}/build/${hostSystemName}/host-tests",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "RM_HOST_TESTS": "ON"
+      },
+      "vendor": {
+        "jetbrains.com/clion": {
+          "toolchain": "MinGW"
+        }
       }
     },
     {
       "name": "h723-debug",
       "displayName": "DM-MC02 固件（arm-none-eabi-gcc，Debug）",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/h723-debug",
+      "binaryDir": "${sourceDir}/build/${hostSystemName}/h723-debug",
       "toolchainFile": "${sourceDir}/cmake/toolchain-arm-gcc.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "RM_BOARD": "dm_mc02"
+      },
+      "vendor": {
+        "jetbrains.com/clion": {
+          "toolchain": "MinGW"
+        }
       }
     }
   ],

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """把 CubeMX 生成的 Keil 工程整理成可以编译本框架的工程（ADR 0053）。
 
-用法（WSL，仓库根目录；先让 CMake 生成编译清单）：
+用法（Windows 或 Linux / WSL，仓库根目录；先在同一系统里让 CMake 生成编译清单）：
     cmake --preset h723-debug
     python3 tools/keil_sync.py            # 改写 06_boards/dm_mc02_h723/MDK-ARM/dm_mc02.uvprojx / .uvoptx
     python3 tools/keil_sync.py --check    # 只检查工程是否最新（不改文件），不是最新时返回 1
@@ -17,6 +17,7 @@ CubeMX 每次按 MDK-ARM 重新生成都会把工程改回它自己的样子，�
 """
 import json
 import os
+import platform
 import re
 import shlex
 import sys
@@ -48,7 +49,8 @@ def keil_path(abs_path):
 
 def load_robot(robot):
     """返回 (本框架的源文件列表, 宏定义列表, 头文件路径列表)，都来自 CMake 的编译清单"""
-    path = os.path.join(REPO, "build", PRESET, "compile_commands.json")
+    # 构建目录按系统分开：build/<Windows|Linux>/<预设>/（CMakePresets.json 的 ${hostSystemName}）
+    path = os.path.join(REPO, "build", platform.system(), PRESET, "compile_commands.json")
     if not os.path.exists(path):
         sys.exit(f"缺少 {path}：先运行 cmake --preset {PRESET}")
     files, defines, includes = [], [], []
