@@ -53,6 +53,7 @@
 | 顺序 | 文档 | 读它是为了 |
 | --- | --- | --- |
 | 1 | `README.md` | 模板能做什么、各功能验证到哪一步 |
+| 1.5 | `docs/READING_GUIDE.md` | 读源码的顺序和方法：先读哪几个文件、跟着一份数据走一遍 |
 | 2 | `docs/LOGIC_PSEUDOCODE.md` | 用中文伪代码看懂从上电到发电机指令的全过程，每段标了文件和函数 |
 | 3 | `docs/CALL_FLOW.md` | 每个任务的函数调用树，和老模板 COD-H7-Template 的对照 |
 | 4 | `docs/CODING_STANDARD.md` | 动手写代码之前 |
