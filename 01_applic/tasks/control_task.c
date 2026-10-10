@@ -12,17 +12,7 @@
 #include "04_core/os/os.h"
 #include "05_platform/time/time.h"
 
-#define CONTROL_PERIOD_MS 1u
-#define CONTROL_DT_S      ((float)CONTROL_PERIOD_MS * 0.001f)
-
-/* 摇杆 → 目标底盘速度（通道对应见 robot.h）。摇杆向右为正，底盘向左、逆时针为正，所以左右和旋转取反 */
-static ChassisVel chassis_cmd_from_rc(const RcState *rc)
-{
-    const float k = 1.0f / (float)RC_CH_MAX;
-    return (ChassisVel){ .vx_m_s = (float)rc->ch[3] * k * max_vx_m_s,
-                         .vy_m_s = -(float)rc->ch[2] * k * max_vy_m_s,
-                         .wz_rad_s = -(float)rc->ch[0] * k * max_wz_rad_s };
-}
+#define CONTROL_PERIOD_MS 1u /* 和 CHASSIS_PERIOD_S 一致 */
 
 void control_task_entry(void *arg)
 {
@@ -42,14 +32,26 @@ void control_task_entry(void *arg)
         const SafetyDecision gate_out =
             safety_gate_update(&safety_gate, rc_online ? &rc : NULL, imu_ready, now_us);
 
-        /* 3. 底盘：chassis_step 里依次 读电机实测 → 算目标（斜坡、逆解）→ 算输出（每轮速度环），见 chassis.c。
-         *    能动时遥控一定在线（安全门保证），rc 有效；全车停时底盘不读目标、只清积分 */
-        const ChassisVel cmd = gate_out.stop_all ? (ChassisVel){ 0 } : chassis_cmd_from_rc(&rc);
-        chassis_step(&chassis, &cmd, gate_out.stop_all,
-                     safety_gate_output_scale(&safety_gate, now_us), CONTROL_DT_S);
+        /* 3. 底盘（chassis.c）：
+         *    全车停 → chassis_stop：只读实测、清积分，不写电机指令；
+         *    能动   → 摇杆换算成目标速度（满杆速度见 robot.h；摇杆向右为正，底盘向左、逆时针为正，所以左右和旋转取反），
+         *             chassis_step 里依次 读电机实测 → 算目标（斜坡、逆解）→ 算输出（每轮速度环）。
+         *             能动时遥控一定在线（安全门保证），rc 有效 */
+        if (gate_out.stop_all)
+        {
+            chassis_stop(&chassis);
+        }
+        else
+        {
+            const float k = 1.0f / (float)RC_CH_MAX;
+            const ChassisVel cmd = { .vx_m_s = (float)rc.ch[3] * k * max_vx_m_s,
+                                     .vy_m_s = -(float)rc.ch[2] * k * max_vy_m_s,
+                                     .wz_rad_s = -(float)rc.ch[0] * k * max_wz_rad_s };
+            chassis_step(&chassis, &cmd, safety_gate_output_scale(&safety_gate, now_us));
+        }
 
         /* 4. 发送（老模板的 CAN_Task）：全车停时把每个电机改写成它的停机动作，即使上面漏判也不会发出运动指令；
-         *    然后把所有电机的指令打包成 CAN 帧发出去，见 motor_group.c */
+         *    然后把所有电机的指令打包成 CAN 帧发出去，见 motor.c 第 5 节 */
         if (gate_out.stop_all)
         {
             motor_group_apply_stop_all(&motors);

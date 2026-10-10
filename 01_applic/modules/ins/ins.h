@@ -117,10 +117,7 @@ void ins_init(Ins *ins, const InsConfig *cfg);
  */
 RM_NODISCARD bool ins_read(const Ins *ins, ImuState *out);
 
-/** 初始化 BMI088（阻塞约 170 ms，在 ins_task 里调用），失败返回原因，调用者稍后重试 */
-Bmi088Status ins_start(Ins *ins);
-
-/** 每 1 ms 调用一次 @pre ins_start() 已返回 BMI088_OK */
+/** 每 1 ms 调用一次 @pre bmi088_init(&ins->imu) 已返回 BMI088_OK（ins_task 开头调用） */
 InsEvent ins_step(Ins *ins);
 
 #ifdef __cplusplus

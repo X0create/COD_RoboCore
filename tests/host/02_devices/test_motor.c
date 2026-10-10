@@ -1,9 +1,9 @@
 /**
- * @file    test_motor_group.c
- * @brief   motor 与 motor_group 的单元测试：ID 冲突、反馈与离线、打包、零力矩填充、全车停、失能、丢帧计数；
+ * @file    test_motor.c
+ * @brief   motor 的单元测试（编解码见 test_motor_codec.c）：ID 冲突、反馈与离线、打包、零力矩填充、全车停、失能、丢帧计数；
  *          达妙：使能按期望状态对齐、清错只一次、离线清除使能请求、阻尼与失能停机、FD 帧
  */
-#include "02_devices/motor/motor_group.h"
+#include "02_devices/motor/motor.h"
 
 #include <string.h>
 
@@ -122,7 +122,7 @@ static void test_stale_frame_stays_offline(void)
     Motor *m = add(&c);
     CanFrame frame = { .id = 0x201, .len = 8, .stamp_us = rm_time_now_us() };
     fake_time_advance_ms(30u);
-    TEST_ASSERT_TRUE(motor_receive(m, CAN_BUS_1, &frame));
+    TEST_ASSERT_TRUE(motor_group_receive(&group, CAN_BUS_1, &frame));
     MotorFeedback fb;
     TEST_ASSERT_FALSE(motor_read_feedback(m, &fb));
 }

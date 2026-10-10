@@ -559,7 +559,7 @@ git push -u origin main
 脚本用 CLion 自带的 Windows GCC / CMake / Ninja，独立构建 `build/mujoco-windows/chassis_bridge.dll`，
 直接编译原有 chassis、half_steer、PID、安全门、看门狗、DJI 协议和电机发送出口。
 虚拟 CAN 适配层把最终发送电流换算成模型关节力矩；全向轮有自由滚子，车体由接触动力学驱动。
-DJI 编码器计数共享 `dji_motor.h` 的常数，固件解析行为不变。
+DJI 编码器计数共享 `motor.h` 的常数，固件解析行为不变。
 不要用 PATH 中 STM32CubeCLT 的 CMake 或 ARM 编译器构建这个 DLL。
 固件和原有主机测试继续在 WSL 构建，预设不变。参数、CSV 与详细用法见 [仿真 README](../tools/mujoco/README.md)。
 

@@ -8,8 +8,7 @@
 
 #include "01_applic/config/robot.h"
 #include "01_applic/system/safety_gate.h"
-#include "02_devices/motor/dji_motor.h"
-#include "02_devices/motor/motor_group.h"
+#include "02_devices/motor/motor.h"
 #include "sim_platform.h"
 
 static Chassis sim_chassis;
@@ -98,8 +97,8 @@ static void put_be16(uint8_t *out, int16_t value)
     out[1] = (uint8_t)((uint16_t)value & 0xFFu);
 }
 
-/* 与电调反馈一样，从虚拟输出轴换成转子编码器 / rpm，再走原来的 motor_receive。
- * 编码器计数和反馈 ID 复用 dji_motor.h，这里只做虚拟发送方的反向编码。
+/* 与电调反馈一样，从虚拟输出轴换成转子编码器 / rpm，再走原来的 motor_group_receive。
+ * 编码器计数复用 motor.h，反馈 ID 按附录 A.2（M3508 为 0x200 + ID），这里只做虚拟发送方的反向编码。
  * 初始转向角为 0，所以第一次反馈的零位就是模型的向前方向；不是实车零点实现。 */
 static void feed_motor(Motor *motor, float angle_rad, float speed_rad_s, uint64_t now_us)
 {
@@ -112,11 +111,11 @@ static void feed_motor(Motor *motor, float angle_rad, float speed_rad_s, uint64_
     const int16_t encoder = (int16_t)(rotor_rad * ((float)DJI_ENCODER_COUNTS / RM_TWO_PI));
     const int16_t rpm =
         (int16_t)lroundf(speed_rad_s * DJI_M3508_RPM_PER_RAD_S * (float)cfg->direction);
-    CanFrame frame = { .id = dji_feedback_id(cfg), .len = 8u, .stamp_us = now_us };
+    CanFrame frame = { .id = 0x200u + cfg->id, .len = 8u, .stamp_us = now_us };
     put_be16(&frame.data[0], encoder);
     put_be16(&frame.data[2], rpm);
     frame.data[6] = 25u;
-    (void)motor_receive(motor, cfg->can_bus, &frame);
+    (void)motor_group_receive(&sim_motors, cfg->can_bus, &frame);
 }
 
 void chassis_bridge_step(const ChassisBridgeInput *in, ChassisBridgeOutput *out)
@@ -139,12 +138,14 @@ void chassis_bridge_step(const ChassisBridgeInput *in, ChassisBridgeOutput *out)
     const SafetyDecision decision = safety_gate_update(
         &safety_gate, in->rc_online != 0u ? &rc : NULL, in->imu_ready != 0u, in->now_us);
     const ChassisVel cmd = { .vx_m_s = in->cmd[0], .vy_m_s = in->cmd[1], .wz_rad_s = in->cmd[2] };
-    chassis_step(&sim_chassis, &cmd, decision.stop_all,
-                 safety_gate_output_scale(&safety_gate, in->now_us),
-                 (float)control_period_us * 0.000001f);
     if (decision.stop_all)
     {
+        chassis_stop(&sim_chassis);
         motor_group_apply_stop_all(&sim_motors);
+    }
+    else
+    {
+        chassis_step(&sim_chassis, &cmd, safety_gate_output_scale(&safety_gate, in->now_us));
     }
     motor_group_send(&sim_motors);
     for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)

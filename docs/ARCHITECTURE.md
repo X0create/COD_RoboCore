@@ -167,7 +167,7 @@ COD_RoboCore/
 │   │   └── ins/  chassis/  gimbal/  shooter/  leg/  arm/
 │   └── config/                  # 这台车：robot.h（参数 + 对象声明）robot.c（对象 + 初始化 + 任务表）（ADR 0061、0066）
 ├── 02_devices/
-│   ├── motor/                   # motor.h（统一接口）dji_motor dm_motor motor_group
+│   ├── motor/                   # motor.h / motor.c：统一接口、DJI 与达妙编解码、电机组发送（ADR 0069）
 │   ├── imu/                     # bmi088
 │   ├── remote/                  # dr16 vt_link
 │   ├── referee/
@@ -266,7 +266,7 @@ bool can_read(CanBusId bus, CanFrame *out);         // 取一帧中断收下的�
 
 - 中断里只做“收帧 → 放进环形缓冲”，comm\_rx 任务用 `can_read()` 取出后交给设备，不在中断里跑业务。
 - **接收不做硬件过滤，交给谁在 `tasks/comm_rx_task.c` 里显式写出**（ADR 0049，取代原来的“按精确 ID 订阅 + 回调”）：
-  每条总线上只挂本车的设备，FDCAN 也收不到自己发出的帧，全放行多收的只是总线上其他设备的帧，由 `motor_receive()` 按总线和反馈 ID 忽略。
+  每条总线上只挂本车的设备，FDCAN 也收不到自己发出的帧，全放行多收的只是总线上其他设备的帧，由 `motor_group_receive()` 按总线和反馈 ID 忽略。
   ID 冲突在 `motor_init()` 里检查。以后真有不相干的设备挂在同一条总线上、接收负载成问题时，再加硬件滤波
   （H7 的 FDCAN 有范围滤波器；F4 的 bxCAN 只能逐个 ID，两者容量含义不同，UniC `can-range-claim-not-mask`）。
 - **DMA 缓冲区的规则**（细节全部在 `05_platform/stm32h7/` 里）：
@@ -305,7 +305,7 @@ bool imu_ready = ins_read(&ins, &imu);
 
 - **最新值语义**：控制量只关心最新一帧，不用队列，不会积压。
 - **类型明确**：读取函数的参数是具体的模块对象和数据类型，由编译器检查；不用字符串名字，也不用 `void *` 通用接口。这是和 basic\_framework 最大的区别。
-- **线程安全**：`watchdog_feed_data()` / `watchdog_read_data()` 在临界区里拷贝数据和时间戳（数据 ≤ 256 字节），调用方不用自己加锁；只能在任务里调用，中断里禁止。
+- **线程安全**：写的一方在临界区里存数据并 `watchdog_feed()`，读的一方在临界区里拷数据并 `watchdog_is_online()`（ADR 0069，每个模块自己写这几行，不用 `void *` 通用函数）；只能在任务里调用，中断里禁止。
 - **带时间戳**：每次写入记录 64 位微秒时间；超时时限由产生数据的模块定（遥控 200 ms、IMU 20 ms），写在它的头文件里，读取函数超时就返回 false，读取方走安全门。
 - **只有一个写入者**：数据是模块对象的成员，只有这个模块的 `.c` 写它，不需要运行时“认领”。
 - **事件**（按键单击、UI 刷新）另用 `event_queue`，定长，满了丢新事件并计数；急停、解锁这类不能丢的信号作为状态保存，不走事件队列。
@@ -313,8 +313,8 @@ bool imu_ready = ins_read(&ins, &imu);
 ### 3. 看门狗（在线检测 + 最新数据）
 
 每个设备（以及 ins 这类产生数据的模块）结构体里有一个 `Watchdog`：**收到一帧合法数据**（校验通过、字段在有效范围内）才喂狗，
-喂的是这帧数据的**接收时刻**（`rm_time_now_us()` 的时间）：CAN 用中断里记下的 `CanFrame.stamp_us`，串口用读出这段字节的时刻。任务被耽误、帧积压时，旧帧按真正的年龄判断，不会被当成刚收到的数据。有数据要给别的任务读的，用 `watchdog_feed_data(wd, &slot, &new, size, rx_us)` 把数据和时刻在同一个临界区里写进去；
-读取函数 `dr16_read()`、`ins_read()`、`motor_read_feedback()` 内部都是 `watchdog_read_data()`。
+喂的是这帧数据的**接收时刻**（`rm_time_now_us()` 的时间）：CAN 用中断里记下的 `CanFrame.stamp_us`，串口用读出这段字节的时刻。任务被耽误、帧积压时，旧帧按真正的年龄判断，不会被当成刚收到的数据。有数据要给别的任务读的，在同一个临界区里先存数据、再 `watchdog_feed(wd, rx_us)`；
+读取函数 `dr16_read()`、`ins_read()`、`motor_read_feedback()` 都是在临界区里拷数据、再 `watchdog_is_online()`，两者对得上（ADR 0069）。
 
 **一个设备的在线状态只有这一个来源（ADR 0059）。** 控制用的 `xxx_read()` 和 detect_task 的上线 / 离线日志读的是同一个时间戳、同一个超时、
 同一条边界（现在 − 最后喂狗 ≤ 超时算在线），不会出现“日志说离线、控制仍认为在线”。
@@ -323,9 +323,18 @@ bool imu_ready = ins_read(&ins, &imu);
 如果等 100 Hz 的 detect_task 去标记离线，最坏还要再多 10 ms。detect_task 只负责**报告**：在 RTT 打上线 / 离线日志（以后驱动 LED 或蜂鸣器）。
 
 ```c
-watchdog_register(&self->wd, "dr16", DR16_TIMEOUT_MS);          // xxx_init() 里登记：名字和超时
-watchdog_feed_data(&self->wd, &self->rc, &state, sizeof(state), now_us);   // 收到合法帧，now_us = 读出这段字节的时刻
-return watchdog_read_data(&self->wd, &self->rc, out, sizeof(*out)); // dr16_read()
+watchdog_register(&self->wd, "dr16", DR16_TIMEOUT_MS);   // xxx_init() 里登记：名字和超时
+
+rm_critical_enter();                                     // 收到合法帧（dr16_on_bytes）
+self->rc = state;
+watchdog_feed(&self->wd, now_us);                        // now_us = 读出这段字节的时刻
+rm_critical_exit();
+
+rm_critical_enter();                                     // dr16_read()
+*out = self->rc;
+const bool online = watchdog_is_online(&self->wd);
+rm_critical_exit();
+return online;
 ```
 
 - 喂狗和判断都读 `rm_time_now_us()` 这一个 64 位时钟，不会出现 UniC 那种“两个时钟起点不同”的问题（`two-clocks-watchdog-bug`），所以不另设“时钟错误”检查（ADR 0026）。
@@ -379,12 +388,6 @@ typedef struct {                // 一份完整快照：所有字段来自同一
     uint64_t stamp_us;          // 收到这帧的时间
 } MotorFeedback;
 
-typedef struct {                // 这种型号支持什么，由 motor.c 按型号给出
-    bool torque_command;        // 能否按力矩下指令（GM6020 电压模式：否）
-    bool torque_feedback_exact; // 反馈力矩是否可信
-    bool needs_enable;          // 是否需要使能帧（达妙：是）
-} MotorCaps;
-
 typedef enum { MOTOR_M3508, MOTOR_M2006, MOTOR_GM6020, MOTOR_DM } MotorType;  // 达妙各型号（DM4310、DM8009…）共用 MOTOR_DM，差异在配置里
 typedef enum { STOP_ACTION_ZERO_TORQUE, STOP_ACTION_DAMP, STOP_ACTION_DISABLE } StopAction;
 
@@ -410,7 +413,6 @@ typedef struct {
 } Motor;
 
 bool      motor_init(Motor *m, const MotorConfig *cfg);           // 两阶段初始化的第二阶段
-MotorCaps motor_caps(const Motor *m);
 bool      motor_supports_torque(const Motor *m);                 // 子系统在 xxx_init() 里检查
 RM_NODISCARD bool motor_read_feedback(const Motor *m, MotorFeedback *out);  // 临界区内拷贝完整快照；离线返回 false
 void      motor_set_torque(Motor *m, float torque_nm);               // @pre 已在 init 时确认支持力矩指令；只写槽位
@@ -433,23 +435,17 @@ if (!motor_init(&yaw_motor, &yaw_config)) { return false; }
 
 `const` 对象适合存参数；要作为文件作用域数组长度的数值（如电机个数）必须用宏或枚举常量，C11 里 `const` 变量不能当数组长度。
 
-`motor.c` 按 `type` 用 `switch` 分派到 `dji_motor.c` / `dm_motor.c`。**品牌分支只出现在 `02_devices/motor/` 内部**：云台、底盘、发射只调用 `motor_xxx()`，不判断接的是 DJI 还是达妙；否则每个子系统各写一套 `switch`，统一接口就没有意义了。品牌独有的功能（`dm_motor_set_mit()`、`gm6020_set_voltage()`）是唯一例外，只在确实需要该能力的子系统里调用。
+DJI 和达妙的编解码都写在 `motor.c` 里（ADR 0069），按 `type` 区分。**品牌分支只出现在 `motor.c` 内部**：云台、底盘、发射只调用 `motor_xxx()`，不判断接的是 DJI 还是达妙；否则每个子系统各写一套 `switch`，统一接口就没有意义了。品牌独有的功能（`dm_motor_set_mit()`、`gm6020_set_voltage()`）是唯一例外，只在确实需要该能力的子系统里调用。
 
 ```c
-// 02_devices/motor/motor.c —— 全工程唯一按品牌分支的地方
-void motor_set_torque(Motor *m, float torque_nm)
+// 02_devices/motor/motor.c —— 全工程唯一按品牌分支的地方（motor_group_receive 里的解码）
+if (m->cfg->type == MOTOR_DM)
 {
-    switch (m->type)
-    {
-        case MOTOR_M3508:
-        case MOTOR_M2006:
-        case MOTOR_GM6020:
-            dji_motor_set_torque(m, torque_nm);
-            break;
-        case MOTOR_DM:
-            dm_motor_set_torque(m, torque_nm);
-            break;
-    }
+    dm_decode(m->cfg, frame->data, &fb);
+}
+else
+{
+    dji_decode(m->cfg, &m->brand.dji, frame->data, &fb);
 }
 ```
 
@@ -472,15 +468,15 @@ motor_set_torque(self->yaw_motor, torque_nm);
 达妙 MIT 模式自带位置 / 速度反馈（Kp、Kd）。用 MIT 时必须在子系统注释里写明分工，例如“主控做角度环，驱动器只用 Kd 做阻尼”或“Kp = Kd = 0，纯力矩模式”；不能因为统一接口方便就把实际控制方式藏起来。
 
 - **不返回指针，只拷贝快照。** 反馈由 comm\_rx 任务写、control_task 读，直接读 `m->fb` 可能读到“角度是新帧、速度是旧帧”。`motor_read_feedback()` 在临界区里一次拷贝整个结构体，在线标志、错误码、时间戳也在里面，不单独读。`volatile` 不能代替这种同步。
-- **力矩是能力，不是默认。** M3508 / M2006 的力矩是由电流估算的（`torque_is_estimate = true`）；GM6020 用电压模式时没有力矩指令，用专门的 `gm6020_set_voltage()`。子系统在 `xxx_init()` 里检查 `motor_caps()`，不满足就 `RM_ASSERT`。
+- **力矩是能力，不是默认。** M3508 / M2006 的力矩是由电流估算的（`torque_is_estimate = true`）；GM6020 用电压模式时没有力矩指令，用专门的 `gm6020_set_voltage()`。子系统在 `xxx_init()` 里检查 `motor_supports_torque()`，不满足就初始化失败。
 - **使能不自动发生。** 电机离线后重新上线，设备层只报告“恢复”；清错、使能只在解锁状态下由所属子系统请求。
 
 **多圈角度和零点。** 设备内部用 `int32_t` 记转子圈数，每次输出时才换算成 `float`，不会因为 float 累加丢精度；圈数在比赛时长内不会溢出。直驱电机（GM6020）和反馈输出轴位置的电机（达妙，以型号手册为准）编码器就是输出轴绝对位置，零点来自 Flash 参数；带减速箱的电机（M3508、M2006）上电位置未知，`angle_rad` 以上电位置为 0，需要绝对位置的机构（如轮腿关节）上电后执行限位归零。
 
 | 实现 | 说明 |
 | --- | --- |
-| `dji_motor.c` | 型号 M3508 / M2006 / GM6020 各有一行常量参数：减速比、力矩常数、原始值量程。同一帧的 4 个电机由 `motor_group` 打包发送，避免手写字节序和帧 ID。控制帧与反馈 ID 的完整对照见附录 A.2 |
-| `dm_motor.c` | 达妙电机，MIT 模式（2026-09-28 按 ADR 0035 只做 MIT；位置速度、速度模式和设零点有人用再加）；使能、失能、清错命令封装好。**不按型号分类型**：DM4310、DM8009（COD-H7-Template 实际使用）等都是 `MOTOR_DM`，型号差异由 `MotorConfig` 里的 `P_MAX / V_MAX / T_MAX` 和减速比体现（ADR 0027）。瓴控、小米等其他品牌等实际用到时再加 |
+| `motor.c` 的 DJI 部分 | 型号 M3508 / M2006 / GM6020 各有一行常量参数：减速比、力矩常数、原始值量程。同一帧的 4 个电机由 `motor_group_send()` 打包发送，避免手写字节序和帧 ID。控制帧与反馈 ID 的完整对照见附录 A.2 |
+| `motor.c` 的达妙部分 | 达妙电机，MIT 模式（2026-09-28 按 ADR 0035 只做 MIT；位置速度、速度模式和设零点有人用再加）；使能、失能、清错命令封装好。**不按型号分类型**：DM4310、DM8009（COD-H7-Template 实际使用）等都是 `MOTOR_DM`，型号差异由 `MotorConfig` 里的 `P_MAX / V_MAX / T_MAX` 和减速比体现（ADR 0027）。瓴控、小米等其他品牌等实际用到时再加 |
 
 **DJI 电机的 ID 冲突在初始化时拒绝。** GM6020 的反馈 ID 是 `0x204 + id`，M3508/M2006 的反馈 ID 是 `0x200 + id`：同一路 CAN 上，GM6020 的 1–4 号和 M3508/M2006 的 5–8 号反馈 ID 相同。控制帧也有共用：`0x1FF` 同时承载 C6x0 的 5–8 号和 GM6020 电压模式的 1–4 号。
 
@@ -492,7 +488,7 @@ motor_set_torque(self->yaw_motor, torque_nm);
 2. 设置零点前必须先失能。
 3. 反馈帧第一个字节的低 4 位是 ID、高 4 位是状态码（`0x8` 过压 … `0xD` 通信丢失 … `0xE` 过载，见附录 A.3）。因此 CAN ID 大于 `0x0F` 时，状态位解析不可靠。状态码映射为 `MotorFeedback.error_code`，非 0 时所属机构执行“机构停”。
 
-特有能力用专门的函数提供：`dm_motor_set_mit()`（达妙 MIT 的 Kp/Kd）、`gm6020_set_voltage()`（6020 电压模式），子系统需要时直接调用。力矩指令是否可用、力矩反馈是否可信，看 `motor_caps()`，不假设所有电机都一样。
+特有能力用专门的函数提供：`dm_motor_set_mit()`（达妙 MIT 的 Kp/Kd）、`gm6020_set_voltage()`（6020 电压模式），子系统需要时直接调用。力矩指令是否可用看 `motor_supports_torque()`，不假设所有电机都一样。
 
 ### 其他设备
 
@@ -758,7 +754,7 @@ bool gimbal_read_state(const Gimbal *self, GimbalState *out);
 
 | 操作 | 任务中 | RTOS 管理的中断 | 高于 RTOS 的中断 | 实现 |
 | --- | --- | --- | --- | --- |
-| `watchdog_feed_data()` / `xxx_read()` | 可以 | 禁止 | 禁止 | 任务临界区内拷贝数据和时间戳 |
+| `watchdog_feed()` / `xxx_read()` | 可以 | 禁止 | 禁止 | 任务临界区内拷贝数据和时间戳 |
 | `event_queue_push()` | 可以 | `event_queue_push_from_isr()` | 禁止 | 任务版用任务临界区，ISR 版用 ISR 临界区 |
 | `event_queue_pop()` | 可以 | 禁止 | 禁止 | 任务临界区 |
 | `spsc_ring_push()` | —— | 可以 | 可以 | 无锁：只有一个生产者写 head、一个消费者写 tail |
@@ -1334,6 +1330,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0066 | 用户 2026-10-10 反映“拆得太多，改一个地方跳很多地方”（加一个电机要改 6 个文件），四项全选：① `01_applic/config/` 四个文件合成两个：`robot.h`（参数表 + 对象声明）、`robot.c`（对象定义 + `robot_init()` + `task_table[]`），`objects_init` 改名 `robot_init`，取代 ADR 0061 的 params/objects/task_table 拆分；② 6 个任务头文件合成 `tasks/tasks.h`，取代 ADR 0059 的“每个任务一对 .h/.c”（.c 仍一个任务一个）；③ 新增 `motor_group_receive(&motors, bus, &frame)`，comm_rx_task 把每帧交给电机组，加电机不再改接收代码（遍历的电机链表初始化后不变）；④ `05_platform` 每个外设最多三个文件：辅助代码 can_dlc + can_rx_ring → `can.c`，cycle_extend → `time.c`，dma_ring → `uart.c`，byte_ring → `usb_cdc.c`，ws2812 → `status_led.c`，声明放在接口头文件末尾一节（上层不调用）；主机测试按模块改名（test_can、test_time、test_uart、test_usb_cdc、test_status_led、test_robot）。行为不变：固件 0 警告、主机测试 34/34（两个 CAN 测试合并为一个），未上板 |
 | 0067 | 用户 2026-10-10：**只有板间通信用 CAN FD，其他都是经典 CAN**。MC02 三路：FDCAN1、FDCAN2 经典 1 Mbit/s 接电机（DJI、达妙都走经典帧），FDCAN3 FD + BRS（仲裁 1 Mbit/s、数据 5 Mbit/s）只给 `board_link`，与 rmcod2026 哨兵接法一致。CubeMX 由用户改：FDCAN2 改经典帧，FDCAN3 改 FD + BRS、数据段 1/14/5、Rx FIFO0 与 Tx 每格 64 字节（原 FDCAN2 每格 8 字节，FD 帧超 8 字节会被截断）。`can_start()` 对 FD 总线：每格不是 64 字节就拒绝启动；带 BRS 时打开发送延时补偿，偏移 = 数据段预分频 × TSeg1（当前 14，同 COD-H7-Template / rmcod2026 的 (14, 14)）。修订 ADR 0023 举的“FD 型达妙电机”例子：本车达妙不上 FD |
 | 0068 | 用户 2026-10-10 看过 rmcod2026 哨兵的做法后让继续：**舵轮 M3508 转向的零点用接近开关归零**（取代 2026-09-30“手动摆正 / 传感器归零”暂缓项）。车架上固定接近开关、转向件上装挡片；上电后低速恒速转动找开关，记下开关触发和离开两个边沿时的输出轴角度取中点（感应范围随间隙变宽变窄时中点不动）；**正、反各测一次再平均**，抵消迟滞和反馈延迟造成的沿转动方向的偏差（rmcod2026 哨兵只用单方向结果并减经验值 3°）；边沿时刻在中断里记时间戳、按时间插值角度；转过一圈多仍没找到开关 → 该转向不可用、底盘机构停并记日志（防开关断线或挡片脱落时一直转）。依赖 `05_platform/gpio`（外部中断），随舵轮底盘实现；零点精度与找零时间待台架实测 |
+| 0069 | 用户 2026-10-10：“函数嵌套和传递参数不要太多，要不然很难理解底层在做什么”，四项全选：① 去掉看门狗的 `void *` 通用存取 `watchdog_feed_data/read_data`，每个模块自己写“关中断 → 存数据 → `watchdog_feed(wd, rx_us)`”和“关中断 → 拷数据 → `watchdog_is_online()`”（临界区可嵌套）；`watchdog_is_online()` 在临界区里取当前时刻，最后接收时刻不会比现在新，去掉“未来时刻算在线”的分支；在线状态仍只有看门狗一个来源（ADR 0059 原则保留，存取方式取代）；② 只调用一次的一两行小函数写回调用处（`ch_valid`、`sw_valid`、`dummy_bytes`、`read_sample`、`ins_start`、`start_uart`、`chassis_cmd_from_rc`、`led_on_at`、`online_at`、`is_dm`、`be16` 等），回调用的函数保留；③ 底盘接口：周期固定为 `CHASSIS_PERIOD_S`（1 ms），全车停调用 `chassis_stop(&chassis)`，能动时 `chassis_step(&chassis, &cmd, scale)`（原 5 个参数）；④ `dji_motor`、`dm_motor`、`motor_group` 并进 `motor.c` / `motor.h`（按 型号常数 → 初始化与查重 → 接收解码 → 读写指令 → 打包发送 排列），`motor_receive` 并入 `motor_group_receive`，没有外部使用的 `MotorCaps` 删除，`dm_encode_mit` 只留 Kd 和力矩两个量（位置、速度、Kp 恒为 0）；测试改走公开接口（test_motor、test_motor_codec）。行为不变：固件 0 警告、主机测试 33/33，未上板 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 

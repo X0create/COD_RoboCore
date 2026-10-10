@@ -6,7 +6,6 @@
 
 #include <string.h>
 
-#include "02_devices/motor/dji_motor.h"
 #include "02_devices/motor/motor.h"
 #include "04_core/os/critical.h"
 #include "05_platform/can/can.h"
@@ -58,11 +57,11 @@ bool can_send(CanBusId bus, const CanFrame *frame)
         return false;
     }
     unsigned offset;
-    if (frame->id == dji_ctrl_frame_id(0u))
+    if (frame->id == 0x200u) /* C620 1–4 号的控制帧（附录 A.2） */
     {
         offset = 0u;
     }
-    else if (frame->id == dji_ctrl_frame_id(1u))
+    else if (frame->id == 0x1FFu) /* 5–8 号 */
     {
         offset = 4u;
     }

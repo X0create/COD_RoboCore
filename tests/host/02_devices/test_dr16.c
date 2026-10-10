@@ -148,6 +148,7 @@ static void test_split_frame_is_joined(void)
     RcState rc;
     centered_frame(f);
     dr16_on_bytes(dr16, f, 9, 10000000u);
+    fake_time_set_us(10001000u); /* 时钟走到第二段到达的时刻 */
     dr16_on_bytes(dr16, f + 9, 9, 10001000u);
     TEST_ASSERT_TRUE(dr16_read(dr16, &rc));
     TEST_ASSERT_EQUAL_UINT32(0, dr16->bad_frames);
@@ -159,7 +160,8 @@ static void test_gap_resyncs(void)
     uint8_t f[DR16_FRAME_LEN];
     RcState rc;
     centered_frame(f);
-    dr16_on_bytes(dr16, f + 5, DR16_FRAME_LEN - 5, 10000000u);  /* 残帧 */
+    dr16_on_bytes(dr16, f + 5, DR16_FRAME_LEN - 5, 10000000u); /* 残帧 */
+    fake_time_set_us(10000000u + 12000u);
     dr16_on_bytes(dr16, f, DR16_FRAME_LEN, 10000000u + 12000u); /* 12 ms 后的完整一帧 */
     TEST_ASSERT_TRUE(dr16_read(dr16, &rc));
     TEST_ASSERT_EQUAL_UINT32(0, dr16->bad_frames);

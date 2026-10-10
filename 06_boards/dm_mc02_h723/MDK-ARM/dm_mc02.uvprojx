@@ -859,24 +859,9 @@
           <GroupName>02_devices/motor</GroupName>
           <Files>
             <File>
-              <FileName>dji_motor.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\02_devices\motor\dji_motor.c</FilePath>
-            </File>
-            <File>
-              <FileName>dm_motor.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\02_devices\motor\dm_motor.c</FilePath>
-            </File>
-            <File>
               <FileName>motor.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\02_devices\motor\motor.c</FilePath>
-            </File>
-            <File>
-              <FileName>motor_group.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\02_devices\motor\motor_group.c</FilePath>
             </File>
           </Files>
         </Group>

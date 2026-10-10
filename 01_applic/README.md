@@ -63,7 +63,7 @@ config/
 | IMU 就绪判定 20 ms | `01_applic/modules/ins/ins.h` 的 `INS_TIMEOUT_MS` | 安全约定（ADR 0034） |
 | 电机离线超时 20 ms | `02_devices/motor/motor.h` 的 `MOTOR_TIMEOUT_MS` | 安全约定（ADR 0031） |
 | 解锁后输出斜坡 300 ms | `system/safety_gate.h` 的 `SAFETY_RAMP_MS` | |
-| 达妙命令间隔 | `02_devices/motor/dm_motor.h` 的 `DM_CMD_INTERVAL_US` | |
+| 达妙命令间隔 | `02_devices/motor/motor.c` 的 `DM_CMD_INTERVAL_US` | |
 
 ## 规则
 

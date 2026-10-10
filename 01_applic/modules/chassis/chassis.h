@@ -114,15 +114,21 @@ RM_NODISCARD bool chassis_init(Chassis *chassis, const ChassisConfig *cfg,
                                Motor *const drive[CHASSIS_WHEELS],
                                Motor *const steer[CHASSIS_WHEELS]);
 
+/** chassis_step() / chassis_stop() 的调用周期：control_task 每 1 ms 调一次（斜坡按它算每步的速度变化；PID 参数也和它绑定，ADR 0029） */
+#define CHASSIS_PERIOD_S 0.001f
+
 /**
- * @brief   每个控制周期调用一次
- * @param   cmd           目标底盘速度（底盘系：vx 向前、vy 向左、wz 逆时针）；stop_all 时不读
- * @param   stop_all      安全门本周期要求全车停
+ * @brief   能动时每个控制周期调用一次：读实测 → 算目标（斜坡、逆解）→ 算输出（每轮速度环，写电机力矩）
+ * @param   cmd           目标底盘速度（底盘系：vx 向前、vy 向左、wz 逆时针）
  * @param   output_scale  输出限幅比例 0–1（safety_gate_output_scale()，解锁后逐渐放开）
- * @param   dt_s          控制周期，用于斜坡
  */
-void chassis_step(Chassis *chassis, const ChassisVel *cmd, bool stop_all, float output_scale,
-                  float dt_s);
+void chassis_step(Chassis *chassis, const ChassisVel *cmd, float output_scale);
+
+/**
+ * @brief   全车停时代替 chassis_step() 每个周期调用：读实测，不写电机指令，清积分，目标对齐实测速度
+ *          （解锁瞬间车还在滑行时，目标从实测速度开始，不会突然跳到 0 或摇杆值）
+ */
+void chassis_stop(Chassis *chassis);
 
 #ifdef __cplusplus
 }

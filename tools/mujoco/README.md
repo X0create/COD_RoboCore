@@ -56,7 +56,7 @@ Windows 64 位 GCC / CMake / Ninja；可用 `-PythonExe`、`-ClionDir` 改路径
 ```text
 MuJoCo 关节角度 / 速度
   → chassis_bridge.c 编码虚拟 DJI 反馈
-  → 原 motor_receive / watchdog / motor_read_feedback
+  → 原 motor_group_receive / watchdog / motor_read_feedback
   → 原 safety_gate_update + chassis_step（斜坡、half_steer、PID）
   → 原 motor_group_apply_stop_all / motor_group_send
   → sim_platform.c 接收最终 CAN 电流帧、还原力矩

@@ -4,10 +4,7 @@ add_library(rm_devices STATIC
     board_link/board_link.c
     buzzer/buzzer.c
     imu/bmi088.c
-    motor/dji_motor.c
-    motor/dm_motor.c
     motor/motor.c
-    motor/motor_group.c
     referee/referee_frame.c
     remote/dr16.c
     remote/vt_link.c

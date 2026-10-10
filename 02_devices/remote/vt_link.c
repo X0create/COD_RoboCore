@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "02_devices/referee/referee_frame.h"
+#include "04_core/os/critical.h"
 #include "04_core/util/crc.h"
 #include "05_platform/time/time.h"
 
@@ -26,12 +27,6 @@
 /* 缓冲区满时开头一定能判定（VT13 帧放得下；0xA5 帧的最大数据长度按缓冲区算），否则解析循环会原地打转 */
 _Static_assert(VT13_FRAME_LEN <= VT_LINK_BUF_LEN, "VT13 帧必须放得进缓冲区");
 
-/* 摇杆值超出范围：整帧丢弃 */
-static bool ch_valid(uint16_t raw)
-{
-    return raw >= CH_MIN && raw <= CH_MAX;
-}
-
 bool vt_link_decode_vt13(const uint8_t frame[VT13_FRAME_LEN], VtRcState *out)
 {
     const uint8_t *b = frame;
@@ -48,9 +43,9 @@ bool vt_link_decode_vt13(const uint8_t frame[VT13_FRAME_LEN], VtRcState *out)
     };
     for (int i = 0; i < 4; i++)
     {
-        if (!ch_valid(ch[i]))
+        if (ch[i] < CH_MIN || ch[i] > CH_MAX)
         {
-            return false;
+            return false; /* 摇杆值超出范围：整帧丢弃 */
         }
         out->ch[i] = (int16_t)(ch[i] - CH_OFFSET);
     }
@@ -79,12 +74,20 @@ void vt_link_init(VtLink *self)
 
 bool vt_link_read_rc(const VtLink *self, VtRcState *out)
 {
-    return watchdog_read_data(&self->rc_wd, &self->rc, out, sizeof(*out));
+    rm_critical_enter();
+    *out = self->rc;
+    const bool online = watchdog_is_online(&self->rc_wd);
+    rm_critical_exit();
+    return online;
 }
 
 bool vt_link_read_kbm(const VtLink *self, KbmState *out)
 {
-    return watchdog_read_data(&self->kbm_wd, &self->kbm, out, sizeof(*out));
+    rm_critical_enter();
+    *out = self->kbm;
+    const bool online = watchdog_is_online(&self->kbm_wd);
+    rm_critical_exit();
+    return online;
 }
 
 /* 校验通过的 0xA5 帧：目前只处理键鼠（0x0304），其他命令只计数 */
@@ -104,7 +107,10 @@ static void handle_referee_frame(VtLink *self, const RefereeFrame *f)
         .mouse_right = d[7] != 0u,
         .keys = (uint16_t)(d[8] | (d[9] << 8)),
     };
-    watchdog_feed_data(&self->kbm_wd, &self->kbm, &kbm, sizeof(kbm), rm_time_now_us());
+    rm_critical_enter();
+    self->kbm = kbm;
+    watchdog_feed(&self->kbm_wd, rm_time_now_us());
+    rm_critical_exit();
 }
 
 typedef enum
@@ -137,7 +143,10 @@ static ParseResult parse_head(VtLink *self, size_t *consumed)
         {
             return PARSE_BAD;
         }
-        watchdog_feed_data(&self->rc_wd, &self->rc, &rc, sizeof(rc), rm_time_now_us());
+        rm_critical_enter();
+        self->rc = rc;
+        watchdog_feed(&self->rc_wd, rm_time_now_us());
+        rm_critical_exit();
         *consumed = VT13_FRAME_LEN;
         return PARSE_CONSUMED;
     }

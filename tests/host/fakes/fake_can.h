@@ -1,6 +1,6 @@
 /**
  * @file    fake_can.h
- * @brief   电脑测试用的假 CAN：记录发出的帧（收帧由测试直接调用 motor_receive()）
+ * @brief   电脑测试用的假 CAN：记录发出的帧（收帧由测试直接调用 motor_group_receive()）
  */
 #pragma once
 

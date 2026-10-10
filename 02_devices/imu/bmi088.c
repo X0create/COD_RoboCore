@@ -92,18 +92,13 @@ static const RegValue gyro_config[] = {
     { GYRO_INT3_INT4_MAP, 0x01u },  /* 数据就绪映射到 INT3 */
 };
 
-/* 加速度计读数在地址之后有一个 dummy 字节，陀螺仪没有（数据手册 SPI 读时序） */
-static uint8_t dummy_bytes(SpiDevice dev)
-{
-    return (dev == SPI_DEV_IMU_ACCEL) ? 1u : 0u;
-}
-
 /* 一个完整事务：选中 → 地址 + [dummy] + len 个数据 → 释放 */
 static bool read_regs(SpiDevice dev, uint8_t reg, uint8_t *out, uint8_t len)
 {
     uint8_t tx[12] = { 0 };
     uint8_t rx[12];
-    const uint8_t skip = (uint8_t)(1u + dummy_bytes(dev));
+    /* 地址之后才是数据；加速度计在地址后还多一个 dummy 字节，陀螺仪没有（数据手册 SPI 读时序） */
+    const uint8_t skip = dev == SPI_DEV_IMU_ACCEL ? 2u : 1u;
     tx[0] = (uint8_t)(reg | READ_BIT);
 
     if (!spi_select(dev))

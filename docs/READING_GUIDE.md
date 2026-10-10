@@ -43,7 +43,7 @@
 | 1. 读输入 | `02_devices/remote/dr16.c` 的 `dr16_read()`、`01_applic/modules/ins/ins.c` 的 `ins_read()` | 遥控、姿态怎么读；多久没更新算掉线 |
 | 2. 安全门 | `01_applic/system/safety_gate.c` | 什么情况下全车停：急停、遥控丢失、未解锁、IMU 未就绪 |
 | 3. 底盘 | `01_applic/modules/chassis/chassis.c` 的 `chassis_step()` → `03_algorithm/kinematics/omni.c`、`03_algorithm/control/pid.c` | 速度怎么分到四个轮子，PID 怎么算出力矩 |
-| 4. 发送 | `02_devices/motor/motor_group.c` 的 `motor_group_send()` | 每个电机最终发什么（停机 > 没写指令 > 离线 > 力矩），怎么打包成 CAN 帧 |
+| 4. 发送 | `02_devices/motor/motor.c` 的 `motor_group_send()` | 每个电机最终发什么（停机 > 没写指令 > 离线 > 力矩），怎么打包成 CAN 帧 |
 
 刚开始可以完全跳过：`05_platform/`、`06_boards/`、`04_core/log/segger_rtt/`、`tests/host/unity/`。
 它们是和芯片、第三方库打交道的底层，平时不用改。
@@ -59,10 +59,10 @@
  → 拼成 18 字节一帧，校验后存进 dr16             02_devices/remote/dr16.c：dr16_on_bytes() → dr16_decode()
  → control_task 读出最新一帧                    01_applic/tasks/control_task.c：dr16_read()
  → 安全门判断能不能动                           01_applic/system/safety_gate.c：safety_gate_update()
- → 摇杆换算成底盘速度                           01_applic/tasks/control_task.c：chassis_cmd_from_rc()
+ → 摇杆换算成底盘速度                           01_applic/tasks/control_task.c：循环第 3 步
  → 速度分到四个轮子，PID 算出力矩，写进电机      01_applic/modules/chassis/chassis.c：chassis_step()
                                                   → omni_inverse()、pid_step()、motor_set_torque()
- → 全部电机的指令打包成 CAN 帧发出去             02_devices/motor/motor_group.c：motor_group_send() → can_send()
+ → 全部电机的指令打包成 CAN 帧发出去             02_devices/motor/motor.c：motor_group_send() → can_send()
 ```
 
 再走一遍反方向的数据，就把接收这一侧也看懂了：
@@ -70,8 +70,8 @@
 ```
 电机反馈帧
  → FDCAN 中断把帧放进环形缓冲                   05_platform/can/can_stm32h7.c
- → comm_rx_task 逐帧取出，交给电机组             01_applic/tasks/comm_rx_task.c：can_read() → motor_group_receive()
- → 总线和 ID 对上的电机解码、保存、喂看门狗      02_devices/motor/motor.c：motor_receive()
+ → comm_rx_task 逐帧取出，交给电机组             01_applic/tasks/comm_rx_task.c：can_read()
+ → 总线和 ID 对上的电机解码、保存、喂看门狗      02_devices/motor/motor.c：motor_group_receive()
  → 底盘读实测转速                               01_applic/modules/chassis/chassis.c：motor_read_feedback()
 ```
 

@@ -6,6 +6,8 @@
 
 #include <string.h>
 
+#include "05_platform/time/time.h"
+
 void vision_link_init(VisionLink *self)
 {
     *self = (VisionLink){ 0 };
@@ -47,7 +49,7 @@ void vision_link_on_bytes(VisionLink *self, const uint8_t *data, uint32_t len)
                 consumed = f.frame_len;
                 self->frames++;
                 self->last_id = f.id;
-                watchdog_feed(&self->wd);
+                watchdog_feed(&self->wd, rm_time_now_us());
                 break;
         }
         memmove(self->buf, self->buf + consumed, self->len - consumed); /* 去掉已处理的字节 */

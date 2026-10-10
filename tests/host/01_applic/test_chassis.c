@@ -11,13 +11,13 @@
 #include <math.h>
 #include <string.h>
 
-#include "02_devices/motor/motor_group.h"
+#include "02_devices/motor/motor.h"
 #include "05_platform/time/time.h"
 #include "fake_can.h"
 #include "fake_time.h"
 #include "unity.h"
 
-#define DT_S 0.001f
+#define DT_S CHASSIS_PERIOD_S
 
 #define DRIVE_PID                                                                                  \
     {                                                                                              \
@@ -186,8 +186,7 @@ static void test_rejects_motor_without_torque_command(void)
 static void test_stop_all_writes_nothing_and_aligns_to_measured(void)
 {
     feed_all(5.0f);
-    const ChassisVel target = { .vx_m_s = 1.0f };
-    chassis_step(&chassis, &target, true, 1.0f, DT_S);
+    chassis_stop(&chassis);
 
     for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
     {
@@ -203,15 +202,15 @@ static void test_stop_all_writes_nothing_and_aligns_to_measured(void)
 static void test_ramps_and_drives_wheels_by_inverse_kinematics(void)
 {
     feed_all(0.0f);
-    chassis_step(&chassis, NULL, true, 1.0f, DT_S); /* 对齐到静止 */
+    chassis_stop(&chassis); /* 对齐到静止 */
 
     const ChassisVel target = { .vx_m_s = 1.0f };
-    chassis_step(&chassis, &target, false, 1.0f, DT_S);
+    chassis_step(&chassis, &target, 1.0f);
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 2.0f * DT_S, chassis.target.velocity.vx_m_s);
     for (int k = 1; k < 100; k++)
     {
         feed_all(0.0f);
-        chassis_step(&chassis, &target, false, 1.0f, DT_S);
+        chassis_step(&chassis, &target, 1.0f);
     }
     TEST_ASSERT_FLOAT_WITHIN(1e-4f, 0.2f, chassis.target.velocity.vx_m_s);
 
@@ -226,20 +225,20 @@ static void test_ramps_and_drives_wheels_by_inverse_kinematics(void)
 static void test_output_scale_limits_torque(void)
 {
     feed_all(0.0f);
-    chassis_step(&chassis, NULL, true, 1.0f, DT_S);
+    chassis_stop(&chassis);
     const ChassisVel target = { .wz_rad_s = 4.0f };
     for (int k = 0; k < 500; k++)
     {
         feed_all(0.0f);
-        chassis_step(&chassis, &target, false, 1.0f, DT_S);
+        chassis_step(&chassis, &target, 1.0f);
     }
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 3.0f, wheel[0]->torque_cmd_nm); /* 已到 PID 输出限幅 */
 
     feed_all(0.0f);
-    chassis_step(&chassis, &target, false, 0.25f, DT_S);
+    chassis_step(&chassis, &target, 0.25f);
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.75f, wheel[0]->torque_cmd_nm);
     feed_all(0.0f);
-    chassis_step(&chassis, &target, false, 0.0f, DT_S);
+    chassis_step(&chassis, &target, 0.0f);
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, wheel[0]->torque_cmd_nm);
 }
 
@@ -247,12 +246,12 @@ static void test_output_scale_limits_torque(void)
 static void test_wheel_offline_decelerates_under_control(void)
 {
     feed_all(0.0f);
-    chassis_step(&chassis, NULL, true, 1.0f, DT_S);
+    chassis_stop(&chassis);
     const ChassisVel target = { .vx_m_s = 1.0f };
     for (int k = 0; k < 500; k++)
     {
         feed_all(0.0f);
-        chassis_step(&chassis, &target, false, 1.0f, DT_S);
+        chassis_step(&chassis, &target, 1.0f);
         motor_group_send(&group);
         fake_time_advance_ms(1u);
     }
@@ -267,7 +266,7 @@ static void test_wheel_offline_decelerates_under_control(void)
         fake_time_advance_ms(1u);
     }
     const float before = chassis.target.velocity.vx_m_s;
-    chassis_step(&chassis, &target, false, 1.0f, DT_S);
+    chassis_step(&chassis, &target, 1.0f);
     TEST_ASSERT_FALSE(chassis.measure.all_online);
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, before - 2.0f * DT_S, chassis.target.velocity.vx_m_s);
     TEST_ASSERT_FALSE(wheel[2]->torque_set);
@@ -281,12 +280,12 @@ static void test_mecanum_drives_by_mecanum_inverse(void)
     Chassis c;
     TEST_ASSERT_TRUE(chassis_init(&c, &mecanum_cfg, wheel, NULL));
     feed_all(0.0f);
-    chassis_step(&c, NULL, true, 1.0f, DT_S);
+    chassis_stop(&c);
     const ChassisVel target = { .vy_m_s = 1.0f };
     for (int k = 0; k < 50; k++)
     {
         feed_all(0.0f);
-        chassis_step(&c, &target, false, 1.0f, DT_S);
+        chassis_step(&c, &target, 1.0f);
     }
     TEST_ASSERT_TRUE(wheel[0]->torque_cmd_nm < 0.0f);
     TEST_ASSERT_TRUE(wheel[1]->torque_cmd_nm > 0.0f);
@@ -303,13 +302,13 @@ static void test_steer_turns_wheels_toward_target(void)
     TEST_ASSERT_TRUE(chassis_init(&c, &steer_cfg, wheel, steer));
     feed_all(0.0f);
     feed_steer_all();
-    chassis_step(&c, NULL, true, 1.0f, DT_S);
+    chassis_stop(&c);
     const ChassisVel target = { .vx_m_s = 0.5f, .vy_m_s = 1.0f };
     for (int k = 0; k < 50; k++)
     {
         feed_all(0.0f);
         feed_steer_all();
-        chassis_step(&c, &target, false, 1.0f, DT_S);
+        chassis_step(&c, &target, 1.0f);
     }
     for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
     {
@@ -334,7 +333,7 @@ static void test_half_steer_turns_only_steer_wheels(void)
         feed_all(0.0f);
         feed_id(5u, DJI_M2006_GEAR_RATIO, 0.0f);
         feed_id(7u, DJI_M2006_GEAR_RATIO, 0.0f);
-        chassis_step(&c, &target, false, 1.0f, DT_S);
+        chassis_step(&c, &target, 1.0f);
     }
     TEST_ASSERT_TRUE(c.measure.all_online);
     TEST_ASSERT_FLOAT_WITHIN(1e-4f, atan2f(1.0f, 0.5f), c.target.heading_rad[0]);
@@ -367,13 +366,13 @@ static void test_steer_motor_offline_is_mechanism_stop(void)
     TEST_ASSERT_TRUE(chassis_init(&c, &steer_cfg, wheel, steer));
     feed_all(0.0f);
     feed_steer_all();
-    chassis_step(&c, NULL, true, 1.0f, DT_S);
+    chassis_stop(&c);
     const ChassisVel target = { .vx_m_s = 1.0f };
     for (int k = 0; k < 100; k++)
     {
         feed_all(0.0f);
         feed_steer_all();
-        chassis_step(&c, &target, false, 1.0f, DT_S);
+        chassis_step(&c, &target, 1.0f);
         motor_group_send(&group);
         fake_time_advance_ms(1u);
     }
@@ -386,7 +385,7 @@ static void test_steer_motor_offline_is_mechanism_stop(void)
         fake_time_advance_ms(1u);
     }
     const float before = c.target.velocity.vx_m_s;
-    chassis_step(&c, &target, false, 1.0f, DT_S);
+    chassis_step(&c, &target, 1.0f);
     TEST_ASSERT_FALSE(c.measure.all_online);
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, before - 2.0f * DT_S, c.target.velocity.vx_m_s);
     TEST_ASSERT_FALSE(steer[3]->torque_set);

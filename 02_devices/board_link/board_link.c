@@ -8,6 +8,8 @@
 #include <stddef.h>
 #include <string.h>
 
+#include "04_core/os/critical.h"
+
 /* 本板已初始化的全部跨板消息（发送和接收），只在初始化阶段读写 */
 static BoardLink *links;
 
@@ -112,14 +114,20 @@ bool board_link_receive(BoardLink *link, CanBusId bus, const CanFrame *frame)
     }
     const uint64_t age_us = (uint64_t)age_ms * 1000u;
     const uint64_t rx_us = (frame->stamp_us > age_us) ? frame->stamp_us - age_us : 0u;
-    watchdog_feed_data(&link->wd, link->payload, &frame->data[BOARD_LINK_HEADER_LEN],
-                       cfg->payload_len, rx_us);
+    rm_critical_enter();
+    memcpy(link->payload, &frame->data[BOARD_LINK_HEADER_LEN], cfg->payload_len);
+    watchdog_feed(&link->wd, rx_us);
+    rm_critical_exit();
     return true;
 }
 
 bool board_link_read(const BoardLink *link, uint8_t *out)
 {
-    return watchdog_read_data(&link->wd, link->payload, out, link->cfg->payload_len);
+    rm_critical_enter();
+    memcpy(out, link->payload, link->cfg->payload_len);
+    const bool online = watchdog_is_online(&link->wd);
+    rm_critical_exit();
+    return online;
 }
 
 void board_link_put_u16(uint8_t *p, uint16_t v)

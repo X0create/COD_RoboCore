@@ -47,7 +47,7 @@ static void start(const InsConfig *cfg)
 {
     ins = &pool[pool_used++];
     ins_init(ins, cfg);
-    TEST_ASSERT_EQUAL_INT(BMI088_OK, ins_start(ins));
+    TEST_ASSERT_EQUAL_INT(BMI088_OK, bmi088_init(&ins->imu));
 }
 
 /* 跑 n 步（每步假时钟前进 1 ms），返回最后一个非 NONE 事件 */

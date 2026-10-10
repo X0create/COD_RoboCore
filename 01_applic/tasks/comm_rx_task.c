@@ -43,15 +43,6 @@ static void start_can(void)
     }
 }
 
-/* 打开一个串口的 DMA 接收；失败记日志，之后读这个串口始终得到 0 字节 */
-static void start_uart(UartPort port)
-{
-    if (!uart_rx_start(port, notify_from_isr, NULL))
-    {
-        RM_LOG_E("uart%d start failed", (int)port + 1);
-    }
-}
-
 /* bus-off 后 FDCAN 不会自己回到总线，这路上的电机全部离线（机构停）。这里负责把它拉回来 */
 static void recover_bus_off(void)
 {
@@ -73,7 +64,11 @@ void comm_rx_task_entry(void *arg)
 {
     (void)arg;
     start_can();
-    start_uart(DBUS_UART);
+    if (!uart_rx_start(DBUS_UART, notify_from_isr,
+                       NULL)) /* DMA 接收；失败时读这个串口始终得到 0 字节 */
+    {
+        RM_LOG_E("uart5 (dr16) start failed");
+    }
 
     CanFrame frame;
     uint8_t buf[64];

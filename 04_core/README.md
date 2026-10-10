@@ -5,7 +5,7 @@
 | 目录 | 内容 |
 | --- | --- |
 | `os/` | 任务创建（静态分配）、临界区、`rm_task_delay_until()` |
-| `watchdog/` | 设备在线检测 + 保管最新一份数据（`watchdog_feed_data` / `watchdog_read_data`，在线状态只有这一个来源，ADR 0059）；（规划）任务心跳、喂 IWDG |
+| `watchdog/` | 设备在线检测（`watchdog_feed` / `watchdog_is_online`；数据由各模块自己在临界区里存取，ADR 0069；在线状态只有这一个来源，ADR 0059）；（规划）任务心跳、喂 IWDG |
 | `error/` | `RM_ASSERT`、`RM_CHECK`、错误码、HardFault 记录 |
 | `log/` | SEGGER RTT 日志 |
 | `param/` | Flash 双区参数存储 |

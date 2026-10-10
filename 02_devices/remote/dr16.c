@@ -4,22 +4,12 @@
  */
 #include "dr16.h"
 
+#include "04_core/os/critical.h"
+
 /* 摇杆原始值的合法范围和中位（DBUS 协议，附录 A.4）：减去中位后是 -660 ~ +660 */
 #define CH_MIN    364
 #define CH_MAX    1684
 #define CH_OFFSET 1024
-
-/* 摇杆值超出范围说明这一帧错位或受了干扰：整帧丢弃，不让错误数据进系统 */
-static bool ch_valid(uint16_t raw)
-{
-    return raw >= CH_MIN && raw <= CH_MAX;
-}
-
-/* 拨杆只有 1（上）、3（中）、2（下）三个合法值 */
-static bool sw_valid(uint8_t raw)
-{
-    return raw >= 1u && raw <= 3u;
-}
 
 bool dr16_decode(const uint8_t frame[DR16_FRAME_LEN], RcState *out)
 {
@@ -35,15 +25,17 @@ bool dr16_decode(const uint8_t frame[DR16_FRAME_LEN], RcState *out)
     const uint8_t sw_left = (uint8_t)((b[5] >> 4) & 0x03u);
     const uint8_t sw_right = (uint8_t)(((b[5] >> 4) & 0x0Cu) >> 2);
 
-    /* 拨轮（通道 4）不检查：有的接收机固件在这两个字节上发 0，检查会导致每帧都被丢弃（推测，待上板核对） */
+    /* 摇杆值超出范围说明这一帧错位或受了干扰：整帧丢弃，不让错误数据进系统。
+     * 拨轮（通道 4）不检查：有的接收机固件在这两个字节上发 0，检查会导致每帧都被丢弃（推测，待上板核对） */
     for (int i = 0; i < 4; i++)
     {
-        if (!ch_valid(ch[i]))
+        if (ch[i] < CH_MIN || ch[i] > CH_MAX)
         {
             return false;
         }
     }
-    if (!sw_valid(sw_left) || !sw_valid(sw_right))
+    /* 拨杆只有 1（上）、3（中）、2（下）三个合法值 */
+    if (sw_left < 1u || sw_left > 3u || sw_right < 1u || sw_right > 3u)
     {
         return false;
     }
@@ -72,7 +64,11 @@ void dr16_init(Dr16 *self)
 
 bool dr16_read(const Dr16 *self, RcState *out)
 {
-    return watchdog_read_data(&self->wd, &self->rc, out, sizeof(*out));
+    rm_critical_enter();
+    *out = self->rc; /* 离线时是最后一帧（从未收到时全 0），只能用来打印 */
+    const bool online = watchdog_is_online(&self->wd);
+    rm_critical_exit();
+    return online;
 }
 
 void dr16_on_bytes(Dr16 *self, const uint8_t *data, uint32_t len, uint64_t now_us)
@@ -98,7 +94,10 @@ void dr16_on_bytes(Dr16 *self, const uint8_t *data, uint32_t len, uint64_t now_u
             RcState state;
             if (dr16_decode(self->frame, &state))
             {
-                watchdog_feed_data(&self->wd, &self->rc, &state, sizeof(state), now_us);
+                rm_critical_enter(); /* 最新一帧和它的时刻一起写，读的一方拿到的两者对得上 */
+                self->rc = state;
+                watchdog_feed(&self->wd, now_us);
+                rm_critical_exit();
             }
             else
             {

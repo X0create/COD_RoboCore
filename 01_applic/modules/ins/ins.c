@@ -5,6 +5,7 @@
 #include "ins.h"
 #include "03_algorithm/math/math_const.h"
 
+#include "04_core/os/critical.h"
 #include "05_platform/time/time.h"
 
 /* 旧工程 INS_Task.c 的参数 */
@@ -35,26 +36,31 @@ void ins_init(Ins *ins, const InsConfig *cfg)
 
 bool ins_read(const Ins *ins, ImuState *out)
 {
-    return watchdog_read_data(&ins->wd, &ins->state, out, sizeof(*out));
-}
-
-/* 初始化 BMI088（复位、检查芯片 ID、配置量程和输出频率），在 ins_task 开始时调用 */
-Bmi088Status ins_start(Ins *ins)
-{
-    return bmi088_init(&ins->imu);
+    rm_critical_enter();
+    *out = ins->state;
+    const bool ready =
+        watchdog_is_online(&ins->wd); /* 标定完成后才开始喂狗，所以也包含“标定完成” */
+    rm_critical_exit();
+    return ready;
 }
 
 /* ins_step 的各步骤，定义在本文件后面 */
-static bool read_sample(Ins *ins, Bmi088Sample *s);
 static InsEvent calibrate_gyro(Ins *ins, const Bmi088Sample *s);
 static ImuState update_attitude(Ins *ins, const Bmi088Sample *s, uint64_t now_us);
 
 /* 每 1 ms 一次的完整流程（相当于老模板 INS_Task 的循环体），各步骤的细节在下面 */
 InsEvent ins_step(Ins *ins)
 {
-    /* 1. 读 BMI088；坏帧时关加热、不更新姿态 */
+    /* 1. 读 BMI088。读失败，或加速度模长接近 0（全零会让 EKF 除零后永久变成 NaN）都算坏帧：关加热、不更新姿态 */
     Bmi088Sample s;
-    if (!read_sample(ins, &s))
+    bool good = bmi088_read(&ins->imu, &s);
+    if (good)
+    {
+        const float a2 = s.accel_m_s2[0] * s.accel_m_s2[0] + s.accel_m_s2[1] * s.accel_m_s2[1]
+                         + s.accel_m_s2[2] * s.accel_m_s2[2];
+        good = a2 >= ACCEL_MIN_M_S2 * ACCEL_MIN_M_S2;
+    }
+    if (!good)
     {
         ins->read_failures++;
         bmi088_heater_off(&ins->imu);
@@ -75,7 +81,10 @@ InsEvent ins_step(Ins *ins)
     const ImuState st = update_attitude(ins, &s, now_us);
 
     /* 5. 保存最新姿态和它的时刻，control、log 用 ins_read() 读 */
-    watchdog_feed_data(&ins->wd, &ins->state, &st, sizeof(st), now_us);
+    rm_critical_enter();
+    ins->state = st;
+    watchdog_feed(&ins->wd, now_us);
+    rm_critical_exit();
     return INS_EVENT_NONE;
 }
 
@@ -190,16 +199,4 @@ static ImuState update_attitude(Ins *ins, const Bmi088Sample *s, uint64_t now_us
     st.yaw_total_rad = st.yaw_rad + (float)ins->yaw_turns * RM_TWO_PI;
     st.temperature_c = s->temperature_c;
     return st;
-}
-
-/* 第 1 步：读一次 BMI088。读失败，或加速度模长接近 0（全零会让 EKF 除零后永久变成 NaN）都算坏帧 */
-static bool read_sample(Ins *ins, Bmi088Sample *s)
-{
-    if (!bmi088_read(&ins->imu, s))
-    {
-        return false;
-    }
-    const float a2 = s->accel_m_s2[0] * s->accel_m_s2[0] + s->accel_m_s2[1] * s->accel_m_s2[1]
-                     + s->accel_m_s2[2] * s->accel_m_s2[2];
-    return a2 >= ACCEL_MIN_M_S2 * ACCEL_MIN_M_S2;
 }

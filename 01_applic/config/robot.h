@@ -24,7 +24,6 @@
 #include "01_applic/modules/ins/ins.h"
 #include "01_applic/system/safety_gate.h"
 #include "02_devices/motor/motor.h"
-#include "02_devices/motor/motor_group.h"
 #include "02_devices/remote/dr16.h"
 #include "03_algorithm/math/math_const.h"
 #include "05_platform/compiler.h"

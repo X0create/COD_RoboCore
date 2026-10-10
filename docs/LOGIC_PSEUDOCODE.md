@@ -49,9 +49,8 @@
 | 文件 | 作用 |
 | --- | --- |
 | `motor/motor.c/.h` | 电机统一接口：收反馈、读快照、写力矩 / 停机动作，查某个 CAN ID 是否被电机占用；单位是输出轴的 rad、rad/s、N·m |
-| `motor/motor_group.c/.h` | 电机组：确定每个电机最终发什么，按控制帧打包发送（第 8 节） |
-| `motor/dji_motor.c/.h` | DJI 电机（M3508 / M2006 / GM6020）协议：反馈解码、控制帧编码 |
-| `motor/dm_motor.c/.h` | 达妙电机 MIT 协议：MIT 帧、使能 / 失能 / 清错命令、反馈解码 |
+| `motor/motor.c` 第 3 节 | 接收：DJI（M3508 / M2006 / GM6020）、达妙 MIT 的反馈解码 |
+| `motor/motor.c` 第 5 节 | 电机组发送：确定每个电机最终发什么，DJI 按控制帧打包、达妙 MIT 帧和使能命令（第 8 节） |
 | `imu/bmi088.c/.h` | BMI088 驱动：寄存器配置、读加速度 / 陀螺 / 温度；加热 PID → PWM 占空比 |
 | `remote/dr16.c/.h` | DR16 遥控：分帧、校验、解析，保存最新一帧，`dr16_read()` 读（200 ms 没新帧算丢失） |
 | `remote/vt_link.c/.h` | 图传链路：VT13 遥控帧和键鼠帧解析（未接线） |
@@ -215,7 +214,7 @@ CAN 接收中断（收到一帧）                                → 05_platfor
 
     对每一路 CAN：
         取出缓冲里的每一帧：
-            交给电机组，依次问每个电机“这帧是不是你的反馈” → 02_devices/motor/motor_group.c:motor_group_receive
+            交给电机组，依次问每个电机“这帧是不是你的反馈” → 02_devices/motor/motor.c:motor_group_receive
                 总线对、反馈 ID 对（0x201–0x204）→ 是它的：
                     长度不是 8 → 丢弃
                     否则 解码出 角度、转速、力矩、温度（换成输出轴国际单位）
@@ -317,7 +316,7 @@ safety_gate_update(遥控, IMU 是否就绪, now)：           → 01_applic/sys
 ## 7. 底盘：一次计算
 
 ```
-chassis_step(目标速度, stop_all, 输出比例)：            → 01_applic/modules/chassis/chassis.c:chassis_step
+chassis_step(目标速度, 输出比例)（全车停时改调 chassis_stop：只读实测、清积分）：            → 01_applic/modules/chassis/chassis.c:chassis_step
     【读实测】
     对 4 个轮子：拷贝电机反馈；20 ms 内收到过反馈才算在线
     全部在线 → 用运动学正解算出底盘当前速度；否则当前速度记为 0
@@ -344,7 +343,7 @@ chassis_step(目标速度, stop_all, 输出比例)：            → 01_applic/m
 ## 8. 电机组发送：最终发什么
 
 ```
-motor_group_send()：                                     → 02_devices/motor/motor_group.c:motor_group_send
+motor_group_send()：                                     → 02_devices/motor/motor.c:motor_group_send
     1. 确定每个电机最终发什么（final_output），按优先级：
            有停机动作 → 执行停机动作（零力矩 / 阻尼 / 失能）
            本周期没写力矩指令 → 零力矩
@@ -387,7 +386,7 @@ log_task（每 1 s）：                                      → 01_applic/task
 | --- | --- | --- | --- |
 | 遥控（`dr16` 对象里） | comm_rx_task（DR16 解析） | control_task、log_task（`dr16_read`） | 和接收时刻一起由看门狗保管，临界区里整份拷贝；200 ms 内才算在线（detect 日志同一判断） |
 | 姿态（`ins` 对象里） | ins_task | control_task、log_task（`ins_read`） | 同上，20 ms 内才算就绪 |
-| 电机反馈 | comm_rx_task（`motor_receive`） | control_task（底盘）、log_task | 临界区里整份拷贝；20 ms 内收到过才算在线 |
+| 电机反馈 | comm_rx_task（`motor_group_receive`） | control_task（底盘）、log_task | 临界区里整份拷贝；20 ms 内收到过才算在线 |
 | 电机指令 | control_task（底盘） | control_task（`motor_group_send`） | 写和发在同一个任务里 |
 | 安全门模式 | control_task | indicator_task、log_task | 单个值，读写是原子的；只用来提示和打印 |
 | 电池电压 | indicator_task | log_task | 通过 `indicator_battery_v()` 读，只用来打印 |

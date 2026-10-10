@@ -129,7 +129,7 @@ void gimbal_step(Gimbal *self, ...)
 
 ```c
 /**
- * @file    dji_motor.c
+ * @file    motor.c
  * @brief   DJI 电机（M3508 / M2006 / GM6020）的协议解析与指令打包
  * @note    协议依据：《架构设计》附录 A.2
  */
@@ -292,7 +292,7 @@ float out = sin(angle_rad) * 0.5;
   供 `01_applic/tasks/` 里的任务直接使用；其他层不得 include `robot.h`。
 - **必须**：不写递归，不用变长数组（VLA）；较大的缓冲区（几百字节以上）不放在栈上。
 - **必须**：DMA 缓冲区用 `RM_DMA_BUF` 声明，BDMA 缓冲区用 `RM_BDMA_BUF` 声明（ADR 0021）。
-- **必须**：`volatile` 只用于硬件寄存器和中断里置位的简单标志，**不能**当作任务之间的同步手段。跨任务共享的数据用 `watchdog_feed_data` / `watchdog_read_data` 或临界区。
+- **必须**：`volatile` 只用于硬件寄存器和中断里置位的简单标志，**不能**当作任务之间的同步手段。跨任务共享的数据用临界区（`rm_critical_enter/exit`）整份拷贝，写法见 `dr16_read()`。
 - **应该**：只在通信帧结构上用 `packed`，并且不对 packed 结构体的成员取地址。
 - **应该**：配置（`const XxxConfig`）和运行状态（`Xxx`）分成两个结构体。
 

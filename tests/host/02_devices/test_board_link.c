@@ -8,7 +8,7 @@
 #include <math.h>
 #include <string.h>
 
-#include "02_devices/motor/motor_group.h"
+#include "02_devices/motor/motor.h"
 #include "05_platform/time/time.h"
 #include "fake_can.h"
 #include "fake_time.h"

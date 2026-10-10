@@ -32,15 +32,6 @@ static const BatteryConfig battery_config = {
 static Battery battery; /* 只在本任务里写；log_task 通过 indicator_battery_*() 读 */
 static Buzzer buzzer;
 
-/*
- * 绿色每拍闪两下表示正常：0–50 ms 亮一次，200–225 ms 再亮一次，其余时间灭。
- * 两次亮的时长不同（50 ms、25 ms，用户 2026-09-28 指定），一长一短容易和其他闪烁码区分。
- */
-static bool led_on_at(uint32_t step)
-{
-    return step < 2u || step == 8u;
-}
-
 /* 低电量期间每 2 s 响一次；状态变化时打印一次 */
 static void check_battery(uint32_t tick)
 {
@@ -105,7 +96,10 @@ void indicator_task_entry(void *arg)
     for (;;)
     {
         /* 每 25 ms：状态灯 → 电池 → 模式提示音 → 推进蜂鸣器的音符 */
-        status_led_set(0u, led_on_at(step) ? LED_GREEN_LEVEL : 0u, 0u); /* R、G、B */
+        /* 状态灯：绿色每拍闪两下表示正常——第 0–1 步（0–50 ms）亮一次，第 8 步（200–225 ms）再亮一次。
+         * 两次亮的时长不同（用户 2026-09-28 指定），一长一短容易和其他闪烁码区分 */
+        const bool led_on = step < 2u || step == 8u;
+        status_led_set(0u, led_on ? LED_GREEN_LEVEL : 0u, 0u); /* R、G、B */
         check_battery(tick);
         beep_on_mode_change(&last_mode);
         buzzer_step(&buzzer, STEP_MS);
