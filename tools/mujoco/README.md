@@ -75,7 +75,7 @@ Python 不重写底盘运动学或 PID；控制周期只在 C 桥接层定义，
 ## 参数与输出
 
 - `sentry_model.py` 的 `SentrySpec`：模型尺寸、车架质量、滚子数量、滚子半径及滚动阻力比；尺寸直接传给 C，不再抄一份。
-- `chassis_bridge.c`：仿真专用转向 PID；驱动 PID 和加速度直接取现有 `01_applic/config/params.h`。
+- `chassis_bridge.c`：仿真专用转向 PID；驱动 PID 和加速度直接取现有 `01_applic/config/robot.h`。
 - `sentry_chassis.py`：自动运动序列、虚拟故障检查、键盘目标速度。
 - `chassis_viewer.py`：独立键盘 / 鼠标分派、MuJoCo 渲染与屏幕操作提示。
 - `check_viewer.py`：隐藏窗口注入真实 Windows 按下 / 松开消息，比较车 / 地板像素与显示标志；检查组合 / 相反方向、松手减速、X 减速和全程零电机力矩滑行。

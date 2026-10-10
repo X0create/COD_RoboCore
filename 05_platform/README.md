@@ -1,14 +1,14 @@
 # 05_platform/
 
-外设接口（≈ 老模板 `BSP/`）。芯片差异全部关在这一层。**一个外设一个目录**，接口、芯片实现、辅助代码都在里面：
+外设接口（≈ 老模板 `BSP/`）。芯片差异全部关在这一层。**一个外设一个目录**，最多三个文件：接口 `<外设>.h`、与芯片无关的辅助代码 `<外设>.c`、芯片实现 `<外设>_<芯片>.c`（ADR 0066）：
 
-| 目录 | 接口 | 芯片实现 | 辅助代码（与芯片无关，电脑上测试） |
+| 目录 | 接口 | 芯片实现 | 辅助代码 `<外设>.c`（与芯片无关，电脑上测试；声明在接口头文件末尾一节） |
 | --- | --- | --- | --- |
-| `can/` | `can.h` | `can_stm32h7.c`（FDCAN，全放行，ADR 0049） | `can_dlc`（DLC 换算）、`can_rx_ring`（接收环形缓冲） |
-| `uart/` | `uart.h` | `uart_stm32h7.c`（DMA 循环接收 + 空闲中断） | `dma_ring`（从 DMA 循环缓冲取数） |
-| `usb_cdc/` | `usb_cdc.h` | `usb_cdc_stm32h7.c` | `byte_ring`（字节环形缓冲） |
-| `time/` | `time.h` | `time_stm32h7.c`（DWT） | `cycle_extend`（32 位计数扩展成 64 位） |
-| `status_led/` | `status_led.h` | `status_led_stm32h7.c`（SPI 驱动 WS2812） | `ws2812`（颜色编码） |
+| `can/` | `can.h` | `can_stm32h7.c`（FDCAN，全放行，ADR 0049） | `can.c`：DLC 换算、接收环形缓冲 |
+| `uart/` | `uart.h` | `uart_stm32h7.c`（DMA 循环接收 + 空闲中断） | `uart.c`：从 DMA 循环缓冲取数 |
+| `usb_cdc/` | `usb_cdc.h` | `usb_cdc_stm32h7.c` | `usb_cdc.c`：字节环形缓冲 |
+| `time/` | `time.h` | `time_stm32h7.c`（DWT） | `time.c`：32 位计数扩展成 64 位 |
+| `status_led/` | `status_led.h` | `status_led_stm32h7.c`（SPI 驱动 WS2812） | `status_led.c`：WS2812 颜色编码 |
 | `spi/` | `spi.h` | `spi_stm32h7.c` | |
 | `pwm/` | `pwm.h` | `pwm_stm32h7.c` | |
 | `adc/` | `adc.h` | `adc_stm32h7.c` | |

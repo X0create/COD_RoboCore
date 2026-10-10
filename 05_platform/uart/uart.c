@@ -1,8 +1,10 @@
 /**
- * @file    dma_ring.c
- * @brief   DMA 循环接收缓冲区取数，见 dma_ring.h
+ * @file    uart.c
+ * @brief   uart 的芯片实现共用的辅助代码（与芯片无关，电脑上测试），见 uart.h 末尾一节
  */
-#include "dma_ring.h"
+#include "uart.h"
+
+#include <string.h>
 
 #include <string.h>
 

@@ -6,7 +6,7 @@
  *          - 设备层不做任何闭环（ADR 0016）。
  *
  *          一个电机怎么用（和老模板 SendValue → CAN_Task 的顺序相同）：
- *            收：comm_rx_task  can_read() 取一帧 → motor_receive(&电机, 总线, &帧)，是它的反馈就解码、存下、喂狗
+ *            收：comm_rx_task  can_read() 取一帧 → motor_group_receive() 依次 motor_receive(&电机, 总线, &帧)，是它的反馈就解码、存下、喂狗
  *            读：control_task  motor_read_feedback()，在临界区里拷贝完整快照（带在线判断）
  *            写：control_task  motor_set_torque() / motor_apply_stop_action()  —— 只记下本周期的指令，还没有发送
  *            发：control_task  周期末尾 motor_group_send()：确定最终指令（停机动作 > 没写指令 > 离线 > 力矩）
@@ -37,7 +37,7 @@ extern "C"
 #define DJI_M2006_GEAR_RATIO 36.0f
 
 /*
- * M3508 + C620 的换算常数（附录 A.2），全仓库只在这里定义：dji_motor.c 编解码、params.h 把旧工程的 PID
+ * M3508 + C620 的换算常数（附录 A.2），全仓库只在这里定义：dji_motor.c 编解码、robot.h 把旧工程的 PID
  * 换算到国际单位都用这里。C620 电流原始值 ±16384 对应 ±20 A；原装减速箱输出轴 0.3 N·m/A
  */
 #define DJI_C620_RAW_MAX   16384
@@ -78,7 +78,7 @@ typedef struct
     float damp_kd;      /* 阻尼停机时的 Kd，N·m·s/rad（0–5） */
 } DmConfig;
 
-/** 本车固定参数：写成params.h 里的 const 配置表，运行中不变 */
+/** 本车固定参数：写成 robot.h 里的 const 配置表，运行中不变 */
 typedef struct
 {
     const char *name; /* 日志和设备清单里的名字 */

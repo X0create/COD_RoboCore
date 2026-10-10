@@ -73,21 +73,14 @@ static Motor pool[128];
 static unsigned pool_used;
 static MotorGroup group;
 
-/* 相当于comm_rx_task.c：把收到的一帧依次交给组里的每个电机（motor_receive），有电机认领就返回 true */
+/* 相当于 comm_rx_task.c：把收到的一帧交给电机组（motor_group_receive），有电机认领就返回 true */
 static bool deliver(CanBusId bus, uint32_t id, const uint8_t *data, uint8_t len)
 {
     CanFrame frame = { .id = id,
                        .len = len,
                        .stamp_us = rm_time_now_us() }; /* 中断里记下的接收时刻 */
     memcpy(frame.data, data, len);
-    for (Motor *m = group.head; m != NULL; m = m->next)
-    {
-        if (motor_receive(m, bus, &frame))
-        {
-            return true;
-        }
-    }
-    return false;
+    return motor_group_receive(&group, bus, &frame);
 }
 static Motor *wheel[CHASSIS_WHEELS];
 static Motor *steer[CHASSIS_WHEELS];

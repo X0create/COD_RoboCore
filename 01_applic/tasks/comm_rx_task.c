@@ -4,12 +4,12 @@
  * @note    相当于老模板 bsp_can.c / bsp_uart.c 里的接收回调，但解析放在任务里，中断只收数据并唤醒本任务。
  *          完整的接收流程都在这一个文件：中断回调、打开接收、读取与分派、CAN bus-off 恢复。
  *          接线一览（接线沿用 COD-H7-Template）：
- *            CAN       四个轮子电机的反馈（总线和 ID 在 params.h 的 wheel_config）
+ *            CAN       全部电机的反馈 → 电机组 motors（总线和 ID 在 robot.h 的电机表，如 wheel_config）
  *            UART5     DR16 遥控接收机 → dr16（保存最新一帧，dr16_read() 读）
  */
-#include "comm_rx_task.h"
+#include "tasks.h"
 
-#include "01_applic/config/objects.h"
+#include "01_applic/config/robot.h"
 #include "04_core/log/log.h"
 #include "05_platform/can/can.h"
 #include "05_platform/time/time.h"
@@ -82,19 +82,13 @@ void comm_rx_task_entry(void *arg)
     {
         (void)rm_task_wait_notify(COMM_RX_IDLE_MS); /* 等中断通知“有新数据”，最多 10 ms */
 
-        /* CAN → 四个轮子电机：每帧依次交给每个电机，总线和反馈 ID 都对上才收（motor_receive）；
-         * 电机在哪路总线只写在 params.h 的 wheel_config 里 */
+        /* CAN → 电机：每帧交给电机组，总线和反馈 ID 都对上的电机才收（motor_group_receive）。
+         * 加电机不用改这里：robot.c 里 motor_init(..., &motors, ...) 就进了组 */
         for (int bus = 0; bus < (int)CAN_BUS_COUNT; bus++)
         {
             while (can_read((CanBusId)bus, &frame))
             {
-                for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
-                {
-                    if (motor_receive(&wheel_motor[i], (CanBusId)bus, &frame))
-                    {
-                        break;
-                    }
-                }
+                (void)motor_group_receive(&motors, (CanBusId)bus, &frame);
             }
         }
         recover_bus_off(); /* bus-off 的总线每 100 ms 重启一次 */

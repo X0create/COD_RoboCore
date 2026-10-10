@@ -77,15 +77,15 @@
 
 | 想做的事 | 去哪里 |
 | --- | --- |
-| 改电机 ID、CAN 总线、方向、停机动作 | `01_applic/config/params.h` 的电机表 |
-| 调底盘 PID、改尺寸、满杆速度 | `01_applic/config/params.h` |
-| 改解锁 / 急停的拨杆、IMU 安装方向 | `01_applic/config/params.h` |
+| 改电机 ID、CAN 总线、方向、停机动作 | `01_applic/config/robot.h` 的电机表 |
+| 调底盘 PID、改尺寸、满杆速度 | `01_applic/config/robot.h` |
+| 改解锁 / 急停的拨杆、IMU 安装方向 | `01_applic/config/robot.h` |
 | 其他参数（超时、加热、EKF 噪声……）在哪 | `01_applic/README.md`“参数在哪里”表，**每个参数只在一处定义** |
 | 改每个控制周期做什么 | `01_applic/tasks/control_task.c` |
 | 改收到 CAN 帧后交给哪个电机 | `01_applic/tasks/comm_rx_task.c` |
 | 改 RTT 打印的内容 | `01_applic/tasks/log_task.c` |
-| 加一个车上对象（电机、机构） | `01_applic/config/objects.c`（定义 + 初始化）、`objects.h`（声明） |
-| 加 / 改任务的优先级、栈 | `01_applic/config/task_table.c` |
+| 加一个车上对象（电机、机构） | `01_applic/config/robot.c`（定义 + 初始化）、`robot.h`（声明）；电机进了电机组就能收到反馈，不用改 comm_rx_task |
+| 加 / 改任务的优先级、栈 | `01_applic/config/robot.c` 的 `task_table[]`（新任务的入口声明在 `tasks/tasks.h`） |
 | 改引脚、外设、时钟 | CubeMX 打开 `06_boards/dm_mc02_h723/dm_mc02.ioc`，然后核对 `REGEN_CHECKLIST.md` |
 
 ## 3. 常见任务的做法
@@ -99,7 +99,7 @@
 1. 在 `01_applic/modules/<机构名>/` 里写一对 `<机构名>.h/.c`：一个结构体 + 一组函数，只做计算，不建任务、不直接碰外设；
    机构之间不互相 include，需要的数据由任务读出来传进去。
 2. 在 `tests/host/01_applic/` 里写单元测试（照已有的 `test_chassis` 写）。
-3. 在 `config/objects.c` 里创建对象，在 `tasks/control_task.c` 里每个周期调用。
+3. 在 `config/robot.c` 里创建对象，在 `tasks/control_task.c` 里每个周期调用。
 4. 更新该目录的 `README.md` 和 CMake；Keil 用户运行 `python3 tools/keil_sync.py`。
 
 ### 3.3 新增一种设备（新电机、新传感器）
@@ -111,7 +111,7 @@
 
 ### 3.4 调参
 
-1. 先在 `params.h` 里改，参数名带单位（`_rad`、`_ms`……）。
+1. 先在 `robot.h` 里改，参数名带单位（`_rad`、`_ms`……）。
 2. 用 Ozone 的 Watched Data 或 Data Sampling 实时看变量曲线（`docs/DEV_ENVIRONMENT.md` 第 9 节）。
 3. 调好的数值和条件（台架还是整车、负载、电压）写进提交说明。
 

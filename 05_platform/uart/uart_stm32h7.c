@@ -8,7 +8,6 @@
 #include "05_platform/uart/uart.h"
 
 #include "05_platform/stm32h7/dma_buf.h"
-#include "dma_ring.h"
 
 #include <usart.h>
 

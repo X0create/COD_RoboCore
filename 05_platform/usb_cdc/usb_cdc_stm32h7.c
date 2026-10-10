@@ -12,7 +12,6 @@
 
 #include <string.h>
 
-#include "byte_ring.h"
 #include <usb_device.h>
 #include <usbd_cdc.h>
 #include <usbd_cdc_if.h>

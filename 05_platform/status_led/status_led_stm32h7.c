@@ -6,8 +6,6 @@
  */
 #include "05_platform/status_led/status_led.h"
 
-#include "ws2812.h"
-
 #include <spi.h>
 
 /* 124 字节在 6 MHz 下约 165 µs；超时只用来防止外设卡死，不用来控制节奏 */

@@ -1,13 +1,12 @@
-# 一个外设一个目录：接口 <外设>.h、芯片实现 <外设>_<芯片>.c、与芯片无关的辅助代码都在里面
+# 一个外设一个目录：接口 <外设>.h、与芯片无关的辅助代码 <外设>.c、芯片实现 <外设>_<芯片>.c
 
 # 与芯片无关的辅助代码（纯计算），只给本层的芯片实现用；电脑测试和固件都链接它
 add_library(rm_platform_common STATIC
-    can/can_dlc.c
-    can/can_rx_ring.c
-    status_led/ws2812.c
-    time/cycle_extend.c
-    uart/dma_ring.c
-    usb_cdc/byte_ring.c
+    can/can.c
+    status_led/status_led.c
+    time/time.c
+    uart/uart.c
+    usb_cdc/usb_cdc.c
 )
 # 以 "05_platform/can/can.h" 的形式 include
 target_include_directories(rm_platform_common PUBLIC ${PROJECT_SOURCE_DIR})

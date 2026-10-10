@@ -1,8 +1,30 @@
 /**
- * @file    can_rx_ring.c
- * @brief   CAN 接收帧环形缓冲，见 can_rx_ring.h
+ * @file    can.c
+ * @brief   can 的芯片实现共用的辅助代码（与芯片无关，电脑上测试），见 can.h 末尾一节
  */
-#include "can_rx_ring.h"
+#include "can.h"
+
+/* DLC 编码 0–15 对应的字节数 */
+static const uint8_t dlc_len[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64 };
+
+uint8_t can_dlc_to_len(uint8_t dlc)
+{
+    return dlc_len[(dlc > 15u) ? 15u : dlc];
+}
+
+/* 反查：只有表里的长度（0–8、12、16、20、24、32、48、64）能发，其他长度返回 false */
+bool can_len_to_dlc(uint8_t len, uint8_t *dlc)
+{
+    for (uint8_t code = 0u; code < 16u; code++)
+    {
+        if (dlc_len[code] == len)
+        {
+            *dlc = code;
+            return true;
+        }
+    }
+    return false;
+}
 
 _Static_assert((CAN_RX_RING_SIZE & (CAN_RX_RING_SIZE - 1u)) == 0u,
                "CAN_RX_RING_SIZE must be a power of 2");

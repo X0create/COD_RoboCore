@@ -1,8 +1,8 @@
 /**
- * @file    cycle_extend.c
- * @brief   32 位周期计数扩展成 64 位，见 cycle_extend.h
+ * @file    time.c
+ * @brief   time 的芯片实现共用的辅助代码（与芯片无关，电脑上测试），见 time.h 末尾一节
  */
-#include "cycle_extend.h"
+#include "time.h"
 
 void cycle_extend_init(CycleExtend *ext, uint32_t raw)
 {

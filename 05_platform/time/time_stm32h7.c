@@ -5,8 +5,6 @@
  */
 #include "05_platform/time/time.h"
 
-#include "cycle_extend.h"
-
 #include <stm32h7xx.h>
 
 /* CoreSight 组件的软件锁解锁值，由 Arm 架构规定；CMSIS 没有为 DWT 定义这个常数 */

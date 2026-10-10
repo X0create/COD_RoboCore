@@ -1,9 +1,8 @@
 /**
- * @file    ws2812.c
- * @brief   WS2812 的 SPI 编码，见 ws2812.h
- * @note    编码方式参考 COD_UniCFramework `dev_ws2812.c`
+ * @file    status_led.c
+ * @brief   status_led 的芯片实现共用的辅助代码（与芯片无关，电脑上测试），见 status_led.h 末尾一节
  */
-#include "ws2812.h"
+#include "status_led.h"
 
 void ws2812_encode(uint8_t out[WS2812_BYTES_PER_LED], uint8_t red, uint8_t green, uint8_t blue)
 {

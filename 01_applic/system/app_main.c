@@ -6,7 +6,7 @@
  */
 #include "app_main.h"
 
-#include "01_applic/config/objects.h"
+#include "01_applic/config/robot.h"
 #include "01_applic/system/safety_gate.h"
 #include "04_core/log/log.h"
 #include "05_platform/time/time.h"
@@ -49,7 +49,7 @@ void app_main(void)
 
     /* 读故障记录、board_init、参数在阶段 1 加入 */
 
-    if (!objects_init()) /* 3. 这台车的全部对象（objects.c） */
+    if (!robot_init()) /* 3. 这台车的全部对象（robot.c） */
     {
         RM_LOG_E("robot init failed");
         halt_on_init_failure();

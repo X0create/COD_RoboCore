@@ -1,6 +1,6 @@
 /**
  * @file    motor_group.c
- * @brief   电机组打包发送，见 motor_group.h
+ * @brief   电机组：接收分派、打包发送，见 motor_group.h
  */
 #include "motor_group.h"
 
@@ -10,6 +10,18 @@
 #include "05_platform/time/time.h"
 #include "dji_motor.h"
 #include "dm_motor.h"
+
+bool motor_group_receive(MotorGroup *group, CanBusId bus, const CanFrame *frame)
+{
+    for (Motor *m = group->head; m != NULL; m = m->next)
+    {
+        if (motor_receive(m, bus, frame))
+        {
+            return true;
+        }
+    }
+    return false;
+}
 
 void motor_group_apply_stop_all(MotorGroup *group)
 {

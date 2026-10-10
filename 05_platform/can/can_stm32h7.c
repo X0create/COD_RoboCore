@@ -9,9 +9,6 @@
 
 #include "05_platform/time/time.h"
 
-#include "can_dlc.h"
-#include "can_rx_ring.h"
-
 #include <fdcan.h>
 
 #include <stddef.h>

@@ -2,7 +2,7 @@
  * @file    can.h
  * @brief   CAN / CAN FD 收发（《架构设计》核心机制第 1 节、运行时契约第 6 节）
  * @note    - 只支持 11 位标准 ID（DJI、达妙都用标准 ID）；接收全部标准数据帧，扩展帧和远程帧拒收。
- *            每条总线上只挂本车的设备，不用硬件滤波；帧交给谁由comm_rx_task.c 显式写出（ADR 0049）；
+ *            每条总线上只挂本车的设备，不用硬件滤波；comm_rx_task.c 用 can_read() 取帧、交给电机组（ADR 0049、0066）；
  *          - 中断里只把帧放进环形缓冲并调用通知回调，任务里用 can_read() 逐帧取出；
  *          - 使用顺序：调度器启动后 can_start() → 任务里 can_read()。
  */
@@ -85,6 +85,52 @@ void can_recover(CanBusId bus);
 
 /** 接收环形缓冲满、被丢弃的帧数（调试用） */
 uint32_t can_rx_dropped(CanBusId bus);
+
+/* ---------------- 芯片实现共用的辅助代码（实现在 can.c） ---------------- */
+/* 与芯片无关，电脑上测试；只给本目录的 *_<芯片>.c 用，上层不要调用 */
+
+/*
+ * DLC：CAN 数据字节数与 DLC 编码（0–15）互相换算。
+ * DLC 0–8 就是字节数；9–15 依次表示 12、16、20、24、32、48、64 字节（只有 CAN FD 帧用得到）。
+ */
+
+/** DLC 编码 → 字节数；超过 15 的编码按 15 处理 */
+uint8_t can_dlc_to_len(uint8_t dlc);
+
+/**
+ * @brief   字节数 → DLC 编码
+ * @param   dlc  输出的编码
+ * @return  false：这个字节数不是合法的 CAN 帧长度（例如 FD 帧 10 字节、任何帧超过 64 字节）
+ */
+bool can_len_to_dlc(uint8_t len, uint8_t *dlc);
+
+/*
+ * 接收环形缓冲：单生产者、单消费者，中断写、任务读。
+ * 生产者（中断）只改 head，消费者（任务）只改 tail，不需要关中断（《架构设计》运行时契约第 2 节）。
+ * 容量为 CAN_RX_RING_SIZE - 1 帧（空一格区分空和满）。
+ */
+
+#define CAN_RX_RING_SIZE 32u /* 必须是 2 的幂；1 kHz 反馈时约 30 ms 的余量 */
+
+typedef struct
+{
+    CanFrame frames[CAN_RX_RING_SIZE];
+    volatile uint32_t head;    /* 只由生产者（中断）改 */
+    volatile uint32_t tail;    /* 只由消费者（任务）改 */
+    volatile uint32_t dropped; /* 满了被丢弃的帧数，只由生产者改 */
+} CanRxRing;
+
+/**
+ * @brief   放入一帧（生产者调用）
+ * @return  false：已满，这一帧被丢弃并计数
+ */
+bool can_rx_ring_push(CanRxRing *ring, const CanFrame *frame);
+
+/**
+ * @brief   取出一帧（消费者调用）
+ * @return  false：没有帧
+ */
+bool can_rx_ring_pop(CanRxRing *ring, CanFrame *out);
 
 #ifdef __cplusplus
 }

@@ -1,8 +1,8 @@
 /**
- * @file    byte_ring.c
- * @brief   字节环形缓冲，见 byte_ring.h
+ * @file    usb_cdc.c
+ * @brief   usb_cdc 的芯片实现共用的辅助代码（与芯片无关，电脑上测试），见 usb_cdc.h 末尾一节
  */
-#include "byte_ring.h"
+#include "usb_cdc.h"
 
 _Static_assert((BYTE_RING_SIZE & (BYTE_RING_SIZE - 1u)) == 0u,
                "BYTE_RING_SIZE must be a power of 2");

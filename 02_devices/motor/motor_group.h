@@ -7,7 +7,8 @@
  *            3. 周期末尾调用一次 motor_group_send()：确定最终指令 → 编码 → 发送 → 清空本周期指令。
  *          本周期没写的槽位和离线电机的槽位填零力矩，不“保持上一帧”。
  *          达妙电机每台每周期一帧：需要时是使能 / 失能 / 清错命令，否则是 MIT 帧；FD 总线上发 FD 帧。
- *          全部函数只在 control_task 里调用（motor_init 除外，它在初始化阶段）。
+ *          motor_group_receive() 在 comm_rx_task 里调用（只遍历初始化后不再变的电机链表）；其余函数只在
+ *          control_task 里调用（motor_init 除外，它在初始化阶段）。
  */
 #pragma once
 
@@ -31,6 +32,12 @@ struct MotorGroup
     bool disabled_sent[CAN_BUS_COUNT][DJI_CTRL_FRAMES];
     uint32_t tx_dropped; /* can_send 失败（发送队列满）被丢弃的帧数，调试用 */
 };
+
+/**
+ * @brief   收到的一帧交给组里的电机：依次问每个电机（motor_receive），总线和反馈 ID 对上的那个解码、喂狗
+ * @return  true：有电机认领了这一帧
+ */
+bool motor_group_receive(MotorGroup *group, CanBusId bus, const CanFrame *frame);
 
 /** 全车停：每个电机本周期改写成它配置的 stop_action（运行时契约第 5 节） */
 void motor_group_apply_stop_all(MotorGroup *group);

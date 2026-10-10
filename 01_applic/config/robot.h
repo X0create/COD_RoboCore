@@ -1,14 +1,20 @@
 /**
- * @file    params.h
- * @brief   这台车的全部可调参数（目前：四轮全向轮底盘，遥控直接给底盘速度）
- * @note    这台车的参数都在这里，objects.c 只用这里的配置表创建对象。通用的参数（电池阈值、EKF、IMU 加热、
- *          各种超时）留在各自模块里，位置见 01_applic/README.md“参数在哪里”。
+ * @file    robot.h
+ * @brief   这台车（目前：四轮全向轮底盘，遥控直接给底盘速度）：全部可调参数 + 全部对象的声明
+ * @note    改车只看两个文件：本文件（参数表、对象声明）和 robot.c（对象定义、robot_init()、任务表）。
+ *          通用的参数（电池阈值、EKF、IMU 加热、各种超时）留在各自模块里，位置见 01_applic/README.md“参数在哪里”。
  *          标 “待量” 的尺寸按实车量好再改；标 “待核对” 的方向在台架上按 docs/VERIFICATION_TODO.md 核对。
  *          换轮组：改 chassis_config 的 .type 并填对应的尺寸（全向轮 .omni、麦轮 .mecanum、
  *          舵轮 .steer，半舵半全向 .half_steer + .steer 的零点和 PID，含义见 03_algorithm/kinematics/ 下的头文件）；
- *          舵轮还要在 objects.c 里加 4 个转向电机，半舵半全向加 2 个（全向轮位置传 NULL）。
+ *          舵轮还要在 robot.c 里加 4 个转向电机，半舵半全向加 2 个（全向轮位置传 NULL）。
  *          PID 不带 dt（ADR 0029），参数和 1 kHz 调用频率绑定。
- *          这里的表是 static const：只给 objects.c 和 01_applic/tasks/ 里的任务用，没用到的不占空间。
+ *          参数表是 static const：只给 robot.c 和 01_applic/tasks/ 里的任务用，没用到的不占空间。
+ *          对象相当于老模板里各任务直接读的全局变量（remote_ctrl、Chassis_Motor[] 等），其他层不 include 本文件
+ *          （CODING_STANDARD 第 8 节的例外）。谁写谁读：
+ *            dr16（遥控）        comm_rx_task 写；control、log 用 dr16_read() 读
+ *            ins（姿态）         ins_task 写；control、log 用 ins_read() 读
+ *            电机反馈            comm_rx_task 经 motor_group_receive(&motors, …) 写；chassis、log 用 motor_read_feedback() 读
+ *            chassis、电机指令   只在 control_task 里写；log 只读来打印
  */
 #pragma once
 
@@ -16,8 +22,17 @@
 
 #include "01_applic/modules/chassis/chassis.h"
 #include "01_applic/modules/ins/ins.h"
+#include "01_applic/system/safety_gate.h"
 #include "02_devices/motor/motor.h"
+#include "02_devices/motor/motor_group.h"
+#include "02_devices/remote/dr16.h"
 #include "03_algorithm/math/math_const.h"
+#include "05_platform/compiler.h"
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
 /* ------------------------------------------------------------------ */
 /* 驱动轮电机：一行一个轮子，按实车接线改                                */
@@ -108,3 +123,24 @@ static const InsConfig ins_config = { .install_rotation = {
                                           0.0f, 1.0f, 0.0f, /* 机体 y */
                                           0.0f, 0.0f, 1.0f, /* 机体 z */
                                       } };
+
+/* ================================================================== */
+/* 对象（定义在 robot.c）                                               */
+/* ================================================================== */
+
+extern Dr16 dr16;
+extern Motor wheel_motor[CHASSIS_WHEELS]; /* 轮 0–3：左前、左后、右后、右前 */
+extern MotorGroup motors; /* 全部电机：comm_rx_task 收反馈、control_task 最后统一发送 */
+
+extern Chassis chassis;
+extern Ins ins;
+
+/**
+ * @brief   初始化这台车的全部对象（设备 → 机构 → 安全门），由 app_main() 在调度器启动前调用
+ * @return  false：必需的设备或机构初始化失败，原因已记日志
+ */
+RM_NODISCARD bool robot_init(void);
+
+#ifdef __cplusplus
+}
+#endif

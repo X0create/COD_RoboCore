@@ -15,7 +15,7 @@
    `board_link_float_to_i16()`（超范围截到边界，NaN 编成“无效”）。**不要 memcpy 结构体**（填充字节、编译器可能不同）。
 2. **ID**：不能和这路总线上任何电机的控制 / 反馈 ID 重复（DJI 占 0x1FF、0x200、0x2FF、0x201–0x20B 等，达妙占
    配置的 CAN ID 和 Master ID），也不能和别的跨板消息重复。`board_link_init()` 会对本板电机组和本板的其他消息检查。
-3. **发送方**：`objects_init()` 里电机都初始化之后 `board_link_init(&msg, &cfg, BOARD_LINK_TX, &motors)`；
+3. **发送方**：`robot_init()` 里电机都初始化之后 `board_link_init(&msg, &cfg, BOARD_LINK_TX, &motors)`；
    任务里按周期编码载荷 → `board_link_send(&msg, payload, age_ms)`。
 4. **接收方**：同样初始化，方向 `BOARD_LINK_RX`；`comm_rx_task.c` 里把这路 CAN 的帧交给它
    （`board_link_receive(&msg, bus, &frame)`，和 `motor_receive` 并列）；使用方 `board_link_read()`，

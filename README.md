@@ -106,7 +106,7 @@ COD_RoboCore/
 │   │   ├── chassis/         底盘（全向轮 / 麦轮 / 舵轮 / 半舵半全向）
 │   │   ├── ins/             惯性导航（标定、零偏在线修正、EKF、发布姿态）
 │   │   └── gimbal/ shooter/ leg/ arm/   （规划）云台、发射、轮腿、机械臂
-│   └── config/              这台车：params.h（参数）、objects.h / objects.c（对象 + objects_init）、task_table.c（任务表）；目前是四轮全向轮底盘
+│   └── config/              这台车：robot.h（参数 + 对象声明）、robot.c（对象 + robot_init + 任务表）；目前是四轮全向轮底盘
 ├── 02_devices/              具体设备驱动（≈ 老模板 Components/Device）
 │   ├── motor/               统一电机接口、DJI、达妙、电机组发送
 │   ├── imu/                 BMI088（含恒温加热）
@@ -130,7 +130,7 @@ COD_RoboCore/
 │   ├── util/                CRC
 │   └── error/  param/       （规划）断言与故障记录、Flash 参数
 ├── 05_platform/             外设接口（≈ 老模板 BSP/）：一个外设一个目录，接口 + 芯片实现 + 辅助代码
-│   ├── can/                 can.h、can_stm32h7.c（FDCAN）、can_dlc、can_rx_ring
+│   ├── can/                 can.h、can.c（DLC、接收环形缓冲）、can_stm32h7.c（FDCAN）
 │   ├── uart/  usb_cdc/      串口（DMA 循环接收）、USB 虚拟串口
 │   ├── time/  status_led/   DWT 时钟、WS2812 状态灯
 │   ├── spi/  pwm/  adc/
@@ -220,8 +220,8 @@ CMake 报“CMakeCache.txt directory is different”时，删掉对应的 `build
 
 本仓库是通用模板，`01_applic/config/` 是“这台车”。做英雄、工程、哨兵等具体的车时复制整个仓库，然后：
 
-1. 改 `config/params.h`：电机表（CAN 总线、ID、方向、停机动作）、PID、尺寸、解锁拨杆、IMU 安装方向。
-2. 改 `config/objects.c`：`objects_init()` 里初始化设备和机构；`config/objects.h` 同步声明新增的对象；加任务时改 `config/task_table.c`。
+1. 改 `config/robot.h`：电机表（CAN 总线、ID、方向、停机动作）、PID、尺寸、解锁拨杆、IMU 安装方向。
+2. 改 `config/robot.c`：定义对象、在 `robot_init()` 里初始化设备和机构，`robot.h` 同步声明；加任务时改同一文件的 `task_table[]`，入口声明在 `tasks/tasks.h`。电机 `motor_init()` 时就进了电机组，CAN 接收不用改。
 3. 改 `01_applic/tasks/control_task.c`：每个控制周期做什么（读输入 → 安全门 → 各机构 → 发送，四步写在循环里）；
    `tasks/comm_rx_task.c` 改接线，`tasks/log_task.c` 改打印内容。各任务的调用关系见 `docs/CALL_FLOW.md`。
 4. 需要新机构（云台、发射……）时在 `01_applic/modules/` 里加，再在第 2、3 步里接上。

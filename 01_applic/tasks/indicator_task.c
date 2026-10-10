@@ -1,9 +1,11 @@
 /**
  * @file    indicator_task.c
- * @brief   indicator_task，见 indicator_task.h
- * @note    状态灯、蜂鸣器、电池的对象和参数只在本文件。
+ * @brief   indicator_task（25 ms）：状态灯、蜂鸣器、低电量检查，通用（照 COD_UniCFramework 的 app_indicator）
+ * @note    状态灯、蜂鸣器、电池的对象和参数只在本文件；ADC、蜂鸣器 PWM 也在本任务开头打开。
+ *          提示依据的状态直接读权威来源，不另存副本：模式读 safety_gate.mode，电量由本任务读 ADC 判断。
+ *          提示：绿灯每秒闪两下（一长一短）= 正常；启动音；解锁音 / 上锁音；低电量每 2 s 响一次。
  */
-#include "indicator_task.h"
+#include "tasks.h"
 
 #include "01_applic/system/safety_gate.h"
 #include "02_devices/battery/battery.h"

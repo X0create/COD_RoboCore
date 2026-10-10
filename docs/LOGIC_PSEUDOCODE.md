@@ -30,11 +30,10 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `system/app_main.c/.h` | 上电顺序：DWT 计时 → RTT 日志 → `objects_init()` → 按任务表建任务；`startup_task` 允许解锁后删除自己（第 1 节） |
+| `system/app_main.c/.h` | 上电顺序：DWT 计时 → RTT 日志 → `robot_init()` → 按任务表建任务；`startup_task` 允许解锁后删除自己（第 1 节） |
 | `system/safety_gate.c/.h` | 安全门：Init → Safe → Manual，决定这一周期是否全车停（第 6 节） |
-| `config/params.h` | 这台车的全部可调参数：电机表、底盘尺寸与 PID、满杆速度、解锁拨杆、IMU 安装方向 |
-| `config/objects.c/.h` | 这台车的全部对象（遥控、IMU、电机、底盘）和 `objects_init()` |
-| `config/task_table.c` | 任务表：6 个任务的名字、入口、优先级、栈 |
+| `config/robot.h` | 这台车的全部可调参数（电机表、底盘尺寸与 PID、满杆速度、解锁拨杆、IMU 安装方向）和全部对象的声明 |
+| `config/robot.c` | 这台车的全部对象（遥控、IMU、电机、底盘）、`robot_init()`、任务表（6 个任务的名字、入口、优先级、栈） |
 | `tasks/ins_task.c/.h` | 1 ms：初始化 BMI088，循环调用 `ins_step()`，把事件写进日志（第 4 节） |
 | `tasks/comm_rx_task.c/.h` | 收到数据就运行：打开 CAN、串口接收，把数据交给电机、DR16 解析；CAN bus-off 恢复（第 3 节） |
 | `tasks/control_task.c/.h` | 1 ms：读输入 → 安全门 → 底盘 → 发电机指令（第 5 节） |
@@ -99,24 +98,23 @@
 
 ### 05_platform 平台层
 
-每个外设一个目录：`xxx.h` 是接口，`xxx_stm32h7.c` 是 H723 的实现，其余是与芯片无关、电脑上可测的辅助代码。
+每个外设一个目录：`xxx.h` 是接口，`xxx_stm32h7.c` 是 H723 的实现，`xxx.c` 是与芯片无关、电脑上可测的辅助代码。
 
 | 文件 | 作用 |
 | --- | --- |
 | `can/can.h`、`can_stm32h7.c` | CAN / CAN FD 收发（FDCAN），接收中断把帧放进环形缓冲 |
-| `can/can_rx_ring.c/.h` | CAN 接收环形缓冲：中断写、任务读 |
-| `can/can_dlc.c/.h` | 数据字节数与 DLC 编码互相换算 |
+| `can/can.c` | 辅助：CAN 接收环形缓冲（中断写、任务读）、数据字节数与 DLC 编码互相换算 |
 | `uart/uart.h`、`uart_stm32h7.c` | 串口 DMA 循环接收 + 空闲中断 |
-| `uart/dma_ring.c/.h` | 从 DMA 循环缓冲里取出新字节 |
+| `uart/uart.c` | 辅助：从 DMA 循环缓冲里取出新字节 |
 | `spi/spi.h`、`spi_stm32h7.c` | SPI 阻塞传输，设备按用途命名（`SPI_DEV_IMU_ACCEL` 等） |
 | `pwm/pwm.h`、`pwm_stm32h7.c` | PWM 输出，通道按用途命名（`PWM_IMU_HEATER` 等），设置占空比和频率 |
 | `adc/adc.h`、`adc_stm32h7.c` | ADC DMA 连续采样，读引脚电压 |
 | `time/time.h`、`time_stm32h7.c` | 全工程唯一的时间基准：上电以来的微秒数（DWT） |
-| `time/cycle_extend.c/.h` | 把会回绕的 32 位周期计数扩展成 64 位 |
+| `time/time.c` | 辅助：把会回绕的 32 位周期计数扩展成 64 位 |
 | `status_led/status_led.h`、`status_led_stm32h7.c` | 板载状态灯（MC02 是 SPI6 上的一颗 WS2812） |
-| `status_led/ws2812.c/.h` | WS2812 颜色到 SPI 字节的编码 |
+| `status_led/status_led.c` | 辅助：WS2812 颜色到 SPI 字节的编码 |
 | `usb_cdc/usb_cdc.h`、`usb_cdc_stm32h7.c` | USB 虚拟串口，与上位机通信的默认通道（未接线） |
-| `usb_cdc/byte_ring.c/.h` | 字节环形缓冲：中断写、任务读 |
+| `usb_cdc/usb_cdc.c` | 辅助：字节环形缓冲（中断写、任务读） |
 | `stm32h7/dma_buf.h` | 把变量放进 DMA 专用段（不可缓存的 AXI SRAM） |
 | `compiler.h` | 编译器属性（`RM_NODISCARD` 等） |
 | `gpio/`、`flash/`、`iwdg/` | 规划中，只有 README |
@@ -173,11 +171,11 @@ main()（CubeMX 生成）
         调用 app_main()                                    → 01_applic/system/app_main.c:app_main
             初始化 DWT 计时器；失败就停住
             初始化 RTT 日志
-            objects_init()：初始化这台车的全部对象              → 01_applic/config/objects.c:objects_init
+            robot_init()：初始化这台车的全部对象              → 01_applic/config/robot.c:robot_init
                 初始化 DR16 遥控（最新一帧保存在 dr16 里）
                 对 4 个轮子电机：检查配置、查 ID 冲突、加入电机组
-                初始化底盘（轮组类型、尺寸、PID 来自 params.h）
-                初始化 ins（安装方向来自 params.h，最新姿态保存在 ins 里）
+                初始化底盘（轮组类型、尺寸、PID 来自 robot.h）
+                初始化 ins（安装方向来自 robot.h，最新姿态保存在 ins 里）
                 初始化安全门（解锁拨杆 = 右拨杆），模式 = Init
                 任何一步失败 → 停住，不建任何任务（电机不会收到指令）
             按任务表 task_table[] 逐个创建 6 个任务；有一个失败就停住
@@ -217,7 +215,7 @@ CAN 接收中断（收到一帧）                                → 05_platfor
 
     对每一路 CAN：
         取出缓冲里的每一帧：
-            依次问 4 个轮子电机“这帧是不是你的反馈”      → 02_devices/motor/motor.c:motor_receive
+            交给电机组，依次问每个电机“这帧是不是你的反馈” → 02_devices/motor/motor_group.c:motor_group_receive
                 总线对、反馈 ID 对（0x201–0x204）→ 是它的：
                     长度不是 8 → 丢弃
                     否则 解码出 角度、转速、力矩、温度（换成输出轴国际单位）
@@ -280,7 +278,7 @@ CAN 接收中断（收到一帧）                                → 05_platfor
 
     【第 3 步 底盘】
     如果 stop_all：目标速度 = 0
-    否则：目标速度 = 摇杆换算（ch[3] 前后、ch[2] 左右、ch[0] 旋转，满杆速度见 params.h）
+    否则：目标速度 = 摇杆换算（ch[3] 前后、ch[2] 左右、ch[0] 旋转，满杆速度见 robot.h）
     底盘计算（见第 7 节），解锁后 300 ms 内输出限幅从 0 逐渐升到 1 倍
 
     【第 4 步 发送】

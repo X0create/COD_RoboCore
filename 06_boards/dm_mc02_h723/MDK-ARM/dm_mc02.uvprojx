@@ -739,14 +739,9 @@
           <GroupName>01_applic/config</GroupName>
           <Files>
             <File>
-              <FileName>objects.c</FileName>
+              <FileName>robot.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\config\objects.c</FilePath>
-            </File>
-            <File>
-              <FileName>task_table.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\01_applic\config\task_table.c</FilePath>
+              <FilePath>..\..\..\01_applic\config\robot.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1084,14 +1079,9 @@
           <GroupName>05_platform/can</GroupName>
           <Files>
             <File>
-              <FileName>can_dlc.c</FileName>
+              <FileName>can.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\05_platform\can\can_dlc.c</FilePath>
-            </File>
-            <File>
-              <FileName>can_rx_ring.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\05_platform\can\can_rx_ring.c</FilePath>
+              <FilePath>..\..\..\05_platform\can\can.c</FilePath>
             </File>
             <File>
               <FileName>can_stm32h7.c</FileName>
@@ -1124,14 +1114,14 @@
           <GroupName>05_platform/status_led</GroupName>
           <Files>
             <File>
+              <FileName>status_led.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\05_platform\status_led\status_led.c</FilePath>
+            </File>
+            <File>
               <FileName>status_led_stm32h7.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\05_platform\status_led\status_led_stm32h7.c</FilePath>
-            </File>
-            <File>
-              <FileName>ws2812.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\05_platform\status_led\ws2812.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1139,9 +1129,9 @@
           <GroupName>05_platform/time</GroupName>
           <Files>
             <File>
-              <FileName>cycle_extend.c</FileName>
+              <FileName>time.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\05_platform\time\cycle_extend.c</FilePath>
+              <FilePath>..\..\..\05_platform\time\time.c</FilePath>
             </File>
             <File>
               <FileName>time_stm32h7.c</FileName>
@@ -1154,9 +1144,9 @@
           <GroupName>05_platform/uart</GroupName>
           <Files>
             <File>
-              <FileName>dma_ring.c</FileName>
+              <FileName>uart.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\05_platform\uart\dma_ring.c</FilePath>
+              <FilePath>..\..\..\05_platform\uart\uart.c</FilePath>
             </File>
             <File>
               <FileName>uart_stm32h7.c</FileName>
@@ -1169,9 +1159,9 @@
           <GroupName>05_platform/usb_cdc</GroupName>
           <Files>
             <File>
-              <FileName>byte_ring.c</FileName>
+              <FileName>usb_cdc.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\05_platform\usb_cdc\byte_ring.c</FilePath>
+              <FilePath>..\..\..\05_platform\usb_cdc\usb_cdc.c</FilePath>
             </File>
             <File>
               <FileName>usb_cdc_stm32h7.c</FileName>

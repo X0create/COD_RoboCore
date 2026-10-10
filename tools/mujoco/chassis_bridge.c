@@ -6,7 +6,7 @@
 
 #include <math.h>
 
-#include "01_applic/config/params.h"
+#include "01_applic/config/robot.h"
 #include "01_applic/system/safety_gate.h"
 #include "02_devices/motor/dji_motor.h"
 #include "02_devices/motor/motor_group.h"

@@ -1,8 +1,8 @@
 /**
- * @file    test_byte_ring.c
- * @brief   byte_ring 的单元测试：先进先出、写满丢弃并计数、回绕、分次取出
+ * @file    test_usb_cdc.c
+ * @brief   byte_ring（usb_cdc 的辅助代码）的单元测试：先进先出、写满丢弃并计数、回绕、分次取出
  */
-#include "05_platform/usb_cdc/byte_ring.h"
+#include "05_platform/usb_cdc/usb_cdc.h"
 
 #include "unity.h"
 
