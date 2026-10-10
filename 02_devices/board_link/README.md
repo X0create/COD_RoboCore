@@ -4,6 +4,7 @@
 
 - `board_link.c/.h`：一条跨板消息占一个 CAN ID；帧头 2 字节（`seq` 序号、`age_ms` 数据年龄）+ 载荷。
   载荷 ≤ 6 字节发经典帧，7–62 字节发 CAN FD 帧（只能在全 FD 总线上，ADR 0023）。不做多帧拼接。
+  **板间通信固定走 FDCAN3（`CAN_BUS_3`）**：MC02 上只有这一路是 CAN FD，FDCAN1、FDCAN2 是接电机的经典 CAN（ADR 0067）。
 - 设计依据：《架构设计》运行时契约第 8 节“板间通信 BoardLink”、ADR 0024、0064。
 - 尚未实现（阶段 8，与安全门一起设计，需用户确认）：心跳里的 `boot_id`、协议版本、两块板的解锁互锁
   （`local_fault` / `arm_request` / `armed`）。
@@ -32,7 +33,7 @@
 
 ```c
 static const BoardLinkConfig chassis_cmd_link = {
-    .name = "chassis_cmd", .can_bus = CAN_BUS_1, .id = 0x110, .payload_len = 6, .timeout_ms = 50,
+    .name = "chassis_cmd", .can_bus = CAN_BUS_3, .id = 0x110, .payload_len = 6, .timeout_ms = 50,
 };
 
 /* 发送方 */

@@ -44,7 +44,7 @@ typedef void (*CanRxNotify)(void *ctx);
 /**
  * @brief   设置为接收全部标准数据帧，打开接收中断并启动总线
  * @param   notify  收到新帧时在中断里调用，可以为 NULL（只靠任务轮询 can_read()）
- * @return  false：这块板没有这路总线，或 HAL 配置失败
+ * @return  false：这块板没有这路总线、HAL 配置失败，或 FD 总线的消息 RAM 每格不是 64 字节（CubeMX 配置错）
  * @pre     调度器已经启动；每路总线只调用一次
  */
 RM_NODISCARD bool can_start(CanBusId bus, CanRxNotify notify, void *ctx);

@@ -3,6 +3,7 @@
  * @brief   STM32H7 FDCAN 收发，见 05_platform/can/can.h
  * @note    - 接收全部标准数据帧，不用硬件滤波（同 COD-H7-Template `bsp_can.c` 的全放行，ADR 0049）；
  *          - 接收用哪个 FIFO 按 CubeMX 配置自动选：FDCAN1/3 用 FIFO0，FDCAN2 用 FIFO1（COD-H7-Template 的配置）；
+ *          - 总线分配（ADR 0067）：FDCAN1、FDCAN2 经典 CAN 1 Mbit/s 接电机，FDCAN3 CAN FD + BRS（1 / 5 Mbit/s）只给板间通信；
  *          - 中断把帧放进软件环形缓冲，comm_rx_task 用 can_read() 取出后按 ID 交给对应设备。
  */
 #include "05_platform/can/can.h"
@@ -35,6 +36,29 @@ static bool uses_fifo0(const FDCAN_HandleTypeDef *h)
     return h->Init.RxFifo0ElmtsNbr > 0u;
 }
 
+/*
+ * FD 总线的额外配置，在 HAL_FDCAN_Start 之前（初始化状态下）做：
+ * 1. 消息 RAM 每格必须是 64 字节：CubeMX 默认 8 字节，FD 帧超过 8 字节的部分会被硬件悄悄截掉，所以在这里拒绝启动；
+ * 2. 带速率切换（BRS）时打开发送延时补偿：数据段 5 Mbit/s 一位只有 200 ns，收发器的回环延迟占了一大截，
+ *    不补偿时控制器在错误的时刻采样自己发出的位，报位错误。偏移取数据段采样点位置（预分频 × TSeg1，ST 例程的算法），
+ *    按当前 1 / 14 / 5 配置为 14，与 COD-H7-Template、rmcod2026 哨兵在实车上用的 (14, 14) 相同。
+ */
+static bool configure_fd(FDCAN_HandleTypeDef *h, bool fifo0)
+{
+    const uint32_t rx_size = fifo0 ? h->Init.RxFifo0ElmtSize : h->Init.RxFifo1ElmtSize;
+    if (rx_size != FDCAN_DATA_BYTES_64 || h->Init.TxElmtSize != FDCAN_DATA_BYTES_64)
+    {
+        return false;
+    }
+    if (h->Init.FrameFormat != FDCAN_FRAME_FD_BRS)
+    {
+        return true;
+    }
+    const uint32_t offset = h->Init.DataPrescaler * h->Init.DataTimeSeg1;
+    return HAL_FDCAN_ConfigTxDelayCompensation(h, offset, offset) == HAL_OK
+           && HAL_FDCAN_EnableTxDelayCompensation(h) == HAL_OK;
+}
+
 bool can_start(CanBusId bus, CanRxNotify notify, void *ctx)
 {
     FDCAN_HandleTypeDef *h = handles[bus];
@@ -47,6 +71,10 @@ bool can_start(CanBusId bus, CanRxNotify notify, void *ctx)
     if (HAL_FDCAN_ConfigGlobalFilter(h, accept, FDCAN_REJECT, FDCAN_REJECT_REMOTE,
                                      FDCAN_REJECT_REMOTE)
         != HAL_OK)
+    {
+        return false;
+    }
+    if (can_bus_is_fd(bus) && !configure_fd(h, fifo0))
     {
         return false;
     }
