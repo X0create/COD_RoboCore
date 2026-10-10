@@ -88,7 +88,7 @@ void MX_FDCAN2_Init(void)
 
   /* USER CODE END FDCAN2_Init 1 */
   hfdcan2.Instance = FDCAN2;
-  hfdcan2.Init.FrameFormat = FDCAN_FRAME_FD_BRS;
+  hfdcan2.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
   hfdcan2.Init.Mode = FDCAN_MODE_NORMAL;
   hfdcan2.Init.AutoRetransmission = DISABLE;
   hfdcan2.Init.TransmitPause = DISABLE;
@@ -136,7 +136,7 @@ void MX_FDCAN3_Init(void)
 
   /* USER CODE END FDCAN3_Init 1 */
   hfdcan3.Instance = FDCAN3;
-  hfdcan3.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+  hfdcan3.Init.FrameFormat = FDCAN_FRAME_FD_BRS;
   hfdcan3.Init.Mode = FDCAN_MODE_NORMAL;
   hfdcan3.Init.AutoRetransmission = DISABLE;
   hfdcan3.Init.TransmitPause = DISABLE;
@@ -145,7 +145,7 @@ void MX_FDCAN3_Init(void)
   hfdcan3.Init.NominalSyncJumpWidth = 5;
   hfdcan3.Init.NominalTimeSeg1 = 14;
   hfdcan3.Init.NominalTimeSeg2 = 5;
-  hfdcan3.Init.DataPrescaler = 5;
+  hfdcan3.Init.DataPrescaler = 1;
   hfdcan3.Init.DataSyncJumpWidth = 5;
   hfdcan3.Init.DataTimeSeg1 = 14;
   hfdcan3.Init.DataTimeSeg2 = 5;
@@ -153,7 +153,7 @@ void MX_FDCAN3_Init(void)
   hfdcan3.Init.StdFiltersNbr = 16;
   hfdcan3.Init.ExtFiltersNbr = 0;
   hfdcan3.Init.RxFifo0ElmtsNbr = 8;
-  hfdcan3.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
+  hfdcan3.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_64;
   hfdcan3.Init.RxFifo1ElmtsNbr = 0;
   hfdcan3.Init.RxFifo1ElmtSize = FDCAN_DATA_BYTES_8;
   hfdcan3.Init.RxBuffersNbr = 0;
@@ -162,7 +162,7 @@ void MX_FDCAN3_Init(void)
   hfdcan3.Init.TxBuffersNbr = 0;
   hfdcan3.Init.TxFifoQueueElmtsNbr = 8;
   hfdcan3.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
-  hfdcan3.Init.TxElmtSize = FDCAN_DATA_BYTES_8;
+  hfdcan3.Init.TxElmtSize = FDCAN_DATA_BYTES_64;
   if (HAL_FDCAN_Init(&hfdcan3) != HAL_OK)
   {
     Error_Handler();
