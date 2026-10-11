@@ -21,17 +21,17 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_MAJOR = "18"  # 与 CI 一致；其他版本个别写法的排版可能不同
+EXPECTED_VERSION = "18.1.3"  # 与 CI 一致；同为 18 的 18.1.8 也会排得不一样（docs/FORMATTING.md）
 EXCLUDE = ("06_boards/", "04_core/log/segger_rtt/", "tests/host/unity/")
 
 
 def find_clang_format():
     exe = os.environ.get("CLANG_FORMAT") or shutil.which("clang-format-18") or shutil.which("clang-format")
     if not exe:
-        sys.exit("找不到 clang-format：安装 clang-format 18，或用环境变量 CLANG_FORMAT 指定路径（docs/FORMATTING.md）")
+        sys.exit("找不到 clang-format：安装 clang-format 18.1.3，或用环境变量 CLANG_FORMAT 指定路径（docs/FORMATTING.md）")
     version = subprocess.run([exe, "--version"], capture_output=True, text=True).stdout.strip()
-    if f"version {EXPECTED_MAJOR}." not in version:
-        print(f"注意：{version}，与 CI 的 {EXPECTED_MAJOR} 版不同，结果以 CI 为准", file=sys.stderr)
+    if f"version {EXPECTED_VERSION}" not in version:
+        print(f"注意：{version}，与 CI 的 {EXPECTED_VERSION} 不同，结果以 CI 为准（docs/FORMATTING.md）", file=sys.stderr)
     return exe
 
 
