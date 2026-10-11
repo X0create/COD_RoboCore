@@ -84,6 +84,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 | `docs/CALL_FLOW.md` | 调用关系地图：老模板对照、每个任务的函数调用树、怎么在 IDE 里跳转 |
 | `docs/ARCHITECTURE.md` | 架构设计：分层、核心机制、运行时契约、决策记录（ADR），以及**实施计划**和硬件、协议事实表 |
 | `docs/CODING_STANDARD.md` | 编码规范：命名、格式、注释、错误处理、安全相关代码，“必须 / 应该 / 可以”三级 |
+| `docs/FORMATTING.md` | 代码格式化：一条命令 `python3 tools/format.py`，clang-format 18 的安装，CLion / VS Code 设置，CI 怎么查 |
 | `docs/DEV_ENVIRONMENT.md` | 开发环境搭建：WSL、工具链、Ozone 烧录调试、CLion，每步带验证状态；推送到 GitHub 和 Gitee |
 | `docs/CHANGES_FROM_COD_H7_TEMPLATE.md` | 与 COD-H7-Template 的差异：新旧对照、原因和验证层级 |
 | `docs/VERIFICATION_TODO.md` | 待验证清单：代码已写好、需要上板或台架确认的项目，每项写明接线、操作和期望 |
@@ -185,7 +186,7 @@ COD_RoboCore/
 | 交叉编译器 | `arm-none-eabi-gcc`：Arm GNU Toolchain 15.2.Rel1，或 STM32CubeCLT 自带的（已验证 1.22 / GCC 14.3） |
 | 构建 | CMake ≥ 3.25、Ninja（CLion 自带） |
 | 测试 | 电脑上的 gcc（Windows 用 CLion 自带的 MinGW）+ Unity，外设用手写的假实现替换 |
-| 代码格式 | clang-format 18（已启用）；clang-tidy、cppcheck（规划） |
+| 代码格式 | clang-format 18（`python3 tools/format.py`，见 `docs/FORMATTING.md`）；clang-tidy、cppcheck（规划） |
 | 烧录与调试 | SEGGER J-Link + Ozone（烧录、RTT 日志、实时看变量）；CLion（编辑、构建、断点） |
 | 板级配置 | STM32CubeMX 6.18（改完按 `06_boards/dm_mc02_h723/REGEN_CHECKLIST.md` 核对） |
 

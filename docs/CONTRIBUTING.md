@@ -11,7 +11,7 @@
 
 1. 接电机前：电机固定在台架上、输出轴不带负载、断电开关放在手边（`README.md`“注意事项”）。
 2. 上电后约 2 s 内不要动板子：这段时间在标定陀螺零偏，晃动会让标定失败、一直停在 `safe`。
-3. 提交前：编译 **0 警告**、电脑侧单元测试全部通过、改过的文件用 `clang-format-18 -i` 格式化（第 4.3 节）。
+3. 提交前：编译 **0 警告**、电脑侧单元测试全部通过、运行 `python3 tools/format.py --changed` 格式化改过的文件（`docs/FORMATTING.md`）。
 4. 改 CubeMX 配置后，逐条核对 `06_boards/dm_mc02_h723/REGEN_CHECKLIST.md` 再提交。
 5. 汇报结果时写清验证到了哪一级：编译、电脑测试、上板、台架、整车（第 5 节）。
 6. 调 PID 先小后大；新参数先在台架上试。
@@ -143,7 +143,7 @@
 git switch main && git pull                 # 1. 拿到最新的 main
 git switch -c feat/gimbal-pid               # 2. 开分支
 # 3. 改代码 ……
-clang-format-18 -i 改过的.c 改过的.h          # 4. 格式化
+python3 tools/format.py --changed            # 4. 格式化（docs/FORMATTING.md）
 cmake --build --preset host-tests && ctest --preset host-tests   # 5. 电脑测试
 cmake --build --preset h723-debug           # 6. 固件 0 警告
 git add -p && git commit                    # 7. 提交（逐段确认要提交的内容）

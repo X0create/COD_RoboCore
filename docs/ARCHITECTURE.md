@@ -1344,6 +1344,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0078 | 用户 2026-10-11：**RLS 不并进 power**，拆回 `03_algorithm/power/rls.h/.c`（恢复 0076 之前的文件和 test_rls），`power.h` include 它。是 ADR 0072“每个目录一对文件”的例外：RLS 是通用的参数辨识算法，不只给功率模型用（此后 0079 定为通用规则） |
 | 0079 | 用户 2026-10-11：“这种通用的算法不能这么干，都得拆出来”——**通用算法一个算法一对文件**（写进 CODING_STANDARD 第 3 节），选两项：control / filter / math / attitude（pid、ramp、lpf、kalman、matrix、math_const、gyro_bias、quat_ekf）和 kinematics（chassis_vel、omni、mecanum、steer、half_steer）恢复为 ADR 0072 之前的文件和测试（从 `c597211^` 原样恢复，合并后这些文件没再改过）；**取代 0072 中这两项**（vision 合并属于设备层，保留）。power（模型 + 分配）、shoot（五个发射算法）用户未选，暂保持各一对。舵轮与半舵半全向重新各有一份轮位符号表（固件多 32 字节）。主机测试 35/35，MuJoCo -Check 通过 |
 | 0080 | 用户 2026-10-11：**本项目头文件一律带目录路径**（从仓库根目录写起、带层编号），本模块自己的和同目录的也一样，取代 CODING_STANDARD 第 3 节原来“同目录只写文件名”；测试替身写 `tests/host/fakes/…`、MuJoCo 写 `tools/mujoco/…`。81 处 include 已统一改，只写文件名的只剩第三方（FreeRTOS、SEGGER RTT、Unity、芯片厂商头文件）。行为不变：固件 0 警告、35/35、Keil 一致、MuJoCo -Check 通过 |
+| 0081 | 用户 2026-10-11 要求把 clang-format 的用法写成通用文档：新增 `docs/FORMATTING.md` 和跨平台脚本 `tools/format.py`（格式化全部 / `--changed` / `--check` / 指定文件），“哪些文件归本项目格式化”只在脚本里定义，CI 和本地检查都调用它。**修正一个缺陷**：clang-format 18.1.3 的 `--dry-run --Werror` 报出格式错误后仍返回 0（2026-10-11 实测），CI 的格式检查此前不可能失败；`--check` 改为逐个比较格式化结果与原文。仓库现有 156 个文件在 18 版下全部合格；CLion 自带的 22 版有 22 个文件判为不合格（版本差异，以 18 为准） |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 

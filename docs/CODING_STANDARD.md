@@ -194,7 +194,7 @@ typedef struct
 
 ## 5. 格式
 
-- **必须**使用仓库根目录的 `.clang-format` 格式化。提交前运行一次，**不要手动对齐**去对抗它。
+- **必须**使用仓库根目录的 `.clang-format` 格式化。提交前运行一次 `python3 tools/format.py --changed`（用法、安装、编辑器设置见 `docs/FORMATTING.md`），**不要手动对齐**去对抗它。
   - 花括号用 **Allman 风格**：`{` 单独占一行。
   - 缩进 4 个空格，每行不超过 100 列。
   - `if` / `else` / `for` / `while` 的语句体**必须**加花括号，只有一行也要加。
