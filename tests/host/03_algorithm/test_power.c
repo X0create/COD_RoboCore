@@ -1,7 +1,6 @@
 /**
  * @file    test_power.c
- * @brief   power 的单元测试，按节：RLS（辨识已知线性模型、返回更新前的误差、遗忘因子跟踪参数变化）、
- *          功率模型（在线辨识 k1、k2）、功率分配（不超限不改、超限压到上限、回馈不压、离线为 0、只压不放大、无实根、不反向）
+ * @brief   power 的单元测试，按节：功率模型（在线辨识 k1、k2）、功率分配（不超限不改、超限压到上限、回馈不压、离线为 0、只压不放大、无实根、不反向）
  */
 #include "03_algorithm/power/power.h"
 
@@ -15,56 +14,6 @@ void setUp(void)
 
 void tearDown(void)
 {
-}
-
-static const float zero2[2] = { 0.0f, 0.0f };
-
-/* 激励：两路不相关的正弦，保证参数可辨识 */
-static void input(int k, float x[2])
-{
-    x[0] = sinf(0.3f * (float)k);
-    x[1] = cosf(0.7f * (float)k) + 1.0f;
-}
-
-static void test_identifies_linear_model(void)
-{
-    Rls rls;
-    rls_init(&rls, 2u, 1.0f, 1000.0f, zero2);
-    for (int k = 0; k < 200; k++)
-    {
-        float x[2];
-        input(k, x);
-        (void)rls_update(&rls, x, 2.0f * x[0] - 0.5f * x[1]);
-    }
-    TEST_ASSERT_FLOAT_WITHIN(1e-3f, 2.0f, rls.w[0]);
-    TEST_ASSERT_FLOAT_WITHIN(1e-3f, -0.5f, rls.w[1]);
-    const float x[2] = { 0.3f, 1.5f };
-    TEST_ASSERT_FLOAT_WITHIN(1e-3f, 0.6f - 0.75f, rls_predict(&rls, x));
-}
-
-static void test_returns_prior_error(void)
-{
-    Rls rls;
-    const float w0[2] = { 1.0f, 1.0f };
-    rls_init(&rls, 2u, 1.0f, 10.0f, w0);
-    const float x[2] = { 2.0f, 3.0f };
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 7.0f - 5.0f, rls_update(&rls, x, 7.0f));
-}
-
-/* 遗忘因子 0.98：参数中途从 (2, -0.5) 变成 (1, 1)，能跟上 */
-static void test_forgetting_tracks_change(void)
-{
-    Rls rls;
-    rls_init(&rls, 2u, 0.98f, 1000.0f, zero2);
-    for (int k = 0; k < 1000; k++)
-    {
-        float x[2];
-        input(k, x);
-        const float y = (k < 500) ? 2.0f * x[0] - 0.5f * x[1] : x[0] + x[1];
-        (void)rls_update(&rls, x, y);
-    }
-    TEST_ASSERT_FLOAT_WITHIN(1e-2f, 1.0f, rls.w[0]);
-    TEST_ASSERT_FLOAT_WITHIN(1e-2f, 1.0f, rls.w[1]);
 }
 
 /* ---- 功率模型：4 台电机、已知 k1 = 0.05、k2 = 1.2、k3 = 4 W，用“实测”总功率在线辨识 ---- */
@@ -199,9 +148,6 @@ static void test_steer_budget(void)
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_identifies_linear_model);
-    RUN_TEST(test_returns_prior_error);
-    RUN_TEST(test_forgetting_tracks_change);
     RUN_TEST(test_identify_k1_k2_from_measured_power);
     RUN_TEST(test_below_limit_unchanged);
     RUN_TEST(test_over_limit_scaled_to_max);

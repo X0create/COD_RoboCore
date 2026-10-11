@@ -1,7 +1,7 @@
 /**
  * @file    power.h
- * @brief   底盘功率控制的算法（纯计算，电脑上可测）：递推最小二乘、电机功率模型与参数辨识、功率分配
- * @note    按节排列：RLS、功率模型、功率分配。底盘在第 3 步“速度环算出力矩之后、写给电机之前”调用（ADR 0022）。
+ * @brief   底盘功率控制的算法（纯计算，电脑上可测）：电机功率模型与参数辨识、功率分配
+ * @note    按节排列：功率模型、功率分配；参数辨识用同目录的通用 RLS（rls.h，单独一对文件，ADR 0078）。底盘在第 3 步“速度环算出力矩之后、写给电机之前”调用（ADR 0022）。
  *          依据 reference/hardware/RM2024-PowerModule（港科大，《架构设计》“功率控制”）和
  *          COD 26 赛季哨兵 rmcod2026_-sentry 的 Power_Ctrl()（同一方法的改写，ADR 0076）。
  */
@@ -10,43 +10,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "03_algorithm/power/rls.h"
+
 #ifdef __cplusplus
 extern "C"
 {
 #endif
-
-/* ================================================================== */
-/* 递推最小二乘 RLS                                                    */
-/*
- * 带遗忘因子、单输出。模型 y = wᵀx，每来一组 (x, y) 更新一次估计 w：
- *   e = y − wᵀx，K = P x / (λ + xᵀP x)，w ← w + K e，P ← (P − K (P x)ᵀ) / λ。
- * COD-H7-Template 的 RLS.c 没有调用者且跑不起来（增益向量只分配 1 个 float 却按 2 个使用、
- * λ 从未赋值为 0、1×1 乘 2×2），不照搬，按上面的标准公式重写（CHANGES）。
- */
-/* ================================================================== */
-
-#define RLS_MAX_N 4u
-
-typedef struct
-{
-    uint8_t n;    /* 参数个数 */
-    float lambda; /* 遗忘因子，0 < λ ≤ 1；越小越快跟上参数变化，噪声也越大 */
-    float w[RLS_MAX_N];
-    float p[RLS_MAX_N * RLS_MAX_N]; /* 按行存储，n×n */
-} Rls;
-
-/**
- * @param   p0  初始协方差（单位阵乘 p0），越大初期收敛越快
- * @param   w0  初始估计，n 个
- * @pre     1 ≤ n ≤ RLS_MAX_N，0 < lambda ≤ 1，p0 > 0
- */
-void rls_init(Rls *rls, uint8_t n, float lambda, float p0, const float w0[]);
-
-/** 更新一次，返回更新前的预测误差 y − wᵀx */
-float rls_update(Rls *rls, const float x[], float y);
-
-/** 按当前估计预测 wᵀx */
-float rls_predict(const Rls *rls, const float x[]);
 
 /* ================================================================== */
 /* 功率模型                                                            */

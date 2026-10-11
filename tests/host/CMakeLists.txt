@@ -44,6 +44,7 @@ rm_add_host_test(test_vt_link 02_devices/test_vt_link.c rm_devices rm_host_fakes
 rm_add_host_test(test_usb_cdc 05_platform/test_usb_cdc.c rm_platform_common)
 rm_add_host_test(test_vision 02_devices/test_vision.c rm_devices rm_host_fakes)
 rm_add_host_test(test_power 03_algorithm/test_power.c rm_algorithm)
+rm_add_host_test(test_rls 03_algorithm/test_rls.c rm_algorithm)
 rm_add_host_test(test_shoot 03_algorithm/test_shoot.c rm_algorithm)
 rm_add_host_test(test_battery 02_devices/test_battery.c rm_devices)
 rm_add_host_test(test_buzzer 02_devices/test_buzzer.c rm_devices rm_host_fakes)
