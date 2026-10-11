@@ -6,7 +6,8 @@
  *          标 “待量” 的尺寸按实车量好再改；标 “待核对” 的方向在台架上按 docs/VERIFICATION_TODO.md 核对。
  *          换轮组：改 chassis_config 的 .type 并填对应的尺寸（全向轮 .omni、麦轮 .mecanum、
  *          舵轮 .steer，半舵半全向 .half_steer + .steer 的零点和 PID，含义见 03_algorithm/kinematics/kinematics.h 对应的一节）；
- *          舵轮还要在 robot.c 里加 4 个转向电机，半舵半全向加 2 个（全向轮位置传 NULL）。
+ *          舵轮还要在 robot.c 里加 4 个转向电机，半舵半全向加 2 个（全向轮位置传 NULL）；
+ *          转向电机用 M2006、M3508 这类上电位置为 0 的型号时，在 .steer.zero_switch 里配零点开关（ADR 0068、0075）。
  *          PID 不带 dt（ADR 0029），参数和 1 kHz 调用频率绑定。
  *          参数表是 static const：只给 robot.c 和 01_applic/tasks/ 里的任务用，没用到的不占空间。
  *          对象相当于老模板里各任务直接读的全局变量（remote_ctrl、Chassis_Motor[] 等），其他层不 include 本文件

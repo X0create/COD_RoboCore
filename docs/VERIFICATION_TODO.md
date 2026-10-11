@@ -80,3 +80,4 @@
 | V52 | 致命故障 → 停在断点 → 复位后自动恢复 | 同上，遥控开着、右拨杆在上、已解锁（`mode manual`） | Ozone：Halt → 把 PC 改成 `0x00000001`（非法地址）→ Go | 停在 `iwdg_fault` 里的 BKPT（调用栈上是 HardFault_Handler）；再 Go：芯片复位，RTT 出现 `restarted by watchdog: resume without re-arm`，遥控在线后直接 `mode manual`，**不用拨杆** | 待验证 |
 | V53 | 任务卡死 → IWDG 复位 | 同上 | Ozone 里把 `DBGMCU->APB4FZ1` 的位 18（DBG_IWDG1）清零，然后 Halt 1 s 再 Go | Halt 期间 IWDG 照常倒计时，约 50 ms 后复位；RTT 出现 `restarted by watchdog` | 待验证 |
 | V54 | 控制实时性（满总线负载） | V45 状态（四台 M3508 在 FDCAN1）；可加 CAN 负载 | 运行 10 min，记 RTT 的 `control exec max … period max … late …` | 记下最大执行时间、最大周期间隔；`late` 应为 0，不为 0 时记下当时在做什么 | 待验证 |
+| V55 | 舵轮接近开关找零（ADR 0075） | 舵轮底盘、零点开关接 PE13/PE9/PA2/PA0 且 CubeMX 已配成输入；车架空 | 解锁；看 Ozone 的 `chassis.zero[i].state`、`center_rad` | 每个转向电机先正转、再反转各经过开关一次后 `state` 变为 DONE（0），轮子回到朝前；重复上电多次 `center_rad` 对应的物理朝向一致（记下最大偏差）；拔掉一个开关：超时后这个轮子不出力，其余继续；断开转向电调电源再接上：重新找零 | 待验证 |

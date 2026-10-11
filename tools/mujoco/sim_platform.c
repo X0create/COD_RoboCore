@@ -9,6 +9,7 @@
 #include "02_devices/motor/motor.h"
 #include "04_core/os/critical.h"
 #include "05_platform/can/can.h"
+#include "05_platform/gpio/gpio.h"
 #include "05_platform/time/time.h"
 
 static uint64_t sim_now_us;
@@ -42,6 +43,13 @@ void rm_critical_enter(void)
 
 void rm_critical_exit(void)
 {
+}
+
+/* 仿真模型里没有零点开关：配置不接开关（GPIO_IN_NONE），不会调用到这里 */
+bool gpio_read(GpioInput in)
+{
+    (void)in;
+    return false;
 }
 
 bool can_bus_is_fd(CanBusId bus)

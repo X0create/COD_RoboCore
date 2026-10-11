@@ -13,7 +13,8 @@
 | `pwm/` | `pwm.h` | `pwm_stm32h7.c` | |
 | `adc/` | `adc.h` | `adc_stm32h7.c` | |
 | `iwdg/` | `iwdg.h` | `iwdg_stm32h7.c`（IWDG1，直接写寄存器，不用 CubeMX；ADR 0074） | |
-| `gpio/`、`flash/` | （规划） | 引脚与外部中断、片内 Flash 擦写 | |
+| `gpio/` | `gpio.h`（按用途命名的输入引脚，轮询） | `gpio_stm32h7.c`（引脚模式由 CubeMX 配；ADR 0075） | |
+| `flash/` | （规划） | 片内 Flash 擦写 | |
 | `stm32h7/` | | `dma_buf.h`：H7 各外设共用的 DMA 缓冲段（ADR 0021） | |
 | `compiler.h` | 编译器属性（`RM_NODISCARD` 等） | | |
 

@@ -8,7 +8,7 @@ target_include_directories(unity SYSTEM PUBLIC unity)
 # 假实现：临界区（单线程下为空）、延时、可设定的时钟、CAN、PWM、带 BMI088 寄存器模型的 SPI，代替 FreeRTOS 与芯片外设
 # OBJECT 库：目标文件直接编进测试程序，不受静态库链接顺序影响（被测库在它之后才用到这些符号）
 add_library(rm_host_fakes OBJECT
-    fakes/fake_can.c fakes/fake_os.c fakes/fake_pwm.c fakes/fake_spi.c fakes/fake_time.c)
+    fakes/fake_can.c fakes/fake_gpio.c fakes/fake_os.c fakes/fake_pwm.c fakes/fake_spi.c fakes/fake_time.c)
 target_include_directories(rm_host_fakes PUBLIC fakes)
 target_link_libraries(rm_host_fakes PUBLIC rm_core_common)
 rm_target_warnings(rm_host_fakes)

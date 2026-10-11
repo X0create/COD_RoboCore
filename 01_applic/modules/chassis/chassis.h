@@ -13,7 +13,9 @@
  *            发送出口统一改成零力矩；这时清积分、目标对齐实测速度，解锁时不会猛冲；
  *          - 降级（有轮子不能用）：不能用的轮子不写指令（发送时为零力矩，被动滚动）、清积分；
  *            其余轮子继续闭环，目标速度和加速度都乘 CHASSIS_DEGRADED_SCALE。
- *            “不能用”= 驱动电机离线，或这个轮子的转向电机离线（朝向控制不了，驱动它会往错的方向推）。
+ *            “不能用”= 驱动电机离线，或这个轮子的转向电机离线 / 零点还没找到（朝向控制不了，驱动它会往错的方向推）。
+ *          舵轮找零（接了零点开关时，ADR 0068）：能动以后在第 3 步里先让转向电机正转、反转各经过开关一次，
+ *          找到开关中心才开始正常控制；转向电机离线再上线后重找（上电位置为 0 的电机重连后零点不再可信）。
  *          轮号顺序见 03_algorithm/kinematics/kinematics.h 对应的一节（都是左前起逆时针）。
  *          功率控制以后加在第 3 步“算出力矩之后、写给电机之前”（ADR 0022）。
  */
@@ -25,6 +27,7 @@
 #include "03_algorithm/control/control.h"
 #include "03_algorithm/kinematics/kinematics.h"
 #include "05_platform/compiler.h"
+#include "05_platform/gpio/gpio.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -49,11 +52,17 @@ typedef enum
 typedef struct
 {
     SteerConfig kinematics;
-    /* 转向电机反馈角度（输出轴 rad）为这个值时，轮子朝向车头（heading = 0）。
-     * 转向电机的角度零点必须上电即确定（如 GM6020 的绝对编码器），上电位置为 0 的型号不能直接用 */
+    /* 零点开关（接近开关，ADR 0068）。不接（GPIO_IN_NONE，默认）：转向电机零点必须上电即确定
+     * （如 GM6020 的绝对编码器），zero_rad = 轮子朝车头时的反馈角度（输出轴 rad）。
+     * 接了：上电位置为 0 的型号（M2006、M3508）也能用——能动以后先找开关中心，
+     * zero_rad = 轮子朝车头时相对开关中心的偏移（机械安装决定，哨兵约 −3°） */
+    GpioInput zero_switch[CHASSIS_WHEELS];
     float zero_rad[CHASSIS_WHEELS];
-    PidParam angle_pid; /* 朝向误差 rad → 转向电机目标转速 rad/s */
-    PidParam speed_pid; /* 转向电机转速 rad/s → N·m */
+    bool zero_switch_active_low; /* 开关触发时为低电平（NPN 接近开关常见，26 赛季哨兵即如此） */
+    float zero_search_rad_s;     /* 找零时转向电机的转速（输出轴） */
+    float zero_search_timeout_s; /* 超过这么久没找到就判失败，这个轮子不能用 */
+    PidParam angle_pid;          /* 朝向误差 rad → 转向电机目标转速 rad/s */
+    PidParam speed_pid;          /* 转向电机转速 rad/s → N·m */
 } ChassisSteerConfig;
 
 /** 底盘参数：写成 robot.h 里的常量 */
@@ -75,10 +84,14 @@ typedef struct
 {
     float drive_speed_rad_s[CHASSIS_WHEELS]; /* 各驱动轮转速 */
     float heading_rad[CHASSIS_WHEELS];       /* 有转向电机的轮子：各轮朝向 */
+    float steer_angle_rad
+        [CHASSIS_WHEELS]; /* 有转向电机的轮子：转向电机反馈角度（输出轴多圈，找零用） */
     float steer_speed_rad_s[CHASSIS_WHEELS]; /* 有转向电机的轮子：各转向电机转速 */
     bool drive_online[CHASSIS_WHEELS];
     bool steer_online[CHASSIS_WHEELS]; /* 没有转向电机的轮子恒为 false */
-    bool wheel_ok[CHASSIS_WHEELS]; /* 轮子能用：驱动电机在线，有转向电机的还要转向电机在线 */
+    bool zero_switch_active[CHASSIS_WHEELS]; /* 零点开关此刻是否触发（没接开关的恒为 false） */
+    bool wheel_ok
+        [CHASSIS_WHEELS]; /* 轮子能用：驱动电机在线，有转向电机的还要转向电机在线且零点已知 */
     bool all_online;     /* 全部轮子能用；有一个不能用就降级 */
     ChassisVel velocity; /* 由各轮实测正解出的底盘速度（有电机离线时为 0） */
 } ChassisMeasure;
@@ -92,6 +105,30 @@ typedef struct
     bool stop_all; /* 本周期全车停：第 3 步不写指令、只清积分 */
 } ChassisTarget;
 
+/**
+ * 舵轮找零的状态（ADR 0068）：正转、反转各记一次“进入开关 → 离开开关”的中点，两个中点平均即开关中心。
+ * 1 kHz 轮询开关，边沿记录的角度滞后电机 1 ms 转过的角度；正反两次的滞后方向相反，平均后抵消
+ */
+typedef enum
+{
+    STEER_ZERO_DONE,    /* 零点已知：找到了，或没接开关（零点上电即确定） */
+    STEER_ZERO_FORWARD, /* 正转找开关 */
+    STEER_ZERO_REVERSE, /* 反转再找一次 */
+    STEER_ZERO_FAILED, /* 超时没找到：这个轮子不能用；转向电机离线再上线后重找 */
+} SteerZeroState;
+
+typedef struct
+{
+    SteerZeroState state;
+    bool started;          /* 已经走过第一拍（第一拍只记电平） */
+    bool was_active;       /* 上一拍开关是否触发 */
+    bool seen_enter;       /* 当前方向已经看到“进入开关” */
+    float enter_rad;       /* 当前方向进入开关时的角度 */
+    float forward_mid_rad; /* 正转时进入、离开的中点 */
+    float center_rad;      /* 开关中心（state 为 DONE 后有效；没接开关时为 0） */
+    float elapsed_s;       /* 本次找零已用的时间（全车停时不计） */
+} SteerZero;
+
 typedef struct
 {
     const ChassisConfig *cfg;
@@ -101,6 +138,7 @@ typedef struct
     Pid drive_pid[CHASSIS_WHEELS];
     Pid steer_angle_pid[CHASSIS_WHEELS];
     Pid steer_speed_pid[CHASSIS_WHEELS];
+    SteerZero zero[CHASSIS_WHEELS]; /* 有转向电机的轮子：找零状态 */
     ChassisMeasure measure;
     ChassisTarget target;
 } Chassis;

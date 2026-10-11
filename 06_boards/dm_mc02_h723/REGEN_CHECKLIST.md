@@ -18,6 +18,7 @@
 | 11 | USB CDC 接收钩子还在 | `grep -n "usb_cdc_rx_isr" USB_DEVICE/App/usbd_cdc_if.c` | 两处：`USER CODE BEGIN PV` 里的声明、`USER CODE BEGIN 11`（`CDC_Receive_HS`）里的调用 | 没有钩子时 USB 能枚举但收不到任何数据；`MX_USB_DEVICE_Init()` 由框架的 `usb_cdc_start()` 调用，CubeMX 弱定义 `startup_task` 里那句不会执行（ADR 0037） |
 | 12 | 生成时 Toolchain 是 CMake；若刚按 MDK-ARM 生成过，已改回 CMake 再生成一次，并运行了 `python3 tools/keil_sync.py` | `grep TargetToolchain dm_mc02.ioc`；`ls Middlewares/Third_Party/FreeRTOS/Source/portable/GCC`；`python3 tools/keil_sync.py --check` | `TargetToolchain=CMake`；`GCC` 目录存在；输出“Keil 工程是最新的” | CubeMX 每次生成会删掉另一种工具链的文件（ADR 0053） |
 | 13 | 致命故障处理还接在 IWDG 上 | `grep -n "iwdg_fault" Core/Src/stm32h7xx_it.c Core/Src/freertos.c Core/Inc/FreeRTOSConfig.h` | `stm32h7xx_it.c` 5 处（声明 + HardFault / MemManage / BusFault / UsageFault 的 USER CODE 0 区）；`freertos.c` 2 处（声明 + `vApplicationStackOverflowHook`）；`FreeRTOSConfig.h` 2 处（`USER CODE BEGIN 1` 里的声明和 `configASSERT`） | 2026-10-10 ADR 0074：生成器清掉后故障时又变成死循环，车停发但不复位 |
+| 14 | 零点开关引脚是 GPIO 输入（只在接了舵轮零点开关时需要） | `grep -E "^(PE13|PE9|PA2|PA0)\." *.ioc` | 4 个引脚都是 `GPIO_Input`（上下拉按开关型号定；哨兵是外部电路，无内部上下拉），对应 `05_platform/gpio/gpio_stm32h7.c` 的 `GPIO_IN_ZERO_SWITCH_1–4` | 2026-10-10 ADR 0075：没配时引脚是模拟模式，读出恒为低电平，找零会超时、这个轮子不出力 |
 
 第 1 条的命令（在本目录执行）：
 

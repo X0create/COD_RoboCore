@@ -17,6 +17,7 @@ if(RM_CHIP)
     add_library(rm_platform STATIC
         adc/adc_${RM_CHIP}.c
         can/can_${RM_CHIP}.c
+        gpio/gpio_${RM_CHIP}.c
         iwdg/iwdg_${RM_CHIP}.c
         pwm/pwm_${RM_CHIP}.c
         spi/spi_${RM_CHIP}.c

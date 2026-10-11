@@ -45,6 +45,8 @@ bool chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive
             chassis->steer[i] = steer[i];
             pid_init(&chassis->steer_angle_pid[i], PID_POSITION, &cfg->steer.angle_pid);
             pid_init(&chassis->steer_speed_pid[i], PID_POSITION, &cfg->steer.speed_pid);
+            chassis->zero[i].state =
+                cfg->steer.zero_switch[i] != GPIO_IN_NONE ? STEER_ZERO_FORWARD : STEER_ZERO_DONE;
         }
     }
     return true;
@@ -69,10 +71,20 @@ void chassis_measure_update(Chassis *chassis)
 
         if (has_steer_motor(cfg, i))
         {
+            SteerZero *z = &chassis->zero[i];
+            const GpioInput sw = cfg->steer.zero_switch[i];
             m->steer_online[i] = motor_read_feedback(chassis->steer[i], &fb);
-            m->heading_rad[i] = fb.angle_rad - cfg->steer.zero_rad[i];
+            m->steer_angle_rad[i] = fb.angle_rad;
+            m->heading_rad[i] = fb.angle_rad - z->center_rad - cfg->steer.zero_rad[i];
             m->steer_speed_rad_s[i] = fb.speed_rad_s;
-            m->wheel_ok[i] = m->wheel_ok[i] && m->steer_online[i];
+            m->zero_switch_active[i] =
+                sw != GPIO_IN_NONE && gpio_read(sw) != cfg->steer.zero_switch_active_low;
+            /* 接了开关的转向电机离线：重连后多圈角度从 0 重新算，零点作废，上线后重找 */
+            if (sw != GPIO_IN_NONE && !m->steer_online[i])
+            {
+                *z = (SteerZero){ .state = STEER_ZERO_FORWARD };
+            }
+            m->wheel_ok[i] = m->wheel_ok[i] && m->steer_online[i] && z->state == STEER_ZERO_DONE;
         }
         m->all_online = m->all_online && m->wheel_ok[i];
     }
@@ -209,6 +221,52 @@ static float clamp(float x, float limit)
     return (x > limit) ? limit : ((x < -limit) ? -limit : x);
 }
 
+/*
+ * 找零一拍（ADR 0068）：按开关电平的变化记边沿，返回转向电机的目标转速。
+ * 一开始就在开关里时，先看到的“离开”不算，等下一次完整的进入、离开
+ */
+static float steer_zero_step(SteerZero *z, const ChassisSteerConfig *sc, float angle_rad,
+                             bool active)
+{
+    if (!z->started)
+    {
+        z->started = true;
+        z->was_active = active; /* 在开关里起步时，不把第一拍当成“进入” */
+    }
+    z->elapsed_s += CHASSIS_PERIOD_S;
+    if (z->elapsed_s > sc->zero_search_timeout_s)
+    {
+        z->state = STEER_ZERO_FAILED;
+        return 0.0f;
+    }
+    if (active && !z->was_active)
+    {
+        z->enter_rad = angle_rad;
+        z->seen_enter = true;
+    }
+    else if (!active && z->was_active && z->seen_enter)
+    {
+        const float mid_rad = 0.5f * (z->enter_rad + angle_rad);
+        z->seen_enter = false;
+        if (z->state == STEER_ZERO_FORWARD)
+        {
+            z->forward_mid_rad = mid_rad;
+            z->state = STEER_ZERO_REVERSE; /* 反方向再经过一次，抵消轮询滞后 */
+        }
+        else
+        {
+            z->center_rad = 0.5f * (z->forward_mid_rad + mid_rad);
+            z->state = STEER_ZERO_DONE;
+        }
+    }
+    z->was_active = active;
+    if (z->state == STEER_ZERO_FORWARD)
+    {
+        return sc->zero_search_rad_s;
+    }
+    return z->state == STEER_ZERO_REVERSE ? -sc->zero_search_rad_s : 0.0f;
+}
+
 /* 不能用的轮子、离线的转向电机不写指令（电机组会填零力矩），并清积分，恢复时不猛冲 */
 void chassis_output_update(Chassis *chassis, float output_scale)
 {
@@ -249,7 +307,18 @@ void chassis_output_update(Chassis *chassis, float output_scale)
         {
             continue;
         }
-        if (m->steer_online[i])
+        SteerZero *z = &chassis->zero[i];
+        if (m->steer_online[i]
+            && (z->state == STEER_ZERO_FORWARD || z->state == STEER_ZERO_REVERSE))
+        {
+            /* 找零：转向电机按固定转速转过开关（速度环），驱动轮不出力（wheel_ok 为 false） */
+            const float rate_rad_s =
+                steer_zero_step(z, &cfg->steer, m->steer_angle_rad[i], m->zero_switch_active[i]);
+            const float torque_nm =
+                pid_step(&chassis->steer_speed_pid[i], rate_rad_s, m->steer_speed_rad_s[i]);
+            motor_set_torque(chassis->steer[i], clamp(torque_nm, steer_limit_nm));
+        }
+        else if (m->steer_online[i] && z->state == STEER_ZERO_DONE)
         {
             const float rate_rad_s =
                 pid_step(&chassis->steer_angle_pid[i], t->heading_rad[i], m->heading_rad[i]);

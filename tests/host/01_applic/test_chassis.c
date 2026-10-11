@@ -14,6 +14,7 @@
 #include "02_devices/motor/motor.h"
 #include "05_platform/time/time.h"
 #include "fake_can.h"
+#include "fake_gpio.h"
 #include "fake_time.h"
 #include "unity.h"
 
@@ -89,6 +90,7 @@ static Chassis chassis;
 void setUp(void)
 {
     fake_can_reset();
+    fake_gpio_reset();
     fake_time_set_us(1000000u);
     group = (MotorGroup){ 0 };
     for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
@@ -429,6 +431,145 @@ static void test_steer_motor_offline_drops_that_wheel(void)
     TEST_ASSERT_TRUE(wheel[0]->torque_set);
 }
 
+/* ---- 舵轮找零（ADR 0068） ---- */
+
+/* 轮 0 的转向电机接零点开关 1（低电平有效），其余轮子不接开关 */
+static const ChassisConfig steer_zero_cfg = {
+    .type = CHASSIS_STEER,
+    .steer = { .kinematics = { .wheel_radius_m = 0.06f,
+                               .half_wheelbase_m = 0.2f,
+                               .half_track_m = 0.2f },
+               .angle_pid = { .kp = 20.0f, .output_limit = 30.0f },
+               .speed_pid = { .kp = 0.1f, .output_limit = 1.0f },
+               .zero_switch = { GPIO_IN_ZERO_SWITCH_1 },
+               .zero_rad = { 0.05f },
+               .zero_switch_active_low = true,
+               .zero_search_rad_s = 2.0f,
+               .zero_search_timeout_s = 3.0f },
+    .drive_speed_pid = DRIVE_PID,
+    .max_accel_m_s2 = 2.0f,
+    .max_alpha_rad_s2 = 4.0f,
+};
+
+#define SWITCH_CENTER_RAD     1.0f
+#define SWITCH_HALF_WIDTH_RAD 0.1f
+
+/* 转向电机 i 的反馈：输出轴角度换成转子编码器计数（M2006 减速比 36），第一帧为 0 */
+static void feed_steer_angle(unsigned i, float angle_rad, float speed_rad_s)
+{
+    const float rotor_rad = angle_rad * DJI_M2006_GEAR_RATIO;
+    const long counts = lroundf(rotor_rad / (2.0f * RM_PI) * (float)DJI_ENCODER_COUNTS);
+    const uint16_t enc =
+        (uint16_t)(((counts % DJI_ENCODER_COUNTS) + DJI_ENCODER_COUNTS) % DJI_ENCODER_COUNTS);
+    const float rpm = speed_rad_s * DJI_M2006_GEAR_RATIO * 60.0f / (2.0f * RM_PI);
+    const int16_t raw = (int16_t)lroundf(rpm);
+    const uint8_t d[8] = {
+        (uint8_t)(enc >> 8), (uint8_t)enc, (uint8_t)((uint16_t)raw >> 8), (uint8_t)raw, 0, 0, 0, 0
+    };
+    TEST_ASSERT_TRUE(deliver(CAN_BUS_1, 0x200u + 5u + i, d, 8));
+}
+
+/*
+ * 模拟一拍：轮 0 的转向电机按找零状态转（正转 +2 rad/s、反转 −2 rad/s），开关在 1.0 ± 0.1 rad 内触发。
+ * 返回模拟出的角度
+ */
+static float zero_sim_step(Chassis *c, float angle_rad, bool switch_present)
+{
+    const float v = c->zero[0].state == STEER_ZERO_FORWARD
+                        ? 2.0f
+                        : (c->zero[0].state == STEER_ZERO_REVERSE ? -2.0f : 0.0f);
+    angle_rad += v * DT_S;
+    const bool active =
+        switch_present && fabsf(angle_rad - SWITCH_CENTER_RAD) <= SWITCH_HALF_WIDTH_RAD;
+    fake_gpio_set(GPIO_IN_ZERO_SWITCH_1, !active); /* 低电平有效 */
+    feed_all(0.0f);
+    feed_steer_angle(0u, angle_rad, v);
+    for (unsigned i = 1u; i < CHASSIS_WHEELS; i++)
+    {
+        feed_steer_angle(i, 0.0f, 0.0f);
+    }
+    const ChassisVel zero = { 0 };
+    run_step(c, &zero, 1.0f);
+    fake_time_advance_ms(1u);
+    return angle_rad;
+}
+
+/* 正转、反转各经过开关一次，开关中心找对（轮询滞后正反抵消）；找到前这个轮子不能用、驱动不出力 */
+static void test_steer_zero_finds_switch_center(void)
+{
+    add_steer_motors();
+    Chassis c;
+    TEST_ASSERT_TRUE(chassis_init(&c, &steer_zero_cfg, wheel, steer));
+    TEST_ASSERT_EQUAL_INT(STEER_ZERO_FORWARD, c.zero[0].state);
+    TEST_ASSERT_EQUAL_INT(STEER_ZERO_DONE, c.zero[1].state); /* 没接开关：零点上电即确定 */
+
+    float angle = 0.0f;
+    angle = zero_sim_step(&c, angle, true);
+    TEST_ASSERT_FALSE(c.measure.wheel_ok[0]);
+    TEST_ASSERT_FALSE(wheel[0]->torque_set);
+    TEST_ASSERT_TRUE(steer[0]->torque_set);
+    for (int k = 0; k < 2000 && c.zero[0].state != STEER_ZERO_DONE; k++)
+    {
+        angle = zero_sim_step(&c, angle, true);
+    }
+    TEST_ASSERT_EQUAL_INT(STEER_ZERO_DONE, c.zero[0].state);
+    TEST_ASSERT_FLOAT_WITHIN(0.005f, SWITCH_CENTER_RAD, c.zero[0].center_rad);
+
+    angle = zero_sim_step(&c, angle, true);
+    TEST_ASSERT_TRUE(c.measure.wheel_ok[0]);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, angle - SWITCH_CENTER_RAD - 0.05f, c.measure.heading_rad[0]);
+}
+
+/* 找不到开关：超时后判失败，这个轮子不能用、转向电机也不再出力 */
+static void test_steer_zero_timeout_fails(void)
+{
+    add_steer_motors();
+    Chassis c;
+    TEST_ASSERT_TRUE(chassis_init(&c, &steer_zero_cfg, wheel, steer));
+    float angle = 0.0f;
+    for (int k = 0; k < 3100; k++)
+    {
+        angle = zero_sim_step(&c, angle, false);
+    }
+    TEST_ASSERT_EQUAL_INT(STEER_ZERO_FAILED, c.zero[0].state);
+    motor_group_send(&group); /* 清掉前面找零时写过的指令，再看失败后的一拍 */
+    angle = zero_sim_step(&c, angle, false);
+    TEST_ASSERT_FALSE(c.measure.wheel_ok[0]);
+    TEST_ASSERT_FALSE(steer[0]->torque_set);
+    TEST_ASSERT_TRUE(c.measure.wheel_ok[1]); /* 其余轮子照常（降级） */
+}
+
+/* 全车停时找零暂停、不计时；转向电机离线再上线后重新找零 */
+static void test_steer_zero_pauses_and_restarts_after_offline(void)
+{
+    add_steer_motors();
+    Chassis c;
+    TEST_ASSERT_TRUE(chassis_init(&c, &steer_zero_cfg, wheel, steer));
+    for (int k = 0; k < 100; k++)
+    {
+        feed_all(0.0f);
+        feed_steer_all();
+        run_stop(&c);
+        fake_time_advance_ms(1u);
+    }
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, c.zero[0].elapsed_s);
+
+    float angle = 0.0f;
+    for (int k = 0; k < 2000 && c.zero[0].state != STEER_ZERO_DONE; k++)
+    {
+        angle = zero_sim_step(&c, angle, true);
+    }
+    TEST_ASSERT_EQUAL_INT(STEER_ZERO_DONE, c.zero[0].state);
+
+    for (int k = 0; k <= (int)MOTOR_TIMEOUT_MS; k++) /* 轮 0 的转向电机不再有反馈 */
+    {
+        fake_time_advance_ms(1u);
+    }
+    feed_all(0.0f);
+    run_stop(&c);
+    TEST_ASSERT_EQUAL_INT(STEER_ZERO_FORWARD, c.zero[0].state);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -442,5 +583,8 @@ int main(void)
     RUN_TEST(test_steer_rejects_motor_without_torque_command);
     RUN_TEST(test_steer_motor_offline_drops_that_wheel);
     RUN_TEST(test_half_steer_turns_only_steer_wheels);
+    RUN_TEST(test_steer_zero_finds_switch_center);
+    RUN_TEST(test_steer_zero_timeout_fails);
+    RUN_TEST(test_steer_zero_pauses_and_restarts_after_offline);
     return UNITY_END();
 }
