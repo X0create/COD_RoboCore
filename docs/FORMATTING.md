@@ -4,9 +4,15 @@
 人不用手动对齐，审查时也不用为格式争论。规则写在仓库根目录的 `.clang-format`，各项设置的说明见
 `docs/CODING_STANDARD.md` 第 5 节和附录 B。
 
-**提交前必须格式化**，CI 会检查，不合格的提交无法通过。
+**提交前必须格式化**，CI（GitHub 上每次推送自动运行的检查）会检查，不合格的提交无法通过。
 
-- 第 1 节：版本为什么必须是 **18.1.3**（先看这个）
+我们主要用 **CLion** 和 **VS Code**。下面的教程分三步，每一步都要做：
+
+1. 安装 clang-format **18.1.3**；
+2. 设置编辑器（CLion 或 VS Code，用哪个设哪个），让它**调用这个 18.1.3** 来格式化；
+3. 日常：编辑器里格式化，提交前最后检查一次。
+
+- 第 1 节：版本为什么必须是 18.1.3（先看这个）
 - 第 2 节：Ubuntu 教程
 - 第 3 节：Windows 教程
 - 第 4–6 节：不想被排版的地方、CI 怎么查、常见问题
@@ -21,11 +27,11 @@ CI 用的是 clang-format **18.1.3**。不同版本对同一段代码可能排�
 | 18.1.8 | 2 个文件不合格（带花括号的宏排法变了，如 `buzzer.c` 的 `PATTERN`） |
 | 22（CLion 自带） | 22 个文件不合格 |
 
-所以下面的教程都装**正好 18.1.3**。`tools/format.py` 发现版本不是 18.1.3 时会提示。
+所以下面的教程都装**正好 18.1.3**，并让编辑器**用它**，而不是编辑器自带的版本。
 
-clang-format 是一个独立的程序，**不需要 Python**。项目里的辅助脚本 `tools/format.py` 需要 Python 3：
+clang-format 是一个独立的程序，**不需要 Python**。项目里的检查脚本 `tools/format.py` 需要 Python 3：
 它负责挑出“哪些文件归本项目格式化”（Git 跟踪的 `.c` / `.h`，**不含第三方代码**——CubeMX 生成的 `06_boards/`、
-`04_core/log/segger_rtt/`、`tests/host/unity/`），再逐个调用 clang-format。没有 Python 也能格式化，见各教程的“不用脚本”。
+`04_core/log/segger_rtt/`、`tests/host/unity/`），再逐个调用 clang-format。没有 Python 也能检查，见各教程第 4 步。
 
 ---
 
@@ -46,61 +52,80 @@ lsb_release -ds          # 显示 Ubuntu 24.04.x LTS 或 22.04.x LTS
 ```bash
 sudo apt update
 sudo apt install clang-format-18
+clang-format-18 --version      # 应显示 clang-format version 18.1.3（后面多一个 (1ubuntu1)，不影响）
 ```
+
+程序路径是 `/usr/bin/clang-format-18`，第 2、3 步要用。
 
 **Ubuntu 22.04**：软件源里最高只有 clang-format 15，没有 18。用 pip 装 LLVM 官方编好的 18.1.3：
 
 ```bash
 sudo apt install python3-pip
 python3 -m pip install --user clang-format==18.1.3
+~/.local/bin/clang-format --version     # 应显示 clang-format version 18.1.3
 ```
 
-装好的程序在 `~/.local/bin/clang-format`。如果下一步提示找不到命令，把这个目录加进 PATH：
-
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
+程序路径是 `/home/你的用户名/.local/bin/clang-format`，第 2、3 步要用。
 （网络需要走代理时，pip 前面加 `HTTPS_PROXY=http://代理地址:端口`。）
 
-### 第 2 步：确认版本
+### 第 2 步：设置 CLion（用 CLion 的做）
 
-```bash
-clang-format-18 --version     # 24.04 用 apt 装的
-clang-format --version        # 22.04 用 pip 装的
+1. 打开 **File → Settings**（`Ctrl+Alt+S`），在左上角的搜索框输入 **clang-format**，找到 C/C++ 代码风格里的 ClangFormat 设置；
+2. 勾选 **Read code style from .clang-format files**（从 `.clang-format` 读取代码风格）；
+3. 勾选 **Use external clang-format instead of the bundled one**（用外部 clang-format 代替自带的）；
+4. **Clang-format executable to use** 选“指定路径”，填第 1 步的程序路径（`/usr/bin/clang-format-18` 或 `~/.local/bin/clang-format` 的完整路径）；
+5. 点 **OK**。
+
+只勾第 2 项、不勾第 3 项时，CLion 是用它自己的格式化引擎去模仿 `.clang-format` 的规则，结果和 18.1.3 不完全一样；
+三项都设好，CLion 才是直接调用 18.1.3。
+
+日常使用：
+
+- 格式化当前文件：`Ctrl+Alt+L`；先选中几行再按，只格式化选中部分；
+- 提交时自动格式化：提交窗口（`Ctrl+K`）里勾选 **Reformat code**。
+
+### 第 3 步：设置 VS Code（用 VS Code 的做）
+
+1. 安装 Microsoft 的 **C/C++** 扩展（扩展商店搜 `ms-vscode.cpptools`）；
+2. `Ctrl+Shift+P` → 输入 **Preferences: Open User Settings (JSON)**，在打开的 `settings.json` 里加上（路径换成第 1 步的）：
+
+```json
+{
+    "C_Cpp.clang_format_path": "/usr/bin/clang-format-18",
+    "C_Cpp.clang_format_style": "file",
+    "[c]": { "editor.formatOnSave": true },
+    "[cpp]": { "editor.formatOnSave": true }
+}
 ```
 
-应显示 `clang-format version 18.1.3`（24.04 会多一个 `(1ubuntu1)`，不影响）。
+之后保存 `.c` / `.h` 时自动格式化（VS Code 默认把 `.h` 当 C++，所以 `[c]`、`[cpp]` 都要写）；手动格式化当前文件是 `Ctrl+Shift+I`。
 
-### 第 3 步：格式化
+`C_Cpp.clang_format_path` 必须填：不填时 VS Code 先找 PATH 里名叫 `clang-format` 的程序，找不到就用扩展自带的版本，
+而 Ubuntu 24.04 上装的叫 `clang-format-18`，会被跳过。
 
-进入仓库根目录：
+### 第 4 步：日常使用与提交前检查
+
+平时在编辑器里写代码、保存或按快捷键格式化就行。**提交前最后检查一次**，进入仓库根目录：
 
 ```bash
-cd 仓库所在目录/COD_RoboCore
-
-python3 tools/format.py --changed    # 只格式化改过、还没提交的文件（日常用这个）
-python3 tools/format.py --check      # 提交前最后检查一次：显示“格式检查通过”才能提交
+cd 仓库所在目录/项目
+python3 tools/format.py --check      # 显示“格式检查通过”才能提交
 ```
 
-其他用法：
+不合格时，脚本会列出文件名。修正的办法：
 
 ```bash
-python3 tools/format.py              # 格式化全部本项目代码
+python3 tools/format.py --changed    # 格式化所有改过、还没提交的文件
 python3 tools/format.py 文件1 文件2   # 只格式化指定的文件
 ```
 
-**不用脚本**：直接调用 clang-format，`-i` 表示直接改写文件。只对本项目的代码用，不要格式化第三方代码：
+脚本会自动找 `clang-format-18`，找不到再找 `clang-format`；要指定位置：`CLANG_FORMAT=程序路径 python3 tools/format.py --check`。
+
+**不用脚本**也可以直接调用 clang-format，`-i` 表示直接改写文件。只对本项目的代码用，不要格式化第三方代码：
 
 ```bash
-clang-format-18 -i 01_applic/tasks/control_task.c 01_applic/modules/chassis/chassis.h
+clang-format-18 -i 文件夹A/文件夹B/task.c
 ```
-
-### 第 4 步（可选）：编辑器里格式化
-
-CLion、VS Code 的设置见第 3 节第 4 步，Linux 上一样（VS Code 的 `clang_format_path` 填 `/usr/bin/clang-format-18`
-或 `~/.local/bin/clang-format`）。
 
 ---
 
@@ -123,53 +148,82 @@ winget 下载的是 LLVM 官方的 `LLVM-18.1.3-win64.exe`（来自 LLVM 的 Git
 
 LLVM 安装包里除了 clang-format，还有编译器等其他工具，体积较大；本项目只用其中的 clang-format。
 
-### 第 2 步：确认能找到 clang-format
-
-**关掉再重新打开 PowerShell**（新装的 PATH 只对新窗口生效），然后：
+装好后确认（**关掉再重新打开 PowerShell**，新装的 PATH 只对新窗口生效）：
 
 ```powershell
-clang-format --version
+& "C:\Program Files\LLVM\bin\clang-format.exe" --version     # 应显示 clang-format version 18.1.3
+clang-format --version                                       # 能显示 18.1.3，说明已在 PATH 里
 ```
 
-应显示 `clang-format version 18.1.3`。
+程序路径是 `C:\Program Files\LLVM\bin\clang-format.exe`，第 2、3 步要用。
 
-如果提示“无法将 clang-format 识别为 cmdlet、函数…”，说明 LLVM 的目录不在 PATH 里（winget 静默安装时可能不会加）。
-把它加进当前用户的 PATH，再重开 PowerShell：
+第二条提示“无法将 clang-format 识别为 cmdlet、函数…”时，说明 LLVM 的目录不在 PATH 里（winget 静默安装时可能不会加）。
+编辑器里填完整路径就不受影响；想在命令行直接用，把它加进当前用户的 PATH，再重开 PowerShell：
 
 ```powershell
 $p = [Environment]::GetEnvironmentVariable("Path", "User")
 [Environment]::SetEnvironmentVariable("Path", "$p;C:\Program Files\LLVM\bin", "User")
 ```
 
-如果显示的不是 18.1.3（比如电脑上以前装过别的版本的 LLVM），用 `where.exe clang-format` 看找到的是哪一个，
-把 18.1.3 的目录排到 PATH 前面，或者用第 3 步的 `CLANG_FORMAT` 直接指定。
+第二条显示的不是 18.1.3（电脑上以前装过别的 LLVM）时，用 `where.exe clang-format` 看找到的是哪一个，
+把 18.1.3 的目录排到 PATH 前面；编辑器里填完整路径同样不受影响。
 
-### 第 3 步：格式化
+### 第 2 步：设置 CLion（用 CLion 的做）
 
-进入仓库根目录（换成你自己的路径）：
+1. 打开 **File → Settings**（`Ctrl+Alt+S`），在左上角的搜索框输入 **clang-format**，找到 C/C++ 代码风格里的 ClangFormat 设置；
+2. 勾选 **Read code style from .clang-format files**（从 `.clang-format` 读取代码风格）；
+3. 勾选 **Use external clang-format instead of the bundled one**（用外部 clang-format 代替自带的）；
+4. **Clang-format executable to use** 选“指定路径”，填 `C:\Program Files\LLVM\bin\clang-format.exe`；
+5. 点 **OK**。
+
+只勾第 2 项、不勾第 3 项时，CLion 是用它自己的格式化引擎去模仿 `.clang-format` 的规则，结果和 18.1.3 不完全一样；
+三项都设好，CLion 才是直接调用 18.1.3。
+
+日常使用：
+
+- 格式化当前文件：`Ctrl+Alt+L`；先选中几行再按，只格式化选中部分；
+- 提交时自动格式化：提交窗口（`Ctrl+K`）里勾选 **Reformat code**。
+
+### 第 3 步：设置 VS Code（用 VS Code 的做）
+
+1. 安装 Microsoft 的 **C/C++** 扩展（扩展商店搜 `ms-vscode.cpptools`）；
+2. `Ctrl+Shift+P` → 输入 **Preferences: Open User Settings (JSON)**，在打开的 `settings.json` 里加上：
+
+```json
+{
+    "C_Cpp.clang_format_path": "C:\\Program Files\\LLVM\\bin\\clang-format.exe",
+    "C_Cpp.clang_format_style": "file",
+    "[c]": { "editor.formatOnSave": true },
+    "[cpp]": { "editor.formatOnSave": true }
+}
+```
+
+（JSON 里的反斜杠要写两个。）之后保存 `.c` / `.h` 时自动格式化（VS Code 默认把 `.h` 当 C++，所以 `[c]`、`[cpp]` 都要写）；手动格式化当前文件是 `Shift+Alt+F`。
+
+`C_Cpp.clang_format_path` 建议填上：不填时 VS Code 先找 PATH 里的 `clang-format`，找不到就用扩展自带的版本，那就不是 18.1.3 了。
+
+### 第 4 步：日常使用与提交前检查
+
+平时在编辑器里写代码、保存或按快捷键格式化就行。**提交前最后检查一次**，进入仓库根目录（换成你自己的路径）：
 
 ```powershell
-cd D:\你的路径\COD_RoboCore
+cd D:\你的路径\项目
 ```
 
 **装了 Python 3 的**（项目的 `keil_sync.py`、MuJoCo 仿真也要用，大多数人迟早要装）：
 
 ```powershell
-python tools\format.py --changed    # 只格式化改过、还没提交的文件（日常用这个）
-python tools\format.py --check      # 提交前最后检查一次：显示“格式检查通过”才能提交
+$env:CLANG_FORMAT = "C:\Program Files\LLVM\bin\clang-format.exe"   # clang-format 已在 PATH 里时可以省略
+python tools\format.py --check      # 显示“格式检查通过”才能提交
+python tools\format.py --changed    # 不合格时：格式化所有改过、还没提交的文件
 ```
 
-`python` 不可用时换成 `py -3`。要指定 clang-format 的位置：
-
-```powershell
-$env:CLANG_FORMAT = "C:\Program Files\LLVM\bin\clang-format.exe"
-python tools\format.py --changed
-```
+`python` 不可用时换成 `py -3`。
 
 **没装 Python 的**：直接调用 clang-format。格式化一个文件：
 
 ```powershell
-clang-format -i 01_applic\tasks\control_task.c
+clang-format -i 文件夹A\文件夹B\task.c
 ```
 
 格式化所有改过、还没提交的 `.c` / `.h`（跳过第三方代码；完整的排除规则以 `tools/format.py` 为准）：
@@ -179,32 +233,6 @@ git diff --name-only HEAD -- '*.c' '*.h' |
     Where-Object { $_ -notmatch '^06_boards/|segger_rtt/|tests/host/unity/' } |
     ForEach-Object { clang-format -i $_ }
 ```
-
-### 第 4 步（可选）：编辑器里格式化
-
-编辑器里格式化方便随手用，但**用的 clang-format 版本不一定是 18.1.3**，提交前仍以第 3 步的 `--check` 为准。
-
-**CLion**：打开仓库后，CLion 识别到 `.clang-format` 会自动改用 ClangFormat（状态栏右下角显示 `ClangFormat`）。
-
-- 格式化当前文件：`Ctrl+Alt+L`；先选中几行再按，只格式化选中部分；
-- 提交时自动格式化：提交窗口（`Ctrl+K`）里勾选 **Reformat code**。
-
-CLion 用的是它自带的 clang-format（较新的版本，实测 22），有二十多个文件的排版会和 18.1.3 不同。
-用 CLion 格式化后，再运行一次第 3 步的命令，让结果回到 18.1.3 的样子。
-开着文件的 CLion 也可能按它自己的版本重排文件（2026-10-11 就发生过一次，`robot.c` 一行注释的对齐被改成 22 版的样子混进了提交），
-所以**提交前最后一步**跑 `--check`。
-
-**VS Code**：安装 Microsoft 的 **C/C++** 扩展，在设置（`settings.json`）里加：
-
-```json
-{
-    "C_Cpp.clang_format_style": "file",
-    "C_Cpp.clang_format_path": "C:\\Program Files\\LLVM\\bin\\clang-format.exe",
-    "editor.formatOnSave": true
-}
-```
-
-之后保存时自动格式化；手动格式化当前文件是 `Shift+Alt+F`。这样用的就是第 1 步装的 18.1.3。
 
 ---
 
@@ -227,9 +255,15 @@ const TaskTableEntry task_table[] = {
 ## 5. CI 怎么检查
 
 推送到 GitHub 后，CI（`.github/workflows/ci.yml`）在 Ubuntu 24.04 上用 apt 安装 clang-format-18（即 18.1.3），运行
-`python3 tools/format.py --check`。不合格时，日志里会列出每个文件名，本地格式化后再提交即可。
+`python3 tools/format.py --check`。结果在 GitHub 仓库页面的 **Actions** 里看；不合格时，日志里会列出每个文件名，
+本地格式化后再提交即可。
 
 ## 6. 常见问题
+
+**编辑器里格式化过了，`--check` 还说不合格？**
+编辑器用的多半不是 18.1.3：CLion 没勾“用外部 clang-format”，或者 VS Code 没填 `C_Cpp.clang_format_path`。
+按教程第 2、3 步检查设置。CLion 开着文件时也可能自动按它当时的设置重排文件
+（2026-10-11 就发生过一次，`robot.c` 一行注释的对齐被改成 CLion 自带 22 版的样子混进了提交），所以提交前一定跑 `--check`。
 
 **为什么不直接用 `clang-format --dry-run --Werror` 检查？**
 clang-format 18.1.3 在这个模式下报出格式错误后，**退出码仍然是 0**（2026-10-11 实测），

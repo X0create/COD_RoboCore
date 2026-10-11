@@ -457,7 +457,8 @@ RTT 控制块在运行时才写好。地址应与 ELF 中 `_SEGGER_RTT` 一致�
 - **想在 CLion 里用 WSL 构建**：设置 → CMake → 选中配置 → 工具链改成自己的 WSL 工具链（需在 WSL 里装好
   `g++`、`gdb`、`cmake`、`ninja` 和第 5 节的交叉编译器）。构建目录自动变成 `build/Linux/...`，和 Windows 构建互不影响。
 - **格式化**：CLion 检测到仓库的 `.clang-format` 后会自动启用 ClangFormat，**Ctrl+Alt+L** 即按项目规则格式化。
-  CLion 自带的 clang-format 是较新的版本（实测 22），与 CI 的 18 版排版有出入；提交前运行 `python3 tools/format.py --changed`，详见 `docs/FORMATTING.md`。
+  **必须改设置**：CLion 默认用它自带的 clang-format（实测 22），与 CI 的 18.1.3 排版有出入。按 `docs/FORMATTING.md` 第 2 / 3 节第 2 步，
+  勾选 “Use external clang-format instead of the bundled one” 并指到装好的 18.1.3。
 
 ### 11.1 在 CLion 里烧录和调试（J-Link，2026-09-29 烧录已验证，断点见下）
 
