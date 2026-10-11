@@ -96,6 +96,40 @@ static void test_rc_restored_with_switch_down_is_estop(void)
     TEST_ASSERT_EQUAL_INT(SAFETY_MODE_SAFE, gate.mode);
 }
 
+/* 故障复位后（ADR 0073 ④）：遥控还没在线时等着；第一次在线、拨杆在上方就直接解锁 */
+static void test_resume_after_fault_without_rearm(void)
+{
+    safety_gate_resume_after_fault(&gate);
+    safety_gate_set_system_ready(&gate);
+    TEST_ASSERT_TRUE(step(false, RC_SW_UP).stop_all); /* 刚重启，遥控还没收到 */
+    TEST_ASSERT_TRUE(step(false, RC_SW_UP).stop_all);
+    TEST_ASSERT_FALSE(step(true, RC_SW_UP).stop_all);
+    TEST_ASSERT_EQUAL_INT(SAFETY_MODE_MANUAL, gate.mode);
+
+    TEST_ASSERT_TRUE(step(true, RC_SW_DOWN).stop_all); /* 之后急停照常要重新拨杆 */
+    TEST_ASSERT_TRUE(step(true, RC_SW_DOWN).stop_all);
+    TEST_ASSERT_FALSE(step(true, RC_SW_UP).stop_all);
+}
+
+/* 故障复位后拨杆在“下”：不自动恢复，按普通流程拨上来才解锁 */
+static void test_resume_after_fault_with_switch_down(void)
+{
+    safety_gate_resume_after_fault(&gate);
+    safety_gate_set_system_ready(&gate);
+    TEST_ASSERT_TRUE(step(true, RC_SW_DOWN).stop_all); /* Init → Safe */
+    TEST_ASSERT_TRUE(step(true, RC_SW_DOWN).stop_all); /* 在“下”：不恢复 */
+    TEST_ASSERT_FALSE(gate.resume_pending);
+    TEST_ASSERT_FALSE(step(true, RC_SW_UP).stop_all); /* 拨上来：普通解锁 */
+}
+
+/* 普通上电不能自动恢复（对照） */
+static void test_normal_boot_does_not_resume(void)
+{
+    safety_gate_set_system_ready(&gate);
+    step(true, RC_SW_UP);
+    TEST_ASSERT_TRUE(step(true, RC_SW_UP).stop_all);
+}
+
 /* Safe 里看到过“下”，但随后遥控丢失：恢复后不能凭旧记录解锁 */
 static void test_rc_lost_in_safe_forgets_down(void)
 {
@@ -140,6 +174,9 @@ int main(void)
     RUN_TEST(test_rc_lost_keeps_manual_and_resumes);
     RUN_TEST(test_rc_restored_with_switch_down_is_estop);
     RUN_TEST(test_rc_lost_in_safe_forgets_down);
+    RUN_TEST(test_resume_after_fault_without_rearm);
+    RUN_TEST(test_resume_after_fault_with_switch_down);
+    RUN_TEST(test_normal_boot_does_not_resume);
     RUN_TEST(test_only_configured_switch_counts);
     RUN_TEST(test_output_ramp);
     return UNITY_END();

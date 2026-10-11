@@ -9,6 +9,7 @@
 #include "01_applic/config/robot.h"
 #include "01_applic/system/safety_gate.h"
 #include "04_core/log/log.h"
+#include "05_platform/iwdg/iwdg.h"
 #include "05_platform/time/time.h"
 
 /* 阶段 0 还没有 RM_ASSERT 和故障记录（阶段 1），初始化失败时先停在这里，调试器能直接看到位置；
@@ -38,8 +39,9 @@ static bool create_tasks(void)
 
 void app_main(void)
 {
-    const bool time_ok = rm_time_init(); /* 1. DWT 计时 */
-    rm_log_init();                       /* 2. RTT 日志 */
+    const bool fault_reset = iwdg_caused_last_reset(); /* 0. 先读复位原因（读后清除） */
+    const bool time_ok = rm_time_init();               /* 1. DWT 计时 */
+    rm_log_init();                                     /* 2. RTT 日志 */
     if (!time_ok)
     {
         /* 时间基准不可用：RM_LOG_* 的时间戳要读 rm_time_now_us()，这里只能用不带时间戳的输出 */
@@ -54,6 +56,11 @@ void app_main(void)
     {
         RM_LOG_E("robot init failed");
         halt_on_init_failure();
+    }
+    if (fault_reset) /* 程序故障复位（ADR 0073 ④）：遥控在线、拨杆不在下就直接恢复，不用重新拨杆 */
+    {
+        RM_LOG_W("restarted by watchdog: resume without re-arm");
+        safety_gate_resume_after_fault(&safety_gate);
     }
     if (!create_tasks()) /* 4. 按这台车的任务表创建全部任务 */
     {

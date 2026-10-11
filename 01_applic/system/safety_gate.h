@@ -8,6 +8,8 @@
  *          - 解锁：在 Safe 模式、遥控在线时先看到拨杆在“下”，再拨到“中”或“上”；上电时拨杆已在上方不会自己动起来；
  *          - 遥控丢失：Manual 下**不**全车停、不退出 Manual，由 control_task 把目标速度改为 0、底盘按斜坡减速；
  *            遥控恢复、拨杆不在“下”就直接继续（不用重新解锁）。Safe 下丢失期间的拨杆位置不作数。
+ *          - 程序故障复位后（IWDG 复位，ADR 0073 ④）：遥控第一次在线时拨杆不在“下”就直接解锁，不用重新拨杆；
+ *            普通上电、调试器复位仍要按上面的顺序解锁。
  *          IMU 状态不在这里：只影响用到 IMU 的机构。机构降级（本机构设备离线）由子系统自己处理。
  */
 #pragma once
@@ -37,7 +39,8 @@ typedef struct
     uint8_t arm_switch; /* 解锁 / 急停用哪个拨杆：RcState.sw 的下标（robot.h 配置，ADR 0032） */
     volatile bool system_ready; /* startup_task 写、control_task 读；单字节读写是原子的 */
     SafetyMode mode;
-    bool saw_stop_position;   /* Safe 模式下、遥控在线时看到过拨杆在“下” */
+    bool saw_stop_position; /* Safe 模式下、遥控在线时看到过拨杆在“下” */
+    bool resume_pending; /* 故障复位后还没恢复：遥控第一次在线、拨杆不在“下”时直接解锁 */
     uint64_t manual_since_us; /* 进入 Manual 的时刻，用于输出斜坡 */
 } SafetyGate;
 
@@ -55,6 +58,9 @@ extern SafetyGate safety_gate;
 
 /** @param arm_switch  RcState.sw 的下标，0 或 1 */
 void safety_gate_init(SafetyGate *gate, uint8_t arm_switch);
+
+/** 上次复位是程序故障（IWDG）引起的：允许不重新拨杆就恢复。由 app_main 在 safety_gate_init() 之后调用 */
+void safety_gate_resume_after_fault(SafetyGate *gate);
 
 /** 启动完成（设备自检之后）才允许解锁；由 startup_task 调用一次 */
 void safety_gate_set_system_ready(SafetyGate *gate);

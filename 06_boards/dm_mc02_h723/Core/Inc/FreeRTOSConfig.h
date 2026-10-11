@@ -155,7 +155,11 @@ See http://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html. */
 /* Normal assert() semantics without relying on the provision of an assert.h
 header file. */
 /* USER CODE BEGIN 1 */
-#define configASSERT( x ) if ((x) == 0) {taskDISABLE_INTERRUPTS(); for( ;; );}
+/* 断言失败 = 致命故障：连着调试器停在断点，否则经 IWDG 立即复位（05_platform/iwdg/iwdg.h，ADR 0074） */
+#if defined(__ICCARM__) || defined(__CC_ARM) || defined(__GNUC__)
+void iwdg_fault(void);
+#endif
+#define configASSERT( x ) if ((x) == 0) { iwdg_fault(); }
 /* USER CODE END 1 */
 
 /* Definitions that map the FreeRTOS port interrupt handlers to their CMSIS

@@ -22,6 +22,7 @@
 #include "stm32h7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+void iwdg_fault(void); /* 致命故障处理，定义在 05_platform/iwdg/iwdg_stm32h7.c（ADR 0074） */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -112,7 +113,7 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+  iwdg_fault(); /* 致命故障：连着调试器停在断点，否则经 IWDG 立即复位（ADR 0074） */
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
@@ -127,7 +128,7 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
-
+  iwdg_fault(); /* 致命故障：连着调试器停在断点，否则经 IWDG 立即复位（ADR 0074） */
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
   {
@@ -142,7 +143,7 @@ void MemManage_Handler(void)
 void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
-
+  iwdg_fault(); /* 致命故障：连着调试器停在断点，否则经 IWDG 立即复位（ADR 0074） */
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
   {
@@ -157,7 +158,7 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
-
+  iwdg_fault(); /* 致命故障：连着调试器停在断点，否则经 IWDG 立即复位（ADR 0074） */
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)
   {

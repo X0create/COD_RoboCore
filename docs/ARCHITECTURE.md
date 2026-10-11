@@ -862,9 +862,9 @@ if (!RM_CHECK(quat_ekf_update(&self->ekf, &sample, dt_s) == ALGO_OK, ERR_EKF_DIV
 
 **两级看门狗。**
 
-1. 软件：关键任务（ins、control、command）每周期把自己的心跳计数加 1。
-2. 硬件 IWDG：detect 每 10 ms 检查一次，**只有所有关键任务的心跳都涨过**才喂 IWDG。超时设 100 ms。任何关键任务卡死、或 detect 被饥饿，都会导致复位，而不是带着错误输出继续跑。
-3. IWDG 在 `app_main()` 之后的 startup_task 里、设备自检完成后启动；调试时通过 `DBGMCU` 设置让断点暂停时 IWDG 也暂停。
+1. 软件：control_task 每周期把心跳计数 `control_heartbeat` 加 1（ADR 0074：只有它发电机指令；其他任务卡死时用到它数据的机构自己处理，不再报到）。
+2. 硬件 IWDG：detect 每 10 ms 检查一次，心跳涨过才喂 IWDG。超时 50 ms。control_task 卡死、被饿死，或 detect 自己卡死，都会导致复位。
+3. IWDG 在 detect_task 开头启动（初始化阶段不在范围内）；`DBGMCU` 设置让调试器暂停时 IWDG 也暂停。复位后按 ADR 0073 ④ 自动恢复。
 
 **FreeRTOS 配置要求。**
 - `configCHECK_FOR_STACK_OVERFLOW = 2`，钩子里调用致命错误处理；框架不做动态分配，不开 malloc 失败钩子。
@@ -886,7 +886,7 @@ if (!RM_CHECK(quat_ekf_update(&self->ekf, &sample, dt_s) == ALGO_OK, ERR_EKF_DIV
 
 下面这些是**功能逻辑，不算安全机制**，由各模块自己处理，不经过安全门：裁判系统离线时按最低功率和热量上限运行（底盘、发射）；视觉离线时 AutoAim 回到 Manual（command）；超级电容离线时不用电容（底盘）；电机温度高时限流（子系统）；陀螺零偏未标定时打日志、亮灯提示。
 
-断言失败、HardFault 不在此表：记录后直接复位（第 3 节）。
+断言失败、栈溢出、HardFault 不在此表：连着调试器时停在断点，否则经 IWDG 立即复位；程序卡死（control_task 心跳 50 ms 不涨）也由 IWDG 复位；IWDG 复位后遥控在线、拨杆不在“下”就直接恢复（ADR 0073 ④、0074）。故障原因保存（`.noinit`）仍未做。
 
 **恢复时不猛冲：** 进入 Manual 时目标设为当前姿态，输出限幅在 300 ms 内从 0 斜坡升到正常值。机构停恢复时同样处理。
 
@@ -1336,6 +1336,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0071 | 用户 2026-10-10 审阅 time：① 注释改正：时间起点是 `rm_time_init()`（把 DWT->CYCCNT 清零），不是上电；64 位扩展**有前提**：两次读取间隔小于计数器一圈（550 MHz 约 7.8 s），目前由 1 kHz 任务保证，不是无条件不回绕；② `CycleExtend`、`cycle_extend_*()` 移到内部头文件 `05_platform/time/time_internal.h`，`time.h` 只留 `rm_time_init` / `rm_time_now_us`；ADR 0066“每外设最多三个文件”加例外：只给芯片实现和主机测试用的声明可放 `<外设>_internal.h`；③ 修正：`app_main` 原来在检查 `time_ok` 之前打日志、失败分支也用 `RM_LOG_E`，都会读未初始化的时钟；改为先检查，失败时用新增的 `RM_LOG_E_NO_TIME`（不带时间戳，直接 `SEGGER_RTT_WriteString`）。固件 0 警告、主机测试通过；失败分支未上板（需锁住 DWT 才能触发） |
 | 0072 | 用户 2026-10-10：“文件拆分的还是太细了”，选三项：① `03_algorithm/kinematics` 的 chassis_vel / omni / mecanum / steer / half_steer 合成 `kinematics.h/.c`（每种轮组一节，舵轮与半舵半全向共用一份轮位符号表）；② 算法每个子目录一对文件：`filter/filter`（lpf + kalman）、`control/control`（pid + ramp）、`attitude/attitude`（gyro_bias + quat_ekf）、`math/rm_math`（math_const + matrix，加 rm_ 前缀避免和 `<math.h>` 重名，ADR 0062）；③ `02_devices/vision` 的 vision_frame + vision_link → `vision.h/.c`。测试随模块合并（test_kinematics / filter / control / attitude / math / vision，测试函数加节前缀），用例 69 个不变，测试程序 33 → 27。未合并：`04_core/os` 的 critical.h / delay.h（让主机测试不依赖 FreeRTOS）、dr16 / vt_link（两种协议）、05_platform（用户未选）。只搬代码；固件 0 警告、27/27，未上板 |
 | 0073 | 用户 2026-10-10：**赛场上优先保证车能继续跑**，程序出问题也尽量降级而不是全车停，四项选定：① 底盘一个轮子不能用（驱动电机离线，或舵轮的转向电机离线）：不能用的轮子零力矩、清积分，其余轮子继续，目标速度和加速度 × `CHASSIS_DEGRADED_SCALE`（0.5）；② IMU 未就绪从全车停条件中去掉，只影响用到 IMU 的机构（现在的底盘不用，上电不必等标定）；③ 遥控丢失不全车停、不退出 Manual，目标改为 0、底盘按斜坡减速；恢复后拨杆不在“下”就直接继续，不用重新解锁（代价：台架上遥控一恢复车就可能动）；④ IWDG 复位后自动恢复（第 3 批实现）。急停、未解锁仍全车停。取代 0026 中“遥控丢失 / IMU 未就绪全车停”和底盘“机构停”，0032 中“遥控恢复须重拨”。主机测试 + MuJoCo 两条对角线 -Check 通过；未上板 |
+| 0074 | 用户 2026-10-10 确定故障闭环：① IWDG 超时 50 ms；喂狗放在 detect_task（“检测”集中在一处）：control_task 每周期心跳 +1，detect_task 每 10 ms 看到在涨才喂；只看 control_task（只有它发电机指令），comm_rx / ins 不报到；直接写寄存器，不经 CubeMX；调试器暂停时 IWDG 冻结；② 致命故障（configASSERT、栈溢出钩子、HardFault / MemManage / BusFault / UsageFault）统一进 `iwdg_fault()`：关中断、先设最短 IWDG 超时，连着调试器就 BKPT 停下，否则约 0.125 ms 后经 IWDG 复位；不在故障里发 CAN（栈可能已坏）；复位原因统一为 IWDG，复位后按 0073 ④ 自动恢复（普通上电、调试器复位不恢复）；③ 实时性只统计不处置：control_task 记最近 1 s 的最大执行时间、最大周期间隔和间隔 > 1.5 ms 的累计次数，log_task 每秒打印。初始化失败仍停在 `halt_on_init_failure()`（IWDG 尚未启动，不会反复重启）。固件 0 警告、主机测试 27/27；未上板（V51–V54） |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
@@ -1516,9 +1517,9 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 - [x] `motor_group`：按周期打包；没有写入的槽位填零力矩（2026-09-28，主机测试；固件里第 6 步 control_task 才调用）
 - [x] `01_applic/system/safety_gate`：遥控丢失、急停、未解锁 → `stop_all`；全车停时发送出口把每个电机改写为 `stop_action`（ADR 0026）（2026-09-28，ADR 0032；IMU 未就绪 2026-09-28 加入，ADR 0034；上板待 V33–V38）
 - [x] 模式状态机 Init → Safe → Manual（表驱动）；进入 Manual 时输出斜坡 300 ms；离线后不自动恢复，需要重新解锁（2026-09-28：在 `safety_gate` 里用 `switch` 实现，主机测试 7 项）
-- [ ] `control` 任务（1 kHz）：周期开头读快照，末尾统一提交；记录启动延迟、执行时间、提交时刻的最大值（只做调试统计，不联动安全门）（2026-09-28：任务与周期结构完成，定时统计未做）
+- [x] `control` 任务（1 kHz）：周期开头读快照，末尾统一提交；记录执行时间、周期间隔的最大值和超期次数（只做调试统计，不联动安全门）（2026-10-10 ADR 0074，log_task 每秒打印；上板待 V54）
 - [ ] `command` 任务：`OperatorInput`（先只接 DR16）→ `RobotCmd`
-- [ ] IWDG：detect 收齐关键任务的心跳才喂狗；调试暂停时 IWDG 也暂停
+- [x] IWDG：detect 看到 control_task 心跳在涨才喂狗，50 ms；调试暂停时 IWDG 也暂停；致命故障经 IWDG 立即复位（2026-10-10 ADR 0074；上板待 V51–V53）
 - [ ] 错误处理：`RM_ASSERT`（Release 下记录后直接复位）、`RM_CHECK`、错误表，以及 `.noinit` 故障记录（magic + CRC）
 - [ ] 主机测试：全车停的每个触发条件、状态机全表遍历、话题重复认领、在线判断超时边界
 - [ ] **台架实测**（电机架空并固定，断电开关放在手边）：

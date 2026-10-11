@@ -27,10 +27,27 @@ void comm_rx_task_entry(void *arg);
 /** comm_rx_task 的任务控制块：中断要用它唤醒任务，所以定义在 comm_rx_task.c */
 extern RmTask comm_rx_task;
 
-/** control_task（1 kHz）：读输入 → 安全门 → 底盘 → 发送 */
+/** control_task（1 kHz）：读实测 → 算目标 → 算输出并发送 */
 void control_task_entry(void *arg);
 
-/** detect_task（100 Hz）：报告设备上线 / 离线，不参与安全判定 */
+/** control_task 每个周期加 1：detect_task 看到它在涨才喂 IWDG（ADR 0074） */
+extern volatile uint32_t control_heartbeat;
+
+/** control_task 的实时性统计（ADR 0074，只取证、不影响控制） */
+typedef struct
+{
+    uint32_t exec_max_us;   /* 一个周期三步的执行时间最大值 */
+    uint32_t period_max_us; /* 相邻两个周期开始时刻的间隔最大值（应为 1000） */
+    uint32_t late_count;    /* 间隔超过 CONTROL_LATE_US 的次数（自上电累计） */
+} ControlTiming;
+
+/** 间隔超过这么久算一次超期 */
+#define CONTROL_LATE_US 1500u
+
+/** 取出统计并把两个最大值清零（log_task 每秒调用一次，所以最大值是“最近 1 s 内”的） */
+ControlTiming control_timing_take(void);
+
+/** detect_task（100 Hz）：报告设备上线 / 离线（不参与安全判定），按 control_task 心跳喂 IWDG */
 void detect_task_entry(void *arg);
 
 /** indicator_task（25 ms）：状态灯、蜂鸣器、低电量检查 */

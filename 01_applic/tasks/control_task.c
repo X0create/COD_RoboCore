@@ -12,6 +12,7 @@
 #include "tasks.h"
 
 #include "01_applic/config/robot.h"
+#include "04_core/os/critical.h"
 #include "04_core/os/os.h"
 #include "05_platform/time/time.h"
 
@@ -44,6 +45,9 @@ typedef struct
 
 static ControlInfo control_info;
 
+volatile uint32_t control_heartbeat;
+static ControlTiming timing;
+
 static void control_measure_update(ControlInfo *info);
 static void control_target_update(ControlInfo *info);
 static void control_output_update(const ControlInfo *info);
@@ -52,14 +56,38 @@ void control_task_entry(void *arg)
 {
     (void)arg;
     RmTaskPeriod last_wake = rm_task_period_start();
+    uint64_t last_start_us = rm_time_now_us();
     for (;;)
     {
+        const uint64_t start_us = rm_time_now_us();
+
         control_measure_update(&control_info);
         control_target_update(&control_info);
         control_output_update(&control_info);
 
+        /* 实时性统计与心跳（ADR 0074）：只取证，不影响控制 */
+        const uint32_t period_us = (uint32_t)(start_us - last_start_us);
+        const uint32_t exec_us = (uint32_t)(rm_time_now_us() - start_us);
+        last_start_us = start_us;
+        rm_critical_enter();
+        timing.period_max_us = period_us > timing.period_max_us ? period_us : timing.period_max_us;
+        timing.exec_max_us = exec_us > timing.exec_max_us ? exec_us : timing.exec_max_us;
+        timing.late_count += period_us > CONTROL_LATE_US ? 1u : 0u;
+        rm_critical_exit();
+        control_heartbeat++;
+
         rm_task_delay_until(&last_wake, CONTROL_PERIOD_MS);
     }
+}
+
+ControlTiming control_timing_take(void)
+{
+    rm_critical_enter();
+    const ControlTiming t = timing;
+    timing.exec_max_us = 0u;
+    timing.period_max_us = 0u;
+    rm_critical_exit();
+    return t;
 }
 
 /* 第 1 步 读实测：遥控、底盘各电机（底盘不用 IMU；IMU 只影响用到它的机构，ADR 0073） */

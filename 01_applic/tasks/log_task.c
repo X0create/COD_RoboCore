@@ -1,6 +1,6 @@
 /**
  * @file    log_task.c
- * @brief   这台车的 log_task（1 s）：通过 RTT 打印模式、遥控、四个轮子、底盘目标、IMU、电池
+ * @brief   这台车的 log_task（1 s）：通过 RTT 打印模式、遥控、四个轮子、底盘目标、IMU、电池、控制实时性
  * @note    只读对象（robot.h），不参与控制；打印的数值只供观察，单个 float 读写是原子的，但不同字段可能来自不同周期。
  *          状态灯、蜂鸣器、低电量提示在 01_applic/tasks/indicator_task.c；上线 / 离线的变化由 detect_task 打印。
  *          浮点用整数打印（RTT 的 printf 不支持 %f）：毫弧度/秒、毫米/秒、毫牛·米。
@@ -78,6 +78,10 @@ void log_task_entry(void *arg)
         log_imu();
         RM_LOG_I("battery %d mV%s", (int)(indicator_battery_v() * 1000.0f),
                  indicator_battery_low() ? " (low)" : "");
+        /* control_task 实时性（ADR 0074）：最近 1 s 的最大执行时间、最大周期间隔，超期次数自上电累计 */
+        const ControlTiming t = control_timing_take();
+        RM_LOG_I("control exec max %u us, period max %u us, late %u", (unsigned)t.exec_max_us,
+                 (unsigned)t.period_max_us, (unsigned)t.late_count);
         beat++;
         rm_task_delay_until(&last_wake, LOG_PERIOD_MS);
     }

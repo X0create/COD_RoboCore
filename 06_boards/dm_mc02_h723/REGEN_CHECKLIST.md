@@ -17,6 +17,7 @@
 | 10 | CubeMX 生成的链接脚本有没有变 | `git diff --ignore-cr-at-eol STM32H723xG_flash.ld` | 无变化；有变化时对照合并进本项目的 `dm_mc02.ld` | 构建只用 `dm_mc02.ld`，生成器改不到它；但芯片内存布局等真改动要人工合并（UniC 出过自定义段被生成器删掉） |
 | 11 | USB CDC 接收钩子还在 | `grep -n "usb_cdc_rx_isr" USB_DEVICE/App/usbd_cdc_if.c` | 两处：`USER CODE BEGIN PV` 里的声明、`USER CODE BEGIN 11`（`CDC_Receive_HS`）里的调用 | 没有钩子时 USB 能枚举但收不到任何数据；`MX_USB_DEVICE_Init()` 由框架的 `usb_cdc_start()` 调用，CubeMX 弱定义 `startup_task` 里那句不会执行（ADR 0037） |
 | 12 | 生成时 Toolchain 是 CMake；若刚按 MDK-ARM 生成过，已改回 CMake 再生成一次，并运行了 `python3 tools/keil_sync.py` | `grep TargetToolchain dm_mc02.ioc`；`ls Middlewares/Third_Party/FreeRTOS/Source/portable/GCC`；`python3 tools/keil_sync.py --check` | `TargetToolchain=CMake`；`GCC` 目录存在；输出“Keil 工程是最新的” | CubeMX 每次生成会删掉另一种工具链的文件（ADR 0053） |
+| 13 | 致命故障处理还接在 IWDG 上 | `grep -n "iwdg_fault" Core/Src/stm32h7xx_it.c Core/Src/freertos.c Core/Inc/FreeRTOSConfig.h` | `stm32h7xx_it.c` 5 处（声明 + HardFault / MemManage / BusFault / UsageFault 的 USER CODE 0 区）；`freertos.c` 2 处（声明 + `vApplicationStackOverflowHook`）；`FreeRTOSConfig.h` 2 处（`USER CODE BEGIN 1` 里的声明和 `configASSERT`） | 2026-10-10 ADR 0074：生成器清掉后故障时又变成死循环，车停发但不复位 |
 
 第 1 条的命令（在本目录执行）：
 

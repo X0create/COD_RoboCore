@@ -76,3 +76,7 @@
 | V48 | 底盘：一个电机离线（降级，ADR 0073） | V47 状态，轮子在转 | 断开一个电调的电源（或拔它的 CAN 线），再恢复 | RTT 出现 `wheel offline: degraded`；其余三轮继续，目标速度降到一半；离线的轮子零力矩；记下车跑偏的程度（落地后测）；恢复后按斜坡回到全速，不猛冲 | 待验证 |
 | V49 | 底盘：急停与遥控丢失 | V47 状态，轮子在转 | 同 V35、V36 | 急停：四个轮子同时零力矩；遥控丢失：四个轮子按斜坡减速到 0，恢复后直接继续 | 待验证 |
 | V50 | 串口接收记账与覆盖检测（2026-10-10 修复） | 同 V10 | Ozone 里看 `rx[4].writer.total`、`rx[4].reader.overruns`（UART5）；然后在 Ozone 里 Halt 约 1 s 再继续 | 遥控开着时 `writer.total` 每秒约增 1280 字节（每 14 ms 一帧 18 字节）；Halt 期间 DMA 照常写，继续后 `overruns` 加 1、随后 `dr16 online` 恢复、`bad frames` 不持续增长 | 待验证 |
+| V51 | IWDG 不误复位（ADR 0074） | 只接 J-Link 和遥控；烧 `h723-debug` | 正常运行 10 min；中途在 Ozone 里 Halt 10 s 再继续 | RTT 里一直没有 `restarted by watchdog`、`alive` 计数连续；Halt 期间 IWDG 冻结，继续后不复位 | 待验证 |
+| V52 | 致命故障 → 停在断点 → 复位后自动恢复 | 同上，遥控开着、右拨杆在上、已解锁（`mode manual`） | Ozone：Halt → 把 PC 改成 `0x00000001`（非法地址）→ Go | 停在 `iwdg_fault` 里的 BKPT（调用栈上是 HardFault_Handler）；再 Go：芯片复位，RTT 出现 `restarted by watchdog: resume without re-arm`，遥控在线后直接 `mode manual`，**不用拨杆** | 待验证 |
+| V53 | 任务卡死 → IWDG 复位 | 同上 | Ozone 里把 `DBGMCU->APB4FZ1` 的位 18（DBG_IWDG1）清零，然后 Halt 1 s 再 Go | Halt 期间 IWDG 照常倒计时，约 50 ms 后复位；RTT 出现 `restarted by watchdog` | 待验证 |
+| V54 | 控制实时性（满总线负载） | V45 状态（四台 M3508 在 FDCAN1）；可加 CAN 负载 | 运行 10 min，记 RTT 的 `control exec max … period max … late …` | 记下最大执行时间、最大周期间隔；`late` 应为 0，不为 0 时记下当时在做什么 | 待验证 |

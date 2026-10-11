@@ -14,6 +14,11 @@ void safety_gate_init(SafetyGate *gate, uint8_t arm_switch)
     *gate = (SafetyGate){ .arm_switch = arm_switch, .mode = SAFETY_MODE_INIT };
 }
 
+void safety_gate_resume_after_fault(SafetyGate *gate)
+{
+    gate->resume_pending = true;
+}
+
 void safety_gate_set_system_ready(SafetyGate *gate)
 {
     gate->system_ready = true;
@@ -29,7 +34,7 @@ SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, uint64_t 
     /*
      * 模式转换（每个周期最多转一次）：
      *   Init   --启动完成-->               Safe
-     *   Safe   --先看到“下”、再拨离“下”--> Manual（解锁）
+     *   Safe   --先看到“下”、再拨离“下”--> Manual（解锁）；故障复位后遥控第一次在线、不在“下”也直接解锁
      *   Manual --拨到“下”（急停）-->       Safe（之后必须重新解锁）；遥控丢失仍留在 Manual
      */
     switch (gate->mode)
@@ -51,9 +56,11 @@ SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, uint64_t 
             else if (stop_position)
             {
                 gate->saw_stop_position = true;
+                gate->resume_pending = false; /* 操作手拨到了“下”：按普通流程，拨上来再解锁 */
             }
-            else if (gate->saw_stop_position)
+            else if (gate->saw_stop_position || gate->resume_pending)
             {
+                gate->resume_pending = false;
                 gate->mode = SAFETY_MODE_MANUAL; /* 从“下”拨上来：解锁 */
                 gate->manual_since_us = now_us;
                 d.entered_manual = true;

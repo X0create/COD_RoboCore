@@ -1041,6 +1041,16 @@
           </Files>
         </Group>
         <Group>
+          <GroupName>05_platform/iwdg</GroupName>
+          <Files>
+            <File>
+              <FileName>iwdg_stm32h7.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\05_platform\iwdg\iwdg_stm32h7.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
           <GroupName>05_platform/pwm</GroupName>
           <Files>
             <File>

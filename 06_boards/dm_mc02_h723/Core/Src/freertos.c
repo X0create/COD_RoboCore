@@ -26,7 +26,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+void iwdg_fault(void); /* 致命故障处理，定义在 05_platform/iwdg/iwdg_stm32h7.c（ADR 0074） */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -79,9 +79,10 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, char *pcTaskName);
 /* USER CODE BEGIN 4 */
 void vApplicationStackOverflowHook(xTaskHandle xTask, char *pcTaskName)
 {
-   /* Run time stack overflow checking is performed if
-   configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2. This hook function is
-   called if a stack overflow is detected. */
+  /* 栈溢出 = 致命故障：连着调试器停在断点（pcTaskName 是溢出的任务名），否则经 IWDG 立即复位（ADR 0074） */
+  (void)xTask;
+  (void)pcTaskName;
+  iwdg_fault();
 }
 /* USER CODE END 4 */
 
