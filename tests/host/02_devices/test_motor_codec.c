@@ -9,7 +9,7 @@
 
 #include <string.h>
 
-#include "03_algorithm/math/rm_math.h"
+#include "03_algorithm/math/math_const.h"
 #include "05_platform/time/time.h"
 #include "fake_can.h"
 #include "fake_time.h"

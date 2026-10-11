@@ -56,7 +56,7 @@ config/
 | 任务优先级、栈大小 | `config/robot.c` 的 `task_table[]` | |
 | 电池：分压比、低电量阈值 | `tasks/indicator_task.c` 的 `battery_config` | 板子和电池的属性，通用（ADR 0038） |
 | M3508 / C620 换算常数 | `02_devices/motor/motor.h` 的 `DJI_M3508_*`、`DJI_C620_*` | 附录 A.2 |
-| π | `03_algorithm/math/rm_math.h` 的 `RM_PI` 等 | |
+| π | `03_algorithm/math/math_const.h` 的 `RM_PI` 等 | |
 | EKF 噪声（Q、R）、加速度低通系数 | `modules/ins/ins.c` 开头 | 沿用旧工程 INS_Task.c |
 | 陀螺零偏标定、静止时在线修正的阈值 | `modules/ins/ins.h` 的 `INS_CALIB_*`、`INS_STILL_*` | ADR 0033、0039 |
 | IMU 加热：目标温度、周期、PID、占空比上限 | `02_devices/imu/bmi088.h` 的 `BMI088_HEATER_TARGET_C`、`bmi088.c` 的 `HEATER_*` | 按本板实测（ADR 0042） |

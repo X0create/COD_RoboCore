@@ -16,7 +16,7 @@
  *            “不能用”= 驱动电机离线，或这个轮子的转向电机离线 / 零点还没找到（朝向控制不了，驱动它会往错的方向推）。
  *          舵轮找零（接了零点开关时，ADR 0068）：能动以后在第 3 步里先让转向电机正转、反转各经过开关一次，
  *          找到开关中心才开始正常控制；转向电机离线再上线后重找（上电位置为 0 的电机重连后零点不再可信）。
- *          轮号顺序见 03_algorithm/kinematics/kinematics.h 对应的一节（都是左前起逆时针）。
+ *          轮号顺序见 03_algorithm/kinematics/ 下对应的头文件（都是左前起逆时针）。
  *          功率控制以后加在第 3 步“算出力矩之后、写给电机之前”（ADR 0022）。
  */
 #pragma once
@@ -24,8 +24,12 @@
 #include <stdbool.h>
 
 #include "02_devices/motor/motor.h"
-#include "03_algorithm/control/control.h"
-#include "03_algorithm/kinematics/kinematics.h"
+#include "03_algorithm/control/pid.h"
+#include "03_algorithm/kinematics/chassis_vel.h"
+#include "03_algorithm/kinematics/half_steer.h"
+#include "03_algorithm/kinematics/mecanum.h"
+#include "03_algorithm/kinematics/omni.h"
+#include "03_algorithm/kinematics/steer.h"
 #include "05_platform/compiler.h"
 #include "05_platform/gpio/gpio.h"
 

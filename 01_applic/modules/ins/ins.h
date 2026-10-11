@@ -18,8 +18,9 @@
 #include <stdint.h>
 
 #include "02_devices/imu/bmi088.h"
-#include "03_algorithm/attitude/attitude.h"
-#include "03_algorithm/filter/filter.h"
+#include "03_algorithm/attitude/gyro_bias.h"
+#include "03_algorithm/attitude/quat_ekf.h"
+#include "03_algorithm/filter/lpf.h"
 #include "04_core/watchdog/watchdog.h"
 #include "05_platform/compiler.h"
 

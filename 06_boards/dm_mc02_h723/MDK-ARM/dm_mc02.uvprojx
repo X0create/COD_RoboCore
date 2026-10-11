@@ -904,9 +904,14 @@
           <GroupName>03_algorithm/attitude</GroupName>
           <Files>
             <File>
-              <FileName>attitude.c</FileName>
+              <FileName>gyro_bias.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\attitude\attitude.c</FilePath>
+              <FilePath>..\..\..\03_algorithm\attitude\gyro_bias.c</FilePath>
+            </File>
+            <File>
+              <FileName>quat_ekf.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\03_algorithm\attitude\quat_ekf.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -914,9 +919,14 @@
           <GroupName>03_algorithm/control</GroupName>
           <Files>
             <File>
-              <FileName>control.c</FileName>
+              <FileName>pid.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\control\control.c</FilePath>
+              <FilePath>..\..\..\03_algorithm\control\pid.c</FilePath>
+            </File>
+            <File>
+              <FileName>ramp.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\03_algorithm\control\ramp.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -924,9 +934,14 @@
           <GroupName>03_algorithm/filter</GroupName>
           <Files>
             <File>
-              <FileName>filter.c</FileName>
+              <FileName>kalman.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\filter\filter.c</FilePath>
+              <FilePath>..\..\..\03_algorithm\filter\kalman.c</FilePath>
+            </File>
+            <File>
+              <FileName>lpf.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\03_algorithm\filter\lpf.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -934,9 +949,24 @@
           <GroupName>03_algorithm/kinematics</GroupName>
           <Files>
             <File>
-              <FileName>kinematics.c</FileName>
+              <FileName>half_steer.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\kinematics\kinematics.c</FilePath>
+              <FilePath>..\..\..\03_algorithm\kinematics\half_steer.c</FilePath>
+            </File>
+            <File>
+              <FileName>mecanum.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\03_algorithm\kinematics\mecanum.c</FilePath>
+            </File>
+            <File>
+              <FileName>omni.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\03_algorithm\kinematics\omni.c</FilePath>
+            </File>
+            <File>
+              <FileName>steer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\03_algorithm\kinematics\steer.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -944,9 +974,9 @@
           <GroupName>03_algorithm/math</GroupName>
           <Files>
             <File>
-              <FileName>rm_math.c</FileName>
+              <FileName>matrix.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\math\rm_math.c</FilePath>
+              <FilePath>..\..\..\03_algorithm\math\matrix.c</FilePath>
             </File>
           </Files>
         </Group>

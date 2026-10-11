@@ -10,7 +10,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "03_algorithm/power/rls.h"
+#include "rls.h"
 
 #ifdef __cplusplus
 extern "C"

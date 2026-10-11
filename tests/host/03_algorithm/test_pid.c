@@ -1,12 +1,19 @@
 /**
- * @file    test_control.c
- * @brief   control 的单元测试，按节：pid、ramp
+ * @file    test_pid.c
+ * @brief   pid 的单元测试：各项计算、限幅、死区、微分滤波、增量式、复位、抗积分饱和；
+ *          除抗积分饱和（ADR 0040）外，期望值按旧工程 PID.c 的公式手算
  */
-#include "03_algorithm/control/control.h"
+#include "03_algorithm/control/pid.h"
 
 #include "unity.h"
 
-/* ---- pid：pid 的单元测试：各项计算、限幅、死区、微分滤波、增量式、复位、抗积分饱和；除抗积分饱和（ADR 0040）外，期望值按旧工程 PID.c 的公式手算 ---- */
+void setUp(void)
+{
+}
+
+void tearDown(void)
+{
+}
 
 static PidParam param(float kp, float ki, float kd)
 {
@@ -15,7 +22,7 @@ static PidParam param(float kp, float ki, float kd)
     };
 }
 
-static void test_pid_proportional_only(void)
+static void test_proportional_only(void)
 {
     Pid pid;
     const PidParam p = param(2.0f, 0.0f, 0.0f);
@@ -25,7 +32,7 @@ static void test_pid_proportional_only(void)
 }
 
 /* 积分是误差逐次累加，累加值按 integral_limit 限幅 */
-static void test_pid_integral_accumulates_and_clamps(void)
+static void test_integral_accumulates_and_clamps(void)
 {
     Pid pid;
     PidParam p = param(0.0f, 0.5f, 0.0f);
@@ -38,7 +45,7 @@ static void test_pid_integral_accumulates_and_clamps(void)
 }
 
 /* 旧工程加热环的参数 integral_limit = 0：积分项恒为 0，保留这个行为 */
-static void test_pid_zero_integral_limit_disables_integral(void)
+static void test_zero_integral_limit_disables_integral(void)
 {
     Pid pid;
     PidParam p = param(0.0f, 20.0f, 0.0f);
@@ -48,7 +55,7 @@ static void test_pid_zero_integral_limit_disables_integral(void)
     TEST_ASSERT_EQUAL_FLOAT(0.0f, pid_step(&pid, 40.0f, 30.0f));
 }
 
-static void test_pid_derivative_is_error_difference(void)
+static void test_derivative_is_error_difference(void)
 {
     Pid pid;
     const PidParam p = param(0.0f, 0.0f, 1.0f);
@@ -58,7 +65,7 @@ static void test_pid_derivative_is_error_difference(void)
 }
 
 /* 第一次微分值直接作为滤波输出，之后 y = a * y_prev + (1 - a) * x */
-static void test_pid_derivative_filter(void)
+static void test_derivative_filter(void)
 {
     Pid pid;
     PidParam p = param(0.0f, 0.0f, 1.0f);
@@ -68,7 +75,7 @@ static void test_pid_derivative_filter(void)
     TEST_ASSERT_EQUAL_FLOAT(2.5f, pid_step(&pid, 5.0f, 0.0f)); /* 0.5 * 2 + 0.5 * 3 */
 }
 
-static void test_pid_output_clamped(void)
+static void test_output_clamped(void)
 {
     Pid pid;
     PidParam p = param(10.0f, 0.0f, 0.0f);
@@ -80,7 +87,7 @@ static void test_pid_output_clamped(void)
 
 /* 误差进入死区后输出保持上一次的值，不归零 */
 /* 抗积分饱和：输出顶到限幅、误差同向时积分不再累加；误差一反向，输出立刻跟着反向（ADR 0040） */
-static void test_pid_integral_frozen_while_saturated(void)
+static void test_integral_frozen_while_saturated(void)
 {
     Pid pid;
     PidParam p = param(1.0f, 0.5f, 0.0f);
@@ -96,7 +103,7 @@ static void test_pid_integral_frozen_while_saturated(void)
 }
 
 /* 没饱和时照常累加；会越限时只补到边界；误差反向（往回拉）时照常累加 */
-static void test_pid_integral_accumulates_when_unwinding(void)
+static void test_integral_accumulates_when_unwinding(void)
 {
     Pid pid;
     PidParam p = param(0.0f, 1.0f, 0.0f);
@@ -108,7 +115,7 @@ static void test_pid_integral_accumulates_when_unwinding(void)
     TEST_ASSERT_EQUAL_FLOAT(2.0f, pid_step(&pid, 0.0f, 3.0f)); /* 误差 -3：5 - 3 = 2 */
 }
 
-static void test_pid_deadband_holds_output(void)
+static void test_deadband_holds_output(void)
 {
     Pid pid;
     PidParam p = param(2.0f, 0.0f, 0.0f);
@@ -120,7 +127,7 @@ static void test_pid_deadband_holds_output(void)
 }
 
 /* 增量式：输出 += kp * Δe + ki * e + kd * Δ²e */
-static void test_pid_incremental(void)
+static void test_incremental(void)
 {
     Pid pid;
     const PidParam p = param(1.0f, 0.5f, 0.0f);
@@ -130,7 +137,7 @@ static void test_pid_incremental(void)
     TEST_ASSERT_EQUAL_FLOAT(2.0f, pid_step(&pid, 0.0f, 0.0f)); /* 4 + 1 * (0 - 2) + 0.5 * 0 */
 }
 
-static void test_pid_reset_clears_state(void)
+static void test_reset_clears_state(void)
 {
     Pid pid;
     const PidParam p = param(1.0f, 1.0f, 1.0f);
@@ -144,57 +151,19 @@ static void test_pid_reset_clears_state(void)
     TEST_ASSERT_EQUAL_FLOAT(3.0f, pid_step(&pid, 1.0f, 0.0f));
 }
 
-/* ---- ramp：ramp 的单元测试：按步长靠近、不越过目标、两个方向 ---- */
-
-static void test_ramp_moves_by_step(void)
-{
-    TEST_ASSERT_EQUAL_FLOAT(1.0f, ramp_step(0.0f, 10.0f, 1.0f));
-    TEST_ASSERT_EQUAL_FLOAT(-1.0f, ramp_step(0.0f, -10.0f, 1.0f));
-}
-
-static void test_ramp_does_not_overshoot(void)
-{
-    TEST_ASSERT_EQUAL_FLOAT(10.0f, ramp_step(9.5f, 10.0f, 1.0f));
-    TEST_ASSERT_EQUAL_FLOAT(-10.0f, ramp_step(-9.5f, -10.0f, 1.0f));
-    TEST_ASSERT_EQUAL_FLOAT(3.0f, ramp_step(3.0f, 3.0f, 1.0f));
-}
-
-static void test_ramp_reaches_target_in_expected_steps(void)
-{
-    float x = 0.0f;
-    int steps = 0;
-    while (x != 5.0f)
-    {
-        x = ramp_step(x, 5.0f, 0.5f);
-        steps++;
-    }
-    TEST_ASSERT_EQUAL_INT(10, steps);
-}
-
-void setUp(void)
-{
-}
-
-void tearDown(void)
-{
-}
-
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_pid_proportional_only);
-    RUN_TEST(test_pid_integral_accumulates_and_clamps);
-    RUN_TEST(test_pid_zero_integral_limit_disables_integral);
-    RUN_TEST(test_pid_derivative_is_error_difference);
-    RUN_TEST(test_pid_derivative_filter);
-    RUN_TEST(test_pid_output_clamped);
-    RUN_TEST(test_pid_integral_frozen_while_saturated);
-    RUN_TEST(test_pid_integral_accumulates_when_unwinding);
-    RUN_TEST(test_pid_deadband_holds_output);
-    RUN_TEST(test_pid_incremental);
-    RUN_TEST(test_pid_reset_clears_state);
-    RUN_TEST(test_ramp_moves_by_step);
-    RUN_TEST(test_ramp_does_not_overshoot);
-    RUN_TEST(test_ramp_reaches_target_in_expected_steps);
+    RUN_TEST(test_proportional_only);
+    RUN_TEST(test_integral_accumulates_and_clamps);
+    RUN_TEST(test_zero_integral_limit_disables_integral);
+    RUN_TEST(test_derivative_is_error_difference);
+    RUN_TEST(test_derivative_filter);
+    RUN_TEST(test_output_clamped);
+    RUN_TEST(test_integral_frozen_while_saturated);
+    RUN_TEST(test_integral_accumulates_when_unwinding);
+    RUN_TEST(test_deadband_holds_output);
+    RUN_TEST(test_incremental);
+    RUN_TEST(test_reset_clears_state);
     return UNITY_END();
 }

@@ -18,7 +18,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "03_algorithm/control/control.h"
+#include "03_algorithm/control/pid.h"
 
 #ifdef __cplusplus
 extern "C"

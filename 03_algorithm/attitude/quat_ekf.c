@@ -1,67 +1,12 @@
 /**
- * @file    attitude.c
- * @brief   姿态：陀螺零偏标定、四元数 EKF（说明见 attitude.h）
+ * @file    quat_ekf.c
+ * @brief   四元数扩展卡尔曼姿态解算，见 quat_ekf.h
+ * @note    矩阵按行存储：6×6 的第 r 行第 c 列是下标 r * 6 + c；H 是 3×6。下标写法与旧代码一一对应，方便对照。
  */
-#include "attitude.h"
+#include "quat_ekf.h"
+#include "03_algorithm/math/math_const.h"
 
 #include <math.h>
-
-#include "03_algorithm/math/rm_math.h"
-
-/* ================================================================== */
-/* 陀螺零偏 gyro_bias（说明见 attitude.h 同名一节） */
-/* ================================================================== */
-
-void gyro_bias_reset(GyroBias *gb)
-{
-    *gb = (GyroBias){ 0 };
-}
-
-/*
- * 加一个样本，逐个更新均值和方差（Welford 算法）：不用保存全部 2000 个样本，
- * 也不会出现“平方和减去和的平方”那种大数相减丢精度的问题
- */
-void gyro_bias_add(GyroBias *gb, const float gyro_rad_s[3])
-{
-    gb->count++;
-    for (int i = 0; i < 3; i++)
-    {
-        const float delta = gyro_rad_s[i] - gb->mean[i];
-        gb->mean[i] += delta / (float)gb->count;
-        gb->m2[i] += delta * (gyro_rad_s[i] - gb->mean[i]);
-    }
-}
-
-GyroBiasResult gyro_bias_result(const GyroBias *gb, uint32_t min_count, float max_std,
-                                float max_bias, float bias_out[3])
-{
-    if (gb->count < min_count || gb->count < 2u)
-    {
-        return GYRO_BIAS_TOO_FEW;
-    }
-    /* 三个轴都要满足：抖动小（板子没在动），均值也小（零偏在正常范围）才采用 */
-    for (int i = 0; i < 3; i++)
-    {
-        const float std = sqrtf(gb->m2[i] / (float)(gb->count - 1u));
-        if (std > max_std)
-        {
-            return GYRO_BIAS_NOT_STILL;
-        }
-        if (fabsf(gb->mean[i]) > max_bias)
-        {
-            return GYRO_BIAS_TOO_LARGE;
-        }
-    }
-    for (int i = 0; i < 3; i++)
-    {
-        bias_out[i] = gb->mean[i];
-    }
-    return GYRO_BIAS_OK;
-}
-
-/* ================================================================== */
-/* 四元数 EKF quat_ekf（说明见 attitude.h 同名一节） */
-/* ================================================================== */
 
 /*
  * 状态 x（N = 6）：[q0 q1 q2 q3 bx by]，四元数 + x、y 轴陀螺零偏（z 轴零偏加速度计看不出来，不估计）。

@@ -3,7 +3,7 @@
  * @brief   惯性导航子系统，见 ins.h
  */
 #include "ins.h"
-#include "03_algorithm/math/rm_math.h"
+#include "03_algorithm/math/math_const.h"
 
 #include "04_core/os/critical.h"
 #include "05_platform/time/time.h"

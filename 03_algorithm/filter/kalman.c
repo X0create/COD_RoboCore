@@ -1,60 +1,8 @@
 /**
- * @file    filter.c
- * @brief   滤波：一阶 / 二阶低通、卡尔曼（说明见 filter.h）
+ * @file    kalman.c
+ * @brief   线性卡尔曼滤波，见 kalman.h
  */
-#include "filter.h"
-
-/* ================================================================== */
-/* 低通 lpf（说明见 filter.h 同名一节） */
-/* ================================================================== */
-
-void lpf1_init(Lpf1 *lpf, float alpha)
-{
-    lpf->alpha = alpha;
-    lpf->output = 0.0f;
-    lpf->primed = false;
-}
-
-/* y = α·y上次 + (1 − α)·x：α 越大越平滑、延迟越大 */
-float lpf1_update(Lpf1 *lpf, float input)
-{
-    if (!lpf->primed) /* 第一个样本直接当输出，避免从 0 慢慢爬上来 */
-    {
-        lpf->output = input;
-        lpf->primed = true;
-    }
-    lpf->output = lpf->alpha * lpf->output + (1.0f - lpf->alpha) * input;
-    return lpf->output;
-}
-
-void lpf2_init(Lpf2 *lpf, const float a[3])
-{
-    lpf->a[0] = a[0];
-    lpf->a[1] = a[1];
-    lpf->a[2] = a[2];
-    lpf->y1 = 0.0f;
-    lpf->y2 = 0.0f;
-    lpf->primed = false;
-}
-
-/* y = a0·y[n-1] + a1·y[n-2] + a2·x */
-float lpf2_update(Lpf2 *lpf, float input)
-{
-    if (!lpf->primed) /* 第一个样本填满历史值 */
-    {
-        lpf->y1 = input;
-        lpf->y2 = input;
-        lpf->primed = true;
-    }
-    const float y = lpf->a[0] * lpf->y1 + lpf->a[1] * lpf->y2 + lpf->a[2] * input;
-    lpf->y2 = lpf->y1;
-    lpf->y1 = y;
-    return y;
-}
-
-/* ================================================================== */
-/* 卡尔曼 kalman（说明见 filter.h 同名一节） */
-/* ================================================================== */
+#include "kalman.h"
 
 /* 从 storage 里切出 rows×cols 个 float 给 m */
 static void take(Matrix *m, uint8_t rows, uint8_t cols, float **storage)
@@ -120,7 +68,7 @@ void kalman_compute_gain(KalmanFilter *kf)
     matrix_mul(&kf->H, &kf->P_minus, &kf->tmp_a);
     matrix_mul(&kf->tmp_a, &kf->Ht, &kf->S);
     matrix_add(&kf->S, &kf->R, &kf->S);
-    /* R 正定时 S 正定、一定可逆（filter.h 卡尔曼一节的前提），不处理返回值 */
+    /* R 正定时 S 正定、一定可逆（kalman.h 的前提），不处理返回值 */
     (void)matrix_inv(&kf->S, &kf->S_inv);
     matrix_mul(&kf->P_minus, &kf->Ht, &kf->tmp_a);
     matrix_mul(&kf->tmp_a, &kf->S_inv, &kf->K);

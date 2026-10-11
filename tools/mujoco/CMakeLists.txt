@@ -13,9 +13,8 @@ include("${RM_SOURCE_DIR}/cmake/warnings.cmake")
 # 直接编译原有算法文件，桥接层没有第二份 PID 实现。
 add_library(pid_bridge SHARED
     pid_bridge.c
-    "${RM_SOURCE_DIR}/03_algorithm/control/control.c"
-    "${RM_SOURCE_DIR}/03_algorithm/filter/filter.c"
-    "${RM_SOURCE_DIR}/03_algorithm/math/rm_math.c"
+    "${RM_SOURCE_DIR}/03_algorithm/control/pid.c"
+    "${RM_SOURCE_DIR}/03_algorithm/filter/lpf.c"
 )
 target_include_directories(pid_bridge PRIVATE "${RM_SOURCE_DIR}")
 set_target_properties(pid_bridge PROPERTIES PREFIX "")
@@ -29,10 +28,13 @@ add_library(chassis_bridge SHARED
     "${RM_SOURCE_DIR}/01_applic/system/safety_gate.c"
     "${RM_SOURCE_DIR}/02_devices/motor/motor.c"
     "${RM_SOURCE_DIR}/04_core/watchdog/watchdog.c"
-    "${RM_SOURCE_DIR}/03_algorithm/control/control.c"
-    "${RM_SOURCE_DIR}/03_algorithm/filter/filter.c"
-    "${RM_SOURCE_DIR}/03_algorithm/math/rm_math.c"
-    "${RM_SOURCE_DIR}/03_algorithm/kinematics/kinematics.c"
+    "${RM_SOURCE_DIR}/03_algorithm/control/pid.c"
+    "${RM_SOURCE_DIR}/03_algorithm/control/ramp.c"
+    "${RM_SOURCE_DIR}/03_algorithm/filter/lpf.c"
+    "${RM_SOURCE_DIR}/03_algorithm/kinematics/half_steer.c"
+    "${RM_SOURCE_DIR}/03_algorithm/kinematics/steer.c"
+    "${RM_SOURCE_DIR}/03_algorithm/kinematics/omni.c"
+    "${RM_SOURCE_DIR}/03_algorithm/kinematics/mecanum.c"
 )
 target_include_directories(chassis_bridge PRIVATE "${RM_SOURCE_DIR}")
 set_target_properties(chassis_bridge PROPERTIES PREFIX "")

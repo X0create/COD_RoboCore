@@ -65,11 +65,19 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `control/control.c/.h` | PID（位置式 / 增量式，不带 dt，有条件积分抗饱和；底盘速度环、IMU 加热在用）、斜坡（每次最多变化固定步长；底盘加速度限制在用） |
-| `filter/filter.c/.h` | 一阶、二阶低通（IMU 加速度低通在用）；线性卡尔曼的五个步骤（EKF 的基础） |
-| `attitude/attitude.c/.h` | 陀螺零偏标定（静止采样，用标准差判断是否静止）、四元数 EKF 姿态解算 |
-| `kinematics/kinematics.c/.h` | 底盘速度类型（vx、vy、wz）+ 四轮全向轮（当前这台车用的）、麦轮、舵轮、半舵半全向运动学，每种一节 |
-| `math/rm_math.c/.h` | π 等数学常数（全仓库只在这里定义）、小矩阵加减乘、转置、求逆（代替 CMSIS-DSP） |
+| `control/pid.c/.h` | 位置式 / 增量式 PID，不带 dt，有条件积分抗饱和；底盘速度环、IMU 加热在用 |
+| `control/ramp.c/.h` | 斜坡：每次最多变化固定步长；底盘加速度限制在用 |
+| `filter/lpf.c/.h` | 一阶、二阶低通；IMU 加速度低通在用 |
+| `filter/kalman.c/.h` | 线性卡尔曼的五个步骤，EKF 的基础 |
+| `attitude/quat_ekf.c/.h` | 四元数 EKF 姿态解算 |
+| `attitude/gyro_bias.c/.h` | 陀螺零偏标定：静止采样，用标准差判断是否静止 |
+| `kinematics/chassis_vel.h` | 底盘速度类型（vx、vy、wz），各运动学共用 |
+| `kinematics/omni.c/.h` | 四轮全向轮运动学（当前这台车用的） |
+| `kinematics/mecanum.c/.h` | 四轮麦轮运动学 |
+| `kinematics/steer.c/.h` | 四轮舵轮运动学 |
+| `kinematics/half_steer.c/.h` | 半舵半全向（对角两个舵轮 + 两个全向轮）运动学 |
+| `math/matrix.c/.h` | 小矩阵加减乘、转置、求逆，代替 CMSIS-DSP |
+| `math/math_const.h` | π 等数学常数，全仓库只在这里定义 |
 | `power/rls.c/.h` | 带遗忘因子的递推最小二乘（通用，功率模型辨识在用） |
 | `power/power.c/.h` | 电机功率模型与 k1/k2 在线辨识、超功率时按误差 / 功率比例分配并反算力矩（未接进底盘，等裁判系统，ADR 0076） |
 | `shoot/shoot.c/.h` | 发射算法：热量限频、本地热量估算、卡弹检测与反转、开火判定、弹速自适应（发射机构还没有，未接线，ADR 0077） |
