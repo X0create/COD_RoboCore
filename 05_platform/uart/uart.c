@@ -2,7 +2,7 @@
  * @file    uart.c
  * @brief   uart 的芯片实现共用的辅助代码（与芯片无关，电脑上测试），见 uart.h 末尾一节
  */
-#include "uart.h"
+#include "05_platform/uart/uart.h"
 
 #include <string.h>
 

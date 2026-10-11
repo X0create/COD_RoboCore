@@ -2,7 +2,7 @@
  * @file    buzzer.c
  * @brief   蜂鸣器提示音，见 buzzer.h
  */
-#include "buzzer.h"
+#include "02_devices/buzzer/buzzer.h"
 
 #include "05_platform/pwm/pwm.h"
 

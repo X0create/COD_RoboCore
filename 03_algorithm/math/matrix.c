@@ -2,7 +2,7 @@
  * @file    matrix.c
  * @brief   小矩阵运算，见 matrix.h
  */
-#include "matrix.h"
+#include "03_algorithm/math/matrix.h"
 
 #include <math.h>
 

@@ -2,7 +2,7 @@
  * @file    safety_gate.c
  * @brief   安全门，见 safety_gate.h
  */
-#include "safety_gate.h"
+#include "01_applic/system/safety_gate.h"
 
 #include <stddef.h>
 

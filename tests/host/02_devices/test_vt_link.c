@@ -8,7 +8,7 @@
 
 #include "02_devices/referee/referee_frame.h"
 #include "04_core/util/crc.h"
-#include "fake_time.h"
+#include "tests/host/fakes/fake_time.h"
 #include "unity.h"
 
 /* 每个测试用新的 VtLink：看门狗每个实例只能登记一次 */

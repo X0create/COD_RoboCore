@@ -5,7 +5,7 @@
  *          状态灯、蜂鸣器、低电量提示在 01_applic/tasks/indicator_task.c；上线 / 离线的变化由 detect_task 打印。
  *          浮点用整数打印（RTT 的 printf 不支持 %f）：毫弧度/秒、毫米/秒、毫牛·米。
  */
-#include "tasks.h"
+#include "01_applic/tasks/tasks.h"
 
 #include "01_applic/config/robot.h"
 

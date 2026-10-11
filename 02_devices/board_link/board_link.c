@@ -2,7 +2,7 @@
  * @file    board_link.c
  * @brief   板间通信，见 board_link.h
  */
-#include "board_link.h"
+#include "02_devices/board_link/board_link.h"
 
 #include <math.h>
 #include <stddef.h>

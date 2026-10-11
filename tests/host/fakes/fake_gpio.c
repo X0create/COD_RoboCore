@@ -2,7 +2,7 @@
  * @file    fake_gpio.c
  * @brief   gpio 的假实现，见 fake_gpio.h
  */
-#include "fake_gpio.h"
+#include "tests/host/fakes/fake_gpio.h"
 
 static bool level[GPIO_IN_COUNT];
 

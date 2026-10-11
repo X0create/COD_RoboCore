@@ -2,7 +2,7 @@
  * @file    referee_frame.c
  * @brief   0xA5 帧检查，见 referee_frame.h
  */
-#include "referee_frame.h"
+#include "02_devices/referee/referee_frame.h"
 
 #include "04_core/util/crc.h"
 

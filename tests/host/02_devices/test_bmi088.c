@@ -6,9 +6,9 @@
 #include "02_devices/imu/bmi088.h"
 
 #include "05_platform/time/time.h"
-#include "fake_pwm.h"
-#include "fake_spi.h"
-#include "fake_time.h"
+#include "tests/host/fakes/fake_pwm.h"
+#include "tests/host/fakes/fake_spi.h"
+#include "tests/host/fakes/fake_time.h"
 #include "unity.h"
 
 #define GYRO_LSB  (2000.0f / 32768.0f * 3.14159265358979f / 180.0f)

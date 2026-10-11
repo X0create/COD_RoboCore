@@ -9,7 +9,7 @@
  *          **这个任务会给电机发指令**：上板时车架空、轮子离地（docs/VERIFICATION_TODO.md V45 起）。
  *          解锁：右拨杆拨到下再拨到中或上；急停：右拨杆拨到下（ADR 0032）。
  */
-#include "tasks.h"
+#include "01_applic/tasks/tasks.h"
 
 #include "01_applic/config/robot.h"
 #include "04_core/os/critical.h"

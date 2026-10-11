@@ -14,8 +14,8 @@
 
 #include <stdbool.h>
 
-#include "chassis_vel.h"
-#include "steer.h"
+#include "03_algorithm/kinematics/chassis_vel.h"
+#include "03_algorithm/kinematics/steer.h"
 
 #ifdef __cplusplus
 extern "C"

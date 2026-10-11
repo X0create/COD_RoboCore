@@ -2,7 +2,7 @@
  * @file    mecanum.c
  * @brief   四轮麦克纳姆轮底盘运动学（公式见 mecanum.h）
  */
-#include "mecanum.h"
+#include "03_algorithm/kinematics/mecanum.h"
 
 /* 各轮系数：ω_i·r = vx + SIGN_VY[i]·vy + SIGN_WZ[i]·k·wz */
 static const float SIGN_VY[MECANUM_WHEELS] = { -1.0f, 1.0f, -1.0f, 1.0f };

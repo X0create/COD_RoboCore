@@ -2,7 +2,7 @@
  * @file    gyro_bias.c
  * @brief   陀螺零偏标定，见 gyro_bias.h
  */
-#include "gyro_bias.h"
+#include "03_algorithm/attitude/gyro_bias.h"
 
 #include <math.h>
 

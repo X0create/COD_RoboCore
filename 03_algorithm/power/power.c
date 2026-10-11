@@ -2,7 +2,7 @@
  * @file    power.c
  * @brief   底盘功率控制的算法（说明见 power.h）
  */
-#include "power.h"
+#include "03_algorithm/power/power.h"
 
 #include <math.h>
 

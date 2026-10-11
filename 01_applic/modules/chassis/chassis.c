@@ -2,7 +2,7 @@
  * @file    chassis.c
  * @brief   底盘子系统：读实测 → 算目标 → 算输出，三个函数按顺序排在下面（说明见 chassis.h）
  */
-#include "chassis.h"
+#include "01_applic/modules/chassis/chassis.h"
 
 #include <math.h>
 

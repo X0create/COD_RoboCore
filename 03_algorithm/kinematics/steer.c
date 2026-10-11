@@ -2,7 +2,7 @@
  * @file    steer.c
  * @brief   四轮舵轮底盘运动学（约定见 steer.h）
  */
-#include "steer.h"
+#include "03_algorithm/kinematics/steer.h"
 #include "03_algorithm/math/math_const.h"
 
 #include <math.h>

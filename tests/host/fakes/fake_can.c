@@ -2,7 +2,7 @@
  * @file    fake_can.c
  * @brief   假 CAN，见 fake_can.h；代替 05_platform/can/can_stm32h7.c
  */
-#include "fake_can.h"
+#include "tests/host/fakes/fake_can.h"
 
 #include <stddef.h>
 

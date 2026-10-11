@@ -2,7 +2,7 @@
  * @file    battery.c
  * @brief   电池电压与低电量提示，见 battery.h
  */
-#include "battery.h"
+#include "02_devices/battery/battery.h"
 
 void battery_init(Battery *bat, const BatteryConfig *cfg)
 {

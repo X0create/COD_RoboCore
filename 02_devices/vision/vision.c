@@ -2,7 +2,7 @@
  * @file    vision.c
  * @brief   视觉通信：0x5A 帧层 + USB CDC 通道（说明见 vision.h）
  */
-#include "vision.h"
+#include "02_devices/vision/vision.h"
 
 #include <string.h>
 

@@ -2,14 +2,14 @@
  * @file    chassis_bridge.c
  * @brief   虚拟反馈 → 原安全门 / chassis 三步 → 原电机发送出口 → 虚拟 CAN 力矩
  */
-#include "chassis_bridge.h"
+#include "tools/mujoco/chassis_bridge.h"
 
 #include <math.h>
 
 #include "01_applic/config/robot.h"
 #include "01_applic/system/safety_gate.h"
 #include "02_devices/motor/motor.h"
-#include "sim_platform.h"
+#include "tools/mujoco/sim_platform.h"
 
 static Chassis sim_chassis;
 static ChassisConfig sim_config;

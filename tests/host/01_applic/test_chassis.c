@@ -13,9 +13,9 @@
 
 #include "02_devices/motor/motor.h"
 #include "05_platform/time/time.h"
-#include "fake_can.h"
-#include "fake_gpio.h"
-#include "fake_time.h"
+#include "tests/host/fakes/fake_can.h"
+#include "tests/host/fakes/fake_gpio.h"
+#include "tests/host/fakes/fake_time.h"
 #include "unity.h"
 
 #define DT_S CHASSIS_PERIOD_S

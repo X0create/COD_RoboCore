@@ -2,7 +2,7 @@
  * @file    can.c
  * @brief   can 的芯片实现共用的辅助代码（与芯片无关，电脑上测试），见 can.h 末尾一节
  */
-#include "can.h"
+#include "05_platform/can/can.h"
 
 /* DLC 编码 0–15 对应的字节数 */
 static const uint8_t dlc_len[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64 };

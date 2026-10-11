@@ -123,8 +123,10 @@ void gimbal_step(Gimbal *self, ...)
   2. C 标准库；
   3. 本项目其他层的头文件；
   4. 第三方库。
-- **必须**：本项目其他层的头文件从仓库根目录写起，**带层的编号**，如 `#include "05_platform/can/can.h"`、`#include "01_applic/modules/chassis/chassis.h"`（ADR 0046）；
-  本模块自己的头文件和同目录的头文件只写文件名（如 `#include "chassis.h"`、`#include "robot.h"`）。
+- **必须**：本项目的头文件**一律**从仓库根目录写起，**带层的编号**，本模块自己的头文件和同目录的头文件也一样（用户 2026-10-11，ADR 0080）：
+  如 `chassis.c` 里写 `#include "01_applic/modules/chassis/chassis.h"`，`power.h` 里写 `#include "03_algorithm/power/rls.h"`；
+  测试替身写 `#include "tests/host/fakes/fake_can.h"`。看到 include 就知道文件在哪，搬文件时搜索整个路径即可（ADR 0046）。
+  只写文件名的只有第三方头文件（FreeRTOS、SEGGER RTT、Unity，以及下一条的芯片厂商头文件）。
 - **必须**：芯片厂商的头文件（CubeMX 生成的 `adc.h`、`spi.h`、`fdcan.h`，HAL、CMSIS）用尖括号 `#include <adc.h>`。
   `05_platform/<外设>/` 里有本模块自己的同名接口头文件，引号会先在当前目录找到它。
 - **应该**：文件开头写 Doxygen 文件头：

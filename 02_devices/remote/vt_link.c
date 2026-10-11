@@ -2,7 +2,7 @@
  * @file    vt_link.c
  * @brief   图传链路，见 vt_link.h
  */
-#include "vt_link.h"
+#include "02_devices/remote/vt_link.h"
 
 #include <string.h>
 

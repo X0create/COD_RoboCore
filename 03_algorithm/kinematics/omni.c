@@ -2,7 +2,7 @@
  * @file    omni.c
  * @brief   四轮全向轮底盘运动学（公式见 omni.h）
  */
-#include "omni.h"
+#include "03_algorithm/kinematics/omni.h"
 #include "03_algorithm/math/math_const.h"
 
 #include <math.h>

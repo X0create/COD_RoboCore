@@ -3,7 +3,7 @@
  * @brief   四元数扩展卡尔曼姿态解算，见 quat_ekf.h
  * @note    矩阵按行存储：6×6 的第 r 行第 c 列是下标 r * 6 + c；H 是 3×6。下标写法与旧代码一一对应，方便对照。
  */
-#include "quat_ekf.h"
+#include "03_algorithm/attitude/quat_ekf.h"
 #include "03_algorithm/math/math_const.h"
 
 #include <math.h>

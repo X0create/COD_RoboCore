@@ -7,7 +7,7 @@
  *          上电顺序（通用）在 01_applic/system/app_main.c：app_main() 调用 robot_init()，再按 task_table[] 创建任务。
  *          6 个任务都在 01_applic/tasks/，调用关系总图见 docs/CALL_FLOW.md。
  */
-#include "robot.h"
+#include "01_applic/config/robot.h"
 
 #include "01_applic/system/app_main.h"
 #include "01_applic/tasks/tasks.h"

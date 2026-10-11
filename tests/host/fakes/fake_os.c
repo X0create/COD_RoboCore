@@ -5,7 +5,7 @@
 #include "04_core/os/critical.h"
 #include "04_core/os/delay.h"
 #include "05_platform/time/time.h"
-#include "fake_time.h"
+#include "tests/host/fakes/fake_time.h"
 
 void rm_critical_enter(void)
 {

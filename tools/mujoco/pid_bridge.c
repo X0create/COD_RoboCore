@@ -2,7 +2,7 @@
  * @file    pid_bridge.c
  * @brief   只负责把 Python 的数值传给现有 PID，见 pid_bridge.h
  */
-#include "pid_bridge.h"
+#include "tools/mujoco/pid_bridge.h"
 
 #include "03_algorithm/control/pid.h"
 

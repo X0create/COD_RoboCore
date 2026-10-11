@@ -2,11 +2,11 @@
  * @file    os.c
  * @brief   FreeRTOS 薄封装，见 os.h
  */
-#include "os.h"
+#include "04_core/os/os.h"
 
+#include "04_core/os/critical.h"
+#include "04_core/os/delay.h"
 #include "05_platform/time/time.h"
-#include "critical.h"
-#include "delay.h"
 
 bool rm_task_create(RmTask *task, const char *name, RmTaskEntry entry, void *arg, uint32_t priority,
                     StackType_t *stack, uint32_t stack_words)

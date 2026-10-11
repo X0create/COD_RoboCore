@@ -6,7 +6,7 @@
 #include "04_core/watchdog/watchdog.h"
 
 #include "05_platform/time/time.h"
-#include "fake_time.h"
+#include "tests/host/fakes/fake_time.h"
 #include "unity.h"
 
 void setUp(void)

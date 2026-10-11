@@ -1343,6 +1343,7 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0077 | 用户 2026-10-10（移植 26 哨兵通用逻辑第 3 项）**发射算法** `03_algorithm/shoot/shoot.h/.c`，国际单位、纯函数，发射机构未做所以未接线：① 热量限频：剩余 ≥ full_heat 最高射频、≤ stop_heat 停，中间 = 冷却射频 + 多余热量在时间窗内用完（取代哨兵按计数器的分段射击，同一思路）；② 本地热量估算：每发 + heat_per_shot、按冷却递减，收到裁判值取较大者（哨兵云台板按摩擦轮电流估出弹，这里由调用方给出弹事件，如 0x0207）；③ 卡弹：力矩超阈值持续 jam_time，或一直拨弹却 no_shot_time 未出弹（取代哨兵“转速高但热量不变”）；反转至少 reverse_min，力矩降下、出弹或满 reverse_max 恢复；④ 开火判定：误差 < atan(半宽 / 距离)；⑤ 弹速自适应：每次实测弹速偏低加、偏高减、读数过低无效、限幅。哨兵的数值写在注释里作参考，换算到本模板单位后待台架。主机测试 8 项；未上板 |
 | 0078 | 用户 2026-10-11：**RLS 不并进 power**，拆回 `03_algorithm/power/rls.h/.c`（恢复 0076 之前的文件和 test_rls），`power.h` include 它。是 ADR 0072“每个目录一对文件”的例外：RLS 是通用的参数辨识算法，不只给功率模型用（此后 0079 定为通用规则） |
 | 0079 | 用户 2026-10-11：“这种通用的算法不能这么干，都得拆出来”——**通用算法一个算法一对文件**（写进 CODING_STANDARD 第 3 节），选两项：control / filter / math / attitude（pid、ramp、lpf、kalman、matrix、math_const、gyro_bias、quat_ekf）和 kinematics（chassis_vel、omni、mecanum、steer、half_steer）恢复为 ADR 0072 之前的文件和测试（从 `c597211^` 原样恢复，合并后这些文件没再改过）；**取代 0072 中这两项**（vision 合并属于设备层，保留）。power（模型 + 分配）、shoot（五个发射算法）用户未选，暂保持各一对。舵轮与半舵半全向重新各有一份轮位符号表（固件多 32 字节）。主机测试 35/35，MuJoCo -Check 通过 |
+| 0080 | 用户 2026-10-11：**本项目头文件一律带目录路径**（从仓库根目录写起、带层编号），本模块自己的和同目录的也一样，取代 CODING_STANDARD 第 3 节原来“同目录只写文件名”；测试替身写 `tests/host/fakes/…`、MuJoCo 写 `tools/mujoco/…`。81 处 include 已统一改，只写文件名的只剩第三方（FreeRTOS、SEGGER RTT、Unity、芯片厂商头文件）。行为不变：固件 0 警告、35/35、Keil 一致、MuJoCo -Check 通过 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 

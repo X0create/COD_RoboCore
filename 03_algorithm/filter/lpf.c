@@ -2,7 +2,7 @@
  * @file    lpf.c
  * @brief   一阶、二阶低通滤波，见 lpf.h
  */
-#include "lpf.h"
+#include "03_algorithm/filter/lpf.h"
 
 void lpf1_init(Lpf1 *lpf, float alpha)
 {

@@ -8,7 +8,7 @@
  *          control_task 卡死、被饿死，或本任务自己卡死，都会在 IWDG_TIMEOUT_MS（50 ms）内复位。
  *          只看 control_task：只有它发电机指令；其他任务卡死时用到它数据的机构自己处理。
  */
-#include "tasks.h"
+#include "01_applic/tasks/tasks.h"
 
 #include "04_core/log/log.h"
 #include "04_core/os/os.h"

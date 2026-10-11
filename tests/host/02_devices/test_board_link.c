@@ -10,8 +10,8 @@
 
 #include "02_devices/motor/motor.h"
 #include "05_platform/time/time.h"
-#include "fake_can.h"
-#include "fake_time.h"
+#include "tests/host/fakes/fake_can.h"
+#include "tests/host/fakes/fake_time.h"
 #include "unity.h"
 
 /* 每个测试用新的 BoardLink 和新的 ID：已初始化的消息留在模块的链表里，看门狗也只能登记一次 */

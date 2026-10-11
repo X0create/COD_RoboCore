@@ -2,7 +2,7 @@
  * @file    status_led.c
  * @brief   status_led 的芯片实现共用的辅助代码（与芯片无关，电脑上测试），见 status_led.h 末尾一节
  */
-#include "status_led.h"
+#include "05_platform/status_led/status_led.h"
 
 void ws2812_encode(uint8_t out[WS2812_BYTES_PER_LED], uint8_t red, uint8_t green, uint8_t blue)
 {

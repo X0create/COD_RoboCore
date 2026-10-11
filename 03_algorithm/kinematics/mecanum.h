@@ -14,7 +14,7 @@
  */
 #pragma once
 
-#include "chassis_vel.h"
+#include "03_algorithm/kinematics/chassis_vel.h"
 
 #ifdef __cplusplus
 extern "C"

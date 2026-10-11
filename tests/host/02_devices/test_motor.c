@@ -8,8 +8,8 @@
 #include <string.h>
 
 #include "05_platform/time/time.h"
-#include "fake_can.h"
-#include "fake_time.h"
+#include "tests/host/fakes/fake_can.h"
+#include "tests/host/fakes/fake_time.h"
 #include "unity.h"
 
 /* 每个测试用新的 Motor：看门狗每个实例只能登记一次 */

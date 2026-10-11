@@ -5,7 +5,7 @@
  * @note    DJI 反馈字节布局照 COD-H7-Template `Motor.c` 的 DJI_Motor_Info_Update，单位换算为本模板新增（ADR 0031）；
  *          达妙字节布局照同一文件，浮点 → 整数加了截断（旧代码超出范围时会绕回，负力矩可能变成最大正力矩）。
  */
-#include "motor.h"
+#include "02_devices/motor/motor.h"
 
 #include <stddef.h>
 

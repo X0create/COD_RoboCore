@@ -2,7 +2,7 @@
  * @file    dr16.c
  * @brief   DR16 遥控接收机，见 dr16.h
  */
-#include "dr16.h"
+#include "02_devices/remote/dr16.h"
 
 #include "04_core/os/critical.h"
 

@@ -11,8 +11,8 @@
 
 #include "03_algorithm/math/math_const.h"
 #include "05_platform/time/time.h"
-#include "fake_can.h"
-#include "fake_time.h"
+#include "tests/host/fakes/fake_can.h"
+#include "tests/host/fakes/fake_time.h"
 #include "unity.h"
 
 /* 每个测试用新的 Motor 和配置：看门狗每个实例只能登记一次，电机保存配置指针 */

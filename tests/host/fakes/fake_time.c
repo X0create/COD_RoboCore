@@ -2,7 +2,7 @@
  * @file    fake_time.c
  * @brief   假时钟，见 fake_time.h；代替 05_platform/time/time.h 的芯片实现
  */
-#include "fake_time.h"
+#include "tests/host/fakes/fake_time.h"
 
 #include "05_platform/time/time.h"
 

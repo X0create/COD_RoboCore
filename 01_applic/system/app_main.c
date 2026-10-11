@@ -4,7 +4,7 @@
  * @note    startup_task 必须和 app_main 放在同一个文件里：它在 CubeMX 生成代码里已有弱定义，
  *          单独放进静态库的另一个 .o 时链接器不会去取，弱定义的空函数就会被悄悄用上。
  */
-#include "app_main.h"
+#include "01_applic/system/app_main.h"
 
 #include "01_applic/config/robot.h"
 #include "01_applic/system/safety_gate.h"

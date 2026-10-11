@@ -2,7 +2,7 @@
  * @file    rls.c
  * @brief   递推最小二乘，见 rls.h
  */
-#include "rls.h"
+#include "03_algorithm/power/rls.h"
 
 /* 参数初值 w0，协方差 P 初值为 p0·I（p0 越大，开始时参数变化越快） */
 void rls_init(Rls *rls, uint8_t n, float lambda, float p0, const float w0[])

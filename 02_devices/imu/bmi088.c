@@ -2,7 +2,7 @@
  * @file    bmi088.c
  * @brief   BMI088 与加热恒温，见 bmi088.h
  */
-#include "bmi088.h"
+#include "02_devices/imu/bmi088.h"
 
 #include "03_algorithm/math/math_const.h"
 

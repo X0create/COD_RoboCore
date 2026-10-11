@@ -4,7 +4,7 @@
  */
 #include "02_devices/buzzer/buzzer.h"
 
-#include "fake_pwm.h"
+#include "tests/host/fakes/fake_pwm.h"
 #include "unity.h"
 
 static Buzzer bz;

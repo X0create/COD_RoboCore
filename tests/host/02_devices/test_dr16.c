@@ -6,7 +6,7 @@
 
 #include <string.h>
 
-#include "fake_time.h"
+#include "tests/host/fakes/fake_time.h"
 #include "unity.h"
 
 /* 每个测试用一个新的 Dr16：看门狗每个实例只能登记一次（watchdog_register 的前提） */

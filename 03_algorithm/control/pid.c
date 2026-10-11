@@ -2,7 +2,7 @@
  * @file    pid.c
  * @brief   位置式 / 增量式 PID，见 pid.h
  */
-#include "pid.h"
+#include "03_algorithm/control/pid.h"
 
 #include <math.h>
 

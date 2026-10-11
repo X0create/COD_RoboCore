@@ -2,7 +2,7 @@
  * @file    ins.c
  * @brief   惯性导航子系统，见 ins.h
  */
-#include "ins.h"
+#include "01_applic/modules/ins/ins.h"
 #include "03_algorithm/math/math_const.h"
 
 #include "04_core/os/critical.h"

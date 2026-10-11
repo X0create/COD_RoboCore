@@ -5,7 +5,7 @@
  *          提示依据的状态直接读权威来源，不另存副本：模式读 safety_gate.mode，电量由本任务读 ADC 判断。
  *          提示：绿灯每秒闪两下（一长一短）= 正常；启动音；解锁音 / 上锁音；低电量每 2 s 响一次。
  */
-#include "tasks.h"
+#include "01_applic/tasks/tasks.h"
 
 #include "01_applic/system/safety_gate.h"
 #include "02_devices/battery/battery.h"

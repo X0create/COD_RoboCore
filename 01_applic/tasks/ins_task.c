@@ -4,7 +4,7 @@
  * @note    相当于老模板的 INS_Task.c；一个周期的具体步骤在 ins.c 的 ins_step()。
  *          标定完成前 ins_read() 返回 false，安全门据此全车停。本任务把 ins_step() 返回的事件记进日志。
  */
-#include "tasks.h"
+#include "01_applic/tasks/tasks.h"
 
 #include "01_applic/modules/ins/ins.h"
 

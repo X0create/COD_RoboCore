@@ -7,7 +7,7 @@
  *            CAN       全部电机的反馈 → 电机组 motors（总线和 ID 在 robot.h 的电机表，如 wheel_config）
  *            UART5     DR16 遥控接收机 → dr16（保存最新一帧，dr16_read() 读）
  */
-#include "tasks.h"
+#include "01_applic/tasks/tasks.h"
 
 #include "01_applic/config/robot.h"
 #include "04_core/log/log.h"

@@ -2,7 +2,7 @@
  * @file    shoot.c
  * @brief   发射机构的算法（说明见 shoot.h）
  */
-#include "shoot.h"
+#include "03_algorithm/shoot/shoot.h"
 
 #include <math.h>
 

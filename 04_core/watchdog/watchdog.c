@@ -2,7 +2,7 @@
  * @file    watchdog.c
  * @brief   设备在线检测，见 watchdog.h
  */
-#include "watchdog.h"
+#include "04_core/watchdog/watchdog.h"
 
 #include <stddef.h>
 

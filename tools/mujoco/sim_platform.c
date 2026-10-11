@@ -2,7 +2,7 @@
  * @file    sim_platform.c
  * @brief   实现平台同名函数，让原有电机发送出口链接到虚拟 CAN
  */
-#include "sim_platform.h"
+#include "tools/mujoco/sim_platform.h"
 
 #include <string.h>
 

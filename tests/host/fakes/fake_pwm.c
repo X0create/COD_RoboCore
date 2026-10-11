@@ -2,7 +2,7 @@
  * @file    fake_pwm.c
  * @brief   假 PWM，见 fake_pwm.h；代替 05_platform/pwm/pwm_stm32h7.c
  */
-#include "fake_pwm.h"
+#include "tests/host/fakes/fake_pwm.h"
 
 static bool started[PWM_COUNT];
 static float duty[PWM_COUNT];

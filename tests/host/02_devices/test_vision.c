@@ -4,7 +4,7 @@
  */
 #include "02_devices/vision/vision.h"
 
-#include "fake_time.h"
+#include "tests/host/fakes/fake_time.h"
 
 #include "unity.h"
 

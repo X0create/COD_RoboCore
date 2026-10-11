@@ -2,7 +2,7 @@
  * @file    half_steer.c
  * @brief   半舵半全向底盘运动学（约定见 half_steer.h）
  */
-#include "half_steer.h"
+#include "03_algorithm/kinematics/half_steer.h"
 
 #include <math.h>
 

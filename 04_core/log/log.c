@@ -2,7 +2,7 @@
  * @file    log.c
  * @brief   SEGGER RTT 日志，见 log.h
  */
-#include "log.h"
+#include "04_core/log/log.h"
 
 #include "05_platform/time/time.h"
 

@@ -2,7 +2,7 @@
  * @file    kalman.c
  * @brief   线性卡尔曼滤波，见 kalman.h
  */
-#include "kalman.h"
+#include "03_algorithm/filter/kalman.h"
 
 /* 从 storage 里切出 rows×cols 个 float 给 m */
 static void take(Matrix *m, uint8_t rows, uint8_t cols, float **storage)
