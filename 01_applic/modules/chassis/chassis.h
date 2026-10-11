@@ -12,7 +12,7 @@
  *          - 全车停（安全门：急停、遥控丢失、未解锁）：第 2 步传 stop_all = true，第 3 步就不写指令，
  *            发送出口统一改成零力矩；这时清积分、目标对齐实测速度，解锁时不会猛冲；
  *          - 机构停（任一电机离线）：目标改为 0，其余轮子按斜坡减速停下；离线的电机不写指令。
- *          轮号顺序见 03_algorithm/kinematics/ 下对应的头文件（都是左前起逆时针）。
+ *          轮号顺序见 03_algorithm/kinematics/kinematics.h 对应的一节（都是左前起逆时针）。
  *          功率控制以后加在第 3 步“算出力矩之后、写给电机之前”（ADR 0022）。
  */
 #pragma once
@@ -20,12 +20,8 @@
 #include <stdbool.h>
 
 #include "02_devices/motor/motor.h"
-#include "03_algorithm/control/pid.h"
-#include "03_algorithm/kinematics/chassis_vel.h"
-#include "03_algorithm/kinematics/half_steer.h"
-#include "03_algorithm/kinematics/mecanum.h"
-#include "03_algorithm/kinematics/omni.h"
-#include "03_algorithm/kinematics/steer.h"
+#include "03_algorithm/control/control.h"
+#include "03_algorithm/kinematics/kinematics.h"
 #include "05_platform/compiler.h"
 
 #ifdef __cplusplus

@@ -61,7 +61,7 @@ def fit(t, y, u, t0=36.0, t1=112.7, dt=0.02, iters=2500):
 
 
 def simulate(model, cap, period_s, kp, ti_s, gain=1.0, amb=None, t_end=300.0, off=None, dt=0.01):
-    """按 pid.c 的位置式 + 条件积分（ADR 0040）模拟加热闭环，返回 [(t, 芯片温度)]"""
+    """按 control.c 的 PID 位置式 + 条件积分（ADR 0040）模拟加热闭环，返回 [(t, 芯片温度)]"""
     a, k1, k2, k3, k4, k5, a0 = model[:7]
     amb = a0 if amb is None else amb
     h = l = b = amb

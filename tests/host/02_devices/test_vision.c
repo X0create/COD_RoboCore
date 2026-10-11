@@ -1,31 +1,23 @@
 /**
- * @file    test_vision_link.c
- * @brief   vision_frame / vision_link 的单元测试：组帧后能检查通过、各种坏帧、每个前缀、字节流找帧
+ * @file    test_vision.c
+ * @brief   vision 的单元测试，按节：vision_link
  */
-#include "02_devices/vision/vision_link.h"
+#include "02_devices/vision/vision.h"
 
 #include "fake_time.h"
+
 #include "unity.h"
+
+/* ---- vision_link：vision_frame / vision_link 的单元测试：组帧后能检查通过、各种坏帧、每个前缀、字节流找帧 ---- */
 
 static VisionLink pool[8];
 static unsigned pool_used;
 static VisionLink *link;
 
-void setUp(void)
-{
-    fake_time_set_us(1000000u);
-    link = &pool[pool_used++]; /* 看门狗每个实例只能登记一次 */
-    vision_link_init(link);
-}
-
-void tearDown(void)
-{
-}
-
 static const uint8_t payload[6] = { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60 };
 
 /* 组帧：头 4 字节 + 数据 + CRC16；再检查应原样取回 */
-static void test_encode_then_check(void)
+static void test_vision_link_encode_then_check(void)
 {
     uint8_t buf[32];
     const size_t n = vision_frame_encode(0x02u, payload, sizeof(payload), buf);
@@ -41,7 +33,7 @@ static void test_encode_then_check(void)
     TEST_ASSERT_EQUAL_UINT(n, f.frame_len);
 }
 
-static void test_every_prefix_needs_more(void)
+static void test_vision_link_every_prefix_needs_more(void)
 {
     uint8_t buf[32];
     const size_t n = vision_frame_encode(0x02u, payload, sizeof(payload), buf);
@@ -52,7 +44,7 @@ static void test_every_prefix_needs_more(void)
     }
 }
 
-static void test_bad_frames(void)
+static void test_vision_link_bad_frames(void)
 {
     uint8_t buf[32];
     VisionFrame f;
@@ -68,7 +60,7 @@ static void test_bad_frames(void)
 }
 
 /* 垃圾 + 两帧 + 一个坏帧 + 一帧，逐字节送入：3 帧通过，坏帧和垃圾按字节丢弃 */
-static void test_stream(void)
+static void test_vision_link_stream(void)
 {
     uint8_t stream[128];
     size_t n = 0u;
@@ -91,7 +83,7 @@ static void test_stream(void)
 }
 
 /* 最长的帧（255 字节数据）一次送入也能解析 */
-static void test_longest_frame(void)
+static void test_vision_link_longest_frame(void)
 {
     static uint8_t data[255];
     static uint8_t buf[300];
@@ -105,13 +97,24 @@ static void test_longest_frame(void)
     TEST_ASSERT_EQUAL_HEX8(0x7F, link->last_id);
 }
 
+void setUp(void)
+{
+    fake_time_set_us(1000000u);
+    link = &pool[pool_used++]; /* 看门狗每个实例只能登记一次 */
+    vision_link_init(link);
+}
+
+void tearDown(void)
+{
+}
+
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_encode_then_check);
-    RUN_TEST(test_every_prefix_needs_more);
-    RUN_TEST(test_bad_frames);
-    RUN_TEST(test_stream);
-    RUN_TEST(test_longest_frame);
+    RUN_TEST(test_vision_link_encode_then_check);
+    RUN_TEST(test_vision_link_every_prefix_needs_more);
+    RUN_TEST(test_vision_link_bad_frames);
+    RUN_TEST(test_vision_link_stream);
+    RUN_TEST(test_vision_link_longest_frame);
     return UNITY_END();
 }

@@ -18,7 +18,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "03_algorithm/math/math_const.h"
+#include "03_algorithm/math/rm_math.h"
 
 #include "04_core/watchdog/watchdog.h"
 #include "05_platform/can/can.h"

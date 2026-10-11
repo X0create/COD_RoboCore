@@ -55,8 +55,7 @@
 | `remote/dr16.c/.h` | DR16 遥控：分帧、校验、解析，保存最新一帧，`dr16_read()` 读（200 ms 没新帧算丢失） |
 | `remote/vt_link.c/.h` | 图传链路：VT13 遥控帧和键鼠帧解析（未接线） |
 | `referee/referee_frame.c/.h` | 裁判系统 0xA5 帧的检查，裁判系统和图传共用（裁判系统本身未接线） |
-| `vision/vision_frame.c/.h` | 与上位机通信的 0x5A 帧：检查与组帧 |
-| `vision/vision_link.c/.h` | 上位机链路：从字节流里找出 0x5A 帧（未接线，等视觉组定协议） |
+| `vision/vision.c/.h` | 与上位机通信：0x5A 帧的检查与组帧、从字节流里找出帧（未接线，等视觉组定协议） |
 | `battery/battery.c/.h` | 电池电压换算和低电量判定（带持续时间和回差） |
 | `buzzer/buzzer.c/.h` | 蜂鸣器：按音符序列播放，不阻塞 |
 | `board_link/board_link.c/.h` | 板间 CAN 通信：一条消息一个 ID，帧头序号 + 数据年龄，收到后存下、超时离线；编码小工具（未接线，单板车用不到） |
@@ -66,19 +65,11 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `control/pid.c/.h` | 位置式 / 增量式 PID，不带 dt，有条件积分抗饱和；底盘速度环、IMU 加热在用 |
-| `control/ramp.c/.h` | 斜坡：每次最多变化固定步长；底盘加速度限制在用 |
-| `filter/lpf.c/.h` | 一阶、二阶低通；IMU 加速度低通在用 |
-| `filter/kalman.c/.h` | 线性卡尔曼的五个步骤，EKF 的基础 |
-| `attitude/quat_ekf.c/.h` | 四元数 EKF 姿态解算 |
-| `attitude/gyro_bias.c/.h` | 陀螺零偏标定：静止采样，用标准差判断是否静止 |
-| `kinematics/chassis_vel.h` | 底盘速度类型（vx、vy、wz），各运动学共用 |
-| `kinematics/omni.c/.h` | 四轮全向轮运动学（当前这台车用的） |
-| `kinematics/mecanum.c/.h` | 四轮麦轮运动学 |
-| `kinematics/steer.c/.h` | 四轮舵轮运动学 |
-| `kinematics/half_steer.c/.h` | 半舵半全向（对角两个舵轮 + 两个全向轮）运动学 |
-| `math/matrix.c/.h` | 小矩阵加减乘、转置、求逆，代替 CMSIS-DSP |
-| `math/math_const.h` | π 等数学常数，全仓库只在这里定义 |
+| `control/control.c/.h` | PID（位置式 / 增量式，不带 dt，有条件积分抗饱和；底盘速度环、IMU 加热在用）、斜坡（每次最多变化固定步长；底盘加速度限制在用） |
+| `filter/filter.c/.h` | 一阶、二阶低通（IMU 加速度低通在用）；线性卡尔曼的五个步骤（EKF 的基础） |
+| `attitude/attitude.c/.h` | 陀螺零偏标定（静止采样，用标准差判断是否静止）、四元数 EKF 姿态解算 |
+| `kinematics/kinematics.c/.h` | 底盘速度类型（vx、vy、wz）+ 四轮全向轮（当前这台车用的）、麦轮、舵轮、半舵半全向运动学，每种一节 |
+| `math/rm_math.c/.h` | π 等数学常数（全仓库只在这里定义）、小矩阵加减乘、转置、求逆（代替 CMSIS-DSP） |
 | `power/rls.c/.h` | 带遗忘因子的递推最小二乘，给以后的功率模型辨识用（未接线） |
 | `ballistic/` | 规划中（弹道解算），只有 README |
 

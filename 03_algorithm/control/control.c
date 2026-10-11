@@ -1,10 +1,14 @@
 /**
- * @file    pid.c
- * @brief   位置式 / 增量式 PID，见 pid.h
+ * @file    control.c
+ * @brief   控制器：PID、斜坡（说明见 control.h）
  */
-#include "pid.h"
+#include "control.h"
 
 #include <math.h>
+
+/* ================================================================== */
+/* PID（说明见 control.h 同名一节） */
+/* ================================================================== */
 
 /* 把 x 限制在 [-limit, +limit] */
 static float clamp(float x, float limit)
@@ -108,4 +112,23 @@ float pid_step(Pid *pid, float target, float measure)
     }
     pid->output = clamp(pid->output + pid->p_out + pid->i_out + pid->d_out, p->output_limit);
     return pid->output;
+}
+
+/* ================================================================== */
+/* 斜坡 ramp（说明见 control.h 同名一节） */
+/* ================================================================== */
+
+/* 每次最多向目标走 step；离目标不到一步就直接到目标 */
+float ramp_step(float current, float target, float step)
+{
+    const float error = target - current;
+    if (error > step)
+    {
+        return current + step;
+    }
+    if (error < -step)
+    {
+        return current - step;
+    }
+    return target;
 }

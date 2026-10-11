@@ -4,7 +4,7 @@
  */
 #include "pid_bridge.h"
 
-#include "03_algorithm/control/pid.h"
+#include "03_algorithm/control/control.h"
 
 static Pid speed_pid;
 

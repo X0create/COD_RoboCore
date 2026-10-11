@@ -5,7 +5,7 @@
  *          通用的参数（电池阈值、EKF、IMU 加热、各种超时）留在各自模块里，位置见 01_applic/README.md“参数在哪里”。
  *          标 “待量” 的尺寸按实车量好再改；标 “待核对” 的方向在台架上按 docs/VERIFICATION_TODO.md 核对。
  *          换轮组：改 chassis_config 的 .type 并填对应的尺寸（全向轮 .omni、麦轮 .mecanum、
- *          舵轮 .steer，半舵半全向 .half_steer + .steer 的零点和 PID，含义见 03_algorithm/kinematics/ 下的头文件）；
+ *          舵轮 .steer，半舵半全向 .half_steer + .steer 的零点和 PID，含义见 03_algorithm/kinematics/kinematics.h 对应的一节）；
  *          舵轮还要在 robot.c 里加 4 个转向电机，半舵半全向加 2 个（全向轮位置传 NULL）。
  *          PID 不带 dt（ADR 0029），参数和 1 kHz 调用频率绑定。
  *          参数表是 static const：只给 robot.c 和 01_applic/tasks/ 里的任务用，没用到的不占空间。
@@ -25,7 +25,7 @@
 #include "01_applic/system/safety_gate.h"
 #include "02_devices/motor/motor.h"
 #include "02_devices/remote/dr16.h"
-#include "03_algorithm/math/math_const.h"
+#include "03_algorithm/math/rm_math.h"
 #include "05_platform/compiler.h"
 
 #ifdef __cplusplus
@@ -38,8 +38,8 @@ extern "C"
 /* ------------------------------------------------------------------ */
 
 /*
- * 顺序 = 底盘的轮 0–3（左前、左后、右后、右前，omni.h），全部在 FDCAN1（经典 CAN）。
- * direction：使电机正转 = 这个轮子推动底盘逆时针转（omni.h）；四个电机轴都朝外对称安装时四个值相同，正负待核对（V46）。
+ * 顺序 = 底盘的轮 0–3（左前、左后、右后、右前，kinematics.h 全向轮一节），全部在 FDCAN1（经典 CAN）。
+ * direction：使电机正转 = 这个轮子推动底盘逆时针转（kinematics.h 全向轮一节）；四个电机轴都朝外对称安装时四个值相同，正负待核对（V46）。
  * 停机动作：零力矩（DJI 电调只支持零力矩 / 失能，ADR 0031）。
  */
 static const MotorConfig wheel_config[CHASSIS_WHEELS] = {

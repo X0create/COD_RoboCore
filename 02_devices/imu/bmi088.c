@@ -4,7 +4,7 @@
  */
 #include "bmi088.h"
 
-#include "03_algorithm/math/math_const.h"
+#include "03_algorithm/math/rm_math.h"
 
 #include "04_core/os/delay.h"
 #include "05_platform/pwm/pwm.h"

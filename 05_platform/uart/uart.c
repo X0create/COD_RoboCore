@@ -6,8 +6,6 @@
 
 #include <string.h>
 
-#include <string.h>
-
 uint32_t dma_ring_take(const uint8_t *buf, uint32_t size, uint32_t *read_pos, uint32_t write_pos,
                        uint8_t *out, uint32_t max_len)
 {

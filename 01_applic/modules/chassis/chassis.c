@@ -6,7 +6,7 @@
 
 #include <math.h>
 
-#include "03_algorithm/control/ramp.h"
+#include "03_algorithm/control/control.h"
 
 /* 轮 i 有没有转向电机：舵轮全部有；半舵半全向只有舵轮那条对角线有 */
 static bool has_steer_motor(const ChassisConfig *cfg, unsigned i)

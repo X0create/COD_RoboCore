@@ -894,14 +894,9 @@
           <GroupName>02_devices/vision</GroupName>
           <Files>
             <File>
-              <FileName>vision_frame.c</FileName>
+              <FileName>vision.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\02_devices\vision\vision_frame.c</FilePath>
-            </File>
-            <File>
-              <FileName>vision_link.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\02_devices\vision\vision_link.c</FilePath>
+              <FilePath>..\..\..\02_devices\vision\vision.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -909,14 +904,9 @@
           <GroupName>03_algorithm/attitude</GroupName>
           <Files>
             <File>
-              <FileName>gyro_bias.c</FileName>
+              <FileName>attitude.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\attitude\gyro_bias.c</FilePath>
-            </File>
-            <File>
-              <FileName>quat_ekf.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\attitude\quat_ekf.c</FilePath>
+              <FilePath>..\..\..\03_algorithm\attitude\attitude.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -924,14 +914,9 @@
           <GroupName>03_algorithm/control</GroupName>
           <Files>
             <File>
-              <FileName>pid.c</FileName>
+              <FileName>control.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\control\pid.c</FilePath>
-            </File>
-            <File>
-              <FileName>ramp.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\control\ramp.c</FilePath>
+              <FilePath>..\..\..\03_algorithm\control\control.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -939,14 +924,9 @@
           <GroupName>03_algorithm/filter</GroupName>
           <Files>
             <File>
-              <FileName>kalman.c</FileName>
+              <FileName>filter.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\filter\kalman.c</FilePath>
-            </File>
-            <File>
-              <FileName>lpf.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\filter\lpf.c</FilePath>
+              <FilePath>..\..\..\03_algorithm\filter\filter.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -954,24 +934,9 @@
           <GroupName>03_algorithm/kinematics</GroupName>
           <Files>
             <File>
-              <FileName>half_steer.c</FileName>
+              <FileName>kinematics.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\kinematics\half_steer.c</FilePath>
-            </File>
-            <File>
-              <FileName>mecanum.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\kinematics\mecanum.c</FilePath>
-            </File>
-            <File>
-              <FileName>omni.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\kinematics\omni.c</FilePath>
-            </File>
-            <File>
-              <FileName>steer.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\kinematics\steer.c</FilePath>
+              <FilePath>..\..\..\03_algorithm\kinematics\kinematics.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -979,9 +944,9 @@
           <GroupName>03_algorithm/math</GroupName>
           <Files>
             <File>
-              <FileName>matrix.c</FileName>
+              <FileName>rm_math.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\math\matrix.c</FilePath>
+              <FilePath>..\..\..\03_algorithm\math\rm_math.c</FilePath>
             </File>
           </Files>
         </Group>

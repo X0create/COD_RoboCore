@@ -1,10 +1,14 @@
 /**
- * @file    matrix.c
- * @brief   小矩阵运算，见 matrix.h
+ * @file    rm_math.c
+ * @brief   数学：常数、小矩阵运算（说明见 rm_math.h）
  */
-#include "matrix.h"
+#include "rm_math.h"
 
 #include <math.h>
+
+/* ================================================================== */
+/* 小矩阵运算 matrix（说明见 rm_math.h 同名一节） */
+/* ================================================================== */
 
 void matrix_init(Matrix *m, uint8_t rows, uint8_t cols, float *data)
 {
