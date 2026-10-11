@@ -150,7 +150,7 @@ void gimbal_step(Gimbal *self, ...)
 | 变量、结构体成员、参数 | **必须** `snake_case` | `yaw_err_rad`、`feedback` |
 | 宏、枚举常量 | **必须**全大写，并带模块前缀 | `STOP_ACTION_DAMP`、`ERR_CAN_BUS_OFF` |
 | 文件内的私有函数和变量 | **必须**加 `static`；名字可以不带模块前缀 | `static void parse_frame(...)` |
-| 布尔变量和返回 bool 的查询函数 | **应该**读起来是一句判断 | `is_online`、`has_error`、`motor_is_enabled()` |
+| 布尔变量和返回 bool 的查询函数 | **应该**读起来是一句判断 | `is_online`、`has_error`、`watchdog_is_online()` |
 
 - `rm_` 前缀**只**用于会和 C 库或 FreeRTOS 重名的基础模块：`rm_time_*`、`rm_log_*`、`rm_task_*`、`rm_delay_*`、`rm_critical_*`（以及 `RM_` 开头的宏，如 `RM_ASSERT`、`RM_NODISCARD`）。其他模块**不加**（`can_send()`、`watchdog_feed()`、`status_led_set()`）。
 - 同一个概念全仓库只用一个词（例：急停时电机的动作只叫 stop action，`StopAction`、`stop_action`、`motor_apply_stop_action()`）；超时常量统一写成 `模块_TIMEOUT_MS`。
@@ -317,10 +317,10 @@ Motor *yaw_motor = malloc(sizeof(Motor));
 
 | 情况 | 返回 | 例子 |
 | --- | --- | --- |
-| 可能因外部条件失败，调用方**必须**处理 | `bool` + `RM_NODISCARD` | `xxx_init()`、`can_send()`、`robot_cmd_read()`（数据过期返回 false） |
-| 纯计算，可能失败 | 结果通过输出参数返回，函数返回状态枚举（如 `AlgoStatus`） | `quat_ekf_update()`（发散） |
-| 纯计算，不会失败 | 直接返回结果 | `angle_wrap_pi()`、`rpm_to_rad_s()` |
-| 按接口约定不会失败 | `void`，并把前提写进 `@pre` | `motor_set_torque()`、`motor_group_send_all()` |
+| 可能因外部条件失败，调用方**必须**处理 | `bool` + `RM_NODISCARD` | `xxx_init()`、`can_send()`、`dr16_read()`（数据过期返回 false） |
+| 纯计算，可能失败 | 结果通过输出参数返回，函数返回 `bool`（失败种类多时再用状态枚举） | `matrix_inv()`（奇异矩阵返回 false） |
+| 纯计算，不会失败 | 直接返回结果 | `ramp_step()`、`pid_step()` |
+| 按接口约定不会失败 | `void`，并把前提写进 `@pre` | `motor_set_torque()`、`motor_group_apply_stop_all()` |
 
 **不要**为了“看起来安全”给按约定不会失败的函数加上 `bool` 返回值。调用方会被迫写一堆永远不会走到的分支。
 
@@ -349,7 +349,7 @@ Motor *yaw_motor = malloc(sizeof(Motor));
 
 - **必须**：中断处理函数里只做两件事：把数据放进环形缓冲区，或者通知任务。不调用控制逻辑，不调用 `watchdog_*` / `xxx_read()`，不打日志。
 - **必须**：临界区里不延时、不调用任何阻塞函数，并且保持很短（拷贝一个快照的量级）。
-- **必须**：任务里用 `rm_task_delay_until()` 或 `rm_task_delay()`，不用 `HAL_Delay()`。
+- **必须**：任务里用 `rm_task_delay_until()` 定周期、`rm_task_wait_notify()` 等数据，不用 `HAL_Delay()`。
 - **必须**：跨任务的数据由产生它的模块保存（模块对象里放数据 + `Watchdog`，在线状态只看这一个，ADR 0059），只有这个模块的 `.c` 写；别人只调用它的 `xxx_read()`（ADR 0058）。
 - **必须**：不能丢的信号（急停、遥控丢失、解锁）作为状态保存，不作为事件放进事件队列。
 - **必须**：只在中断里调用带 `FromISR` 后缀的 RTOS 接口，并且只在优先级数值不小于 `configMAX_SYSCALL_INTERRUPT_PRIORITY` 的中断里调用。
@@ -389,7 +389,7 @@ Motor *yaw_motor = malloc(sizeof(Motor));
 - **必须**：`03_algorithm/` 里的算法、`02_devices/` 里的协议解析、状态机、安全门规则，都有主机单元测试。
 - **应该**：每修复一个 bug，就加一个能复现它的测试。
 - **应该**：断言检查**行为**（输出值、发出的帧），而不是检查“调用了几次”。
-- **应该**：新增接口后，接上一个真实调用者，并确认它确实被链接进了固件（`tools/check_linked.py`）。
+- **应该**：新增接口后，接上一个真实调用者，并确认它确实被链接进了固件（用 `nm` 查 ELF；规划中的 `tools/check_linked.py` 会自动做）。
 
 ## 16. 文档
 

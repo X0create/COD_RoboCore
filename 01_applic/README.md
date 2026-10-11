@@ -4,7 +4,7 @@
 
 ```
 01_applic/
-├── system/      通用框架：上电顺序、安全门、接收公共部分
+├── system/      通用框架：上电顺序、安全门
 ├── tasks/       全部 6 个任务（≈ 老模板 Application/Task）
 ├── modules/     机构，可复用（只放计算，不放任务）
 │   ├── chassis/  ins/
@@ -15,7 +15,7 @@
 | 目录 | 内容 |
 | --- | --- |
 | `system/` | `app_main.c`（上电顺序，只有这一份）、`safety_gate.c`（全车唯一的安全门） |
-| `tasks/` | 全部任务，每个一个 `xxx_task.c`，入口都声明在 `tasks.h`：`ins_task.c`（1 kHz 姿态）、`control_task.c`（1 kHz 控制）、`comm_rx_task.c`（接收的完整流程：中断唤醒、打开接收、分派、bus-off 恢复）、`detect_task.c`（10 ms 上线 / 离线）、`indicator_task.c`（25 ms 灯、蜂鸣器、电池）、`log_task.c`（1 s 打印） |
+| `tasks/` | 全部任务，每个一个 `xxx_task.c`，入口都声明在 `tasks.h`：`ins_task.c`（1 kHz 姿态）、`control_task.c`（1 kHz 控制）、`comm_rx_task.c`（接收的完整流程：中断唤醒、打开接收、分派、bus-off 恢复）、`detect_task.c`（10 ms 上线 / 离线、喂硬件看门狗）、`indicator_task.c`（25 ms 灯、蜂鸣器、电池）、`log_task.c`（1 s 打印） |
 | `modules/chassis/` | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮 / 半舵半全向，读实测 → 算目标 → 算输出（ADR 0043） |
 | `modules/ins/` | 惯性导航：`ins.c`（BMI088 → 零偏标定 → EKF → 保存最新姿态，`ins_read()` 读） |
 | `modules/gimbal/`、`shooter/`、`leg/`、`arm/` | （规划）云台、发射、轮腿、机械臂（工程） |
@@ -42,7 +42,7 @@ config/
 - **一个状态，一个权威来源**：安全门模式只在 `system/safety_gate.c` 的 `safety_gate`；电池状态只在 `tasks/indicator_task.c`（别处用 `indicator_battery_*()` 读）；
   遥控只在 dr16 对象（`dr16_read()`），姿态只在 ins 对象（`ins_read()`），电机反馈只在电机对象（`motor_read_feedback()`）。读的一方不另存副本。
 - **任务放哪里**：全部任务都在 `tasks/`，`*_task.c` 不出现在别处（ADR 0057）。任务只负责“什么时候跑、按什么顺序调用谁”，计算在 `modules/` 等其他文件里。
-- **一项职责，一个负责模块**：状态灯和蜂鸣器只有 indicator_task 操作；CAN 接收和 bus-off 恢复都在 comm_rx_task；上线 / 离线报告只在 detect_task；上电顺序只在 `app_main.c`。
+- **一项职责，一个负责模块**：状态灯和蜂鸣器只有 indicator_task 操作；CAN 接收和 bus-off 恢复都在 comm_rx_task；上线 / 离线报告和喂硬件看门狗只在 detect_task；上电顺序只在 `app_main.c`。
 
 ## 参数在哪里
 
@@ -64,6 +64,9 @@ config/
 | IMU 就绪判定 20 ms | `01_applic/modules/ins/ins.h` 的 `INS_TIMEOUT_MS` | 安全约定（ADR 0034） |
 | 电机离线超时 20 ms | `02_devices/motor/motor.h` 的 `MOTOR_TIMEOUT_MS` | 安全约定（ADR 0031） |
 | 解锁后输出斜坡 300 ms | `system/safety_gate.h` 的 `SAFETY_RAMP_MS` | |
+| 轮子离线时降级限速 50% | `modules/chassis/chassis.h` 的 `CHASSIS_DEGRADED_SCALE` | ADR 0073 |
+| 舵轮零点开关（引脚、有效电平） | `config/robot.h` 的 `chassis_config`（`.steer.zero_switch`） | 引脚要在 CubeMX 配成输入（ADR 0075） |
+| 硬件看门狗超时 50 ms | `05_platform/iwdg/iwdg.h` 的 `IWDG_TIMEOUT_MS` | ADR 0074 |
 | 达妙命令间隔 | `02_devices/motor/motor.c` 的 `DM_CMD_INTERVAL_US` | |
 
 ## 规则

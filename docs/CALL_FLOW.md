@@ -63,7 +63,7 @@ COD-H7-Template/
 ├── ins_task.c         1 kHz：姿态解算（调用 modules/ins/ins.c）       ← INS_Task
 ├── control_task.c     1 kHz：读实测 → 算目标 → 算输出并发送        ← Control_Task + CAN_Task
 ├── comm_rx_task.c     收到数据就运行：打开接收，CAN → 电机，UART5 → DR16 ← BSP 里的接收回调
-├── detect_task.c      10 ms：上线 / 离线报告                        ← Detect_Task
+├── detect_task.c      10 ms：上线 / 离线报告、喂硬件看门狗 IWDG      ← Detect_Task
 ├── indicator_task.c   25 ms：状态灯、蜂鸣器、低电量（照 UniC 的 app_indicator）
 └── log_task.c         1 s：RTT 打印状态
 01_applic/config/（这台车的参数、对象、任务表）
@@ -114,6 +114,7 @@ for (;;)                                        control_info（本文件）存�
       ├─ 2. 编码 → 3. 发送：send_dji_frame()    四台电调共用一帧（0x200 / 0x1FF）→ can_send
       │                     send_dm_frame()     达妙每台一帧：先对齐使能（清错 / 使能 / 失能命令），否则 MIT 帧
       └─ 4. 清理                               清空本周期指令：下个周期不写就发零力矩
+（三步之后）记录执行时间 / 周期最大值（control_timing_take() 给 log_task），control_heartbeat++（detect_task 据此喂 IWDG）
 ```
 
 和老模板一一对应：`control_info` ↔ `Control_Info`，`control_measure_update` ↔ `Control_Measure_Update`，
@@ -151,7 +152,11 @@ comm_rx_task：
 
 ### detect_task（10 ms）：`01_applic/tasks/detect_task.c:detect_task_entry`
 
-上电打印设备清单；之后 `watchdog_poll()` 打印上线 / 离线变化。只报告，不决定停车。
+上电打印设备清单，`iwdg_start()` 启动硬件看门狗；之后每 10 ms：`control_heartbeat` 涨了才 `iwdg_feed()`（control_task 卡死 50 ms 即复位，ADR 0074），
+`watchdog_poll()` 打印上线 / 离线变化（只报告，不决定停车）。
+
+致命故障入口（不在任务里）：`06_boards/dm_mc02_h723/Core/Src/stm32h7xx_it.c` 的 HardFault / MemManage / BusFault / UsageFault、
+`freertos.c` 的 `vApplicationStackOverflowHook`、`FreeRTOSConfig.h` 的 `configASSERT`，都调用 `05_platform/iwdg/iwdg_stm32h7.c` 的 `iwdg_fault()`。
 
 ### indicator_task（25 ms）：`01_applic/tasks/indicator_task.c:indicator_task_entry`
 
@@ -159,7 +164,7 @@ comm_rx_task：
 
 ### log_task（1 s）：`01_applic/tasks/log_task.c:log_task_entry`
 
-打印模式、遥控、四个轮子、底盘目标、IMU、电池（电池读 `indicator_battery_v()`）。
+打印模式、遥控、四个轮子、底盘目标、IMU、电池（电池读 `indicator_battery_v()`）、control_task 实时性（`control_timing_take()`）。
 
 ## 6. 数据在任务之间怎么传
 

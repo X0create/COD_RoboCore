@@ -3,8 +3,9 @@
 COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清楚，可以在电脑上测试，并内置失效安全机制。
 一套通用的电控框架，做哪台车就复制一份、改 `01_applic/config/`；支持两种主控：达妙 DM-MC02（STM32H723）和大疆 C 板（STM32F407）。
 
-> **当前状态（2026-09-30）：** COD-H7-Template 的功能已按新架构移植完（裁判系统解析等官方协议文档），编译 0 警告、
-> 电脑侧单元测试全部通过；正在 DM-MC02 上逐项验证（进度见 `docs/VERIFICATION_TODO.md`）。大疆 C 板（F407）后端尚未开始。
+> **当前状态（2026-10-11）：** COD-H7-Template 的功能已按新架构移植完（裁判系统解析等官方协议文档），并有四轮底盘、
+> 硬件看门狗与故障复位、功率 / 发射算法（未接线）；编译 0 警告、电脑侧单元测试 35 个全部通过。
+> 正在 DM-MC02 上逐项验证（进度见 `docs/VERIFICATION_TODO.md`），底盘和看门狗还没上板。大疆 C 板（F407）后端尚未开始。
 
 ## 设计原则
 
@@ -18,7 +19,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 
 **能在电脑上测试**
 - 硬件相关的代码只在 `05_platform/` 一层；其余各层是普通 C，电脑上用假 CAN / SPI / PWM / 时钟替换硬件，
-  电机协议、遥控解析、姿态解算、安全门等都有单元测试（Unity，30 个测试程序）。
+  电机协议、遥控解析、姿态解算、安全门等都有单元测试（Unity，35 个测试程序）。
 - 平台抽象就是“同名函数、链接时选实现”，没有函数指针表，调试时可以一路跳进具体实现。
 
 **只写必要、但一定写对的安全机制**
@@ -69,9 +70,14 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 | 通信 | 视觉 USB 帧层（0x5A） | 🧪 | 消息内容等视觉组协议 |
 | | 裁判系统 | 🧪 帧检查 · 📝 解析 | 解析等官方 V2.0.0 文档 |
 | 安全 | 安全门（全车停）、每个电机的停机动作 | 🧪 | 上板只看过“一直安全停机”；急停、遥控丢失的停机时间要台架实测 |
+| | 硬件看门狗 IWDG（50 ms）· 致命故障复位 | 🧪 | control_task 卡死或 HardFault / 栈溢出时复位，复位后自动恢复（ADR 0074） |
 | 算法 | PID · 斜坡 · 低通 · 卡尔曼 · 矩阵 | 🧪 | EKF 用到的部分已随 IMU 上板 |
-| | RLS（功率模型辨识） | 🧪 | 暂未接入 |
-| 子系统 | 云台 · 底盘（含功率控制） · 发射 · 轮腿 | 📝 | 见下方路线图 |
+| | 底盘运动学：全向轮 · 麦轮 · 舵轮 · 半舵半全向 | 🧪 | 全向轮已接进底盘 |
+| | 功率模型 + RLS 辨识 · 功率分配 | 🧪 | 未接进底盘（等裁判系统） |
+| | 发射：热量限频 · 卡弹 · 弹速自适应 | 🧪 | 未接线（发射机构还没有） |
+| 子系统 | 底盘（四轮全向 / 麦轮 / 舵轮 / 半舵半全向，轮子离线降级） | 🧪 | 当前固件是四轮全向轮；舵轮接近开关找零未上板 |
+| | 云台 · 发射 · 轮腿 | 📝 | 见下方路线图 |
+| 通信 | 板间通信 board_link（CAN FD） | 🧪 | 单板车用不到，未接线 |
 | 主控 | 大疆 C 板（STM32F407） | 📝 | |
 
 ## 文档
@@ -116,17 +122,19 @@ COD_RoboCore/
 │   ├── referee/             裁判系统帧检查（协议解析等官方文档）
 │   ├── vision/              视觉 USB 通信帧层
 │   ├── battery/  buzzer/    电池电压、蜂鸣器提示音
-│   └── supercap/ actuator/ board_link/   （规划）超级电容、PWM 执行器、板间通信
+│   ├── board_link/          板间 CAN 通信（已写好，未接线）
+│   └── supercap/ actuator/  （规划）超级电容、PWM 执行器
 ├── 03_algorithm/            纯计算，电脑上可测（≈ 老模板 Components/Algorithm、Controller）
 │   ├── control/             PID、斜坡
 │   ├── filter/              低通、卡尔曼
 │   ├── attitude/            四元数 EKF、陀螺零偏估计
 │   ├── kinematics/          全向轮、麦轮、舵轮、半舵半全向运动学
 │   ├── math/                矩阵运算
-│   ├── power/               RLS（功率模型辨识）
+│   ├── power/               功率模型与分配、RLS
+│   ├── shoot/               发射：热量、卡弹、弹速
 │   └── ballistic/           （规划）弹道解算
 ├── 04_core/                 与业务无关的基础设施
-│   ├── watchdog/            设备在线判断
+│   ├── watchdog/            设备在线判断（软件看门狗，不是 IWDG）
 │   ├── log/                 RTT 日志（含 SEGGER RTT 源码）
 │   ├── os/                  临界区、延时、静态任务创建
 │   ├── util/                CRC
@@ -135,17 +143,18 @@ COD_RoboCore/
 │   ├── can/                 can.h、can.c（DLC、接收环形缓冲）、can_stm32h7.c（FDCAN）
 │   ├── uart/  usb_cdc/      串口（DMA 循环接收）、USB 虚拟串口
 │   ├── time/  status_led/   DWT 时钟、WS2812 状态灯
-│   ├── spi/  pwm/  adc/
-│   ├── gpio/ flash/ iwdg/   （规划）引脚、片内 Flash、硬件看门狗
+│   ├── spi/  pwm/  adc/  gpio/
+│   ├── iwdg/                硬件看门狗、致命故障复位
+│   ├── flash/               （规划）片内 Flash
 │   └── stm32h7/             H7 各外设共用的 DMA 缓冲段（.dma_buf）；F407 以后在每个外设目录加 *_stm32f4.c
 ├── 06_boards/               每块板一个目录（CubeMX 生成代码，只改 USER CODE 区）
 │   ├── dm_mc02_h723/        达妙 DM-MC02：.ioc、链接脚本 dm_mc02.ld / Keil 的 dm_mc02.sct、MDK-ARM/（Keil 工程）、REGEN_CHECKLIST.md
 │   └── dji_c_f407/          （规划）大疆 C 板
 ├── tests/
-│   ├── host/                电脑侧单元测试（Unity）；fakes/ 是假 CAN / SPI / PWM / 时钟 / OS
+│   ├── host/                电脑侧单元测试（Unity）；fakes/ 是假 CAN / SPI / PWM / GPIO / 时钟 / OS
 │   └── target/ hil/ data/   （规划）板上自测、硬件在环、录制数据
 ├── cmake/                   交叉编译工具链、板级编译选项、警告设置
-├── tools/                   keil_sync.py（整理 Keil 工程）、gen_readme_diagrams.py（生成本页的图）；（规划）依赖检查
+├── tools/                   format.py（格式化）、keil_sync.py（整理 Keil 工程）、gen_readme_diagrams.py（生成本页的图）、mujoco/（底盘仿真）
 ├── docs/                    架构设计与实施计划、编码规范、开发环境、与旧模板的差异、待验证清单；images/ 放本页的图
 ├── CMakePresets.json        两个预设：host-tests（电脑测试）、h723-debug；构建目录 build/<系统>/<预设>/
 └── LICENSE                  MIT
@@ -164,9 +173,9 @@ COD_RoboCore/
 | `ins_task` | 1 kHz | 6（最高） | 读 BMI088，零偏标定与在线修正，四元数 EKF 算姿态，IMU 恒温加热，保存最新姿态（`ins_read()` 读） |
 | `comm_rx_task` | 有数据就运行 | 5 | 中断收到 CAN 帧 / 串口字节 / USB 数据后被唤醒，交给对应设备解析；CAN bus-off 恢复 |
 | `control_task` | 1 kHz | 4 | 读实测 → 算目标（安全门、各机构目标）→ 算输出（全车停改写、发电机指令）（下图 ①–⑤） |
-| `detect_task` | 100 Hz | 3 | 报告设备上线 / 离线（只报告，不参与安全判断） |
+| `detect_task` | 100 Hz | 3 | 报告设备上线 / 离线（只报告，不参与安全判断）；看 control_task 的心跳喂硬件看门狗 IWDG |
 | `indicator_task` | 40 Hz | 2 | 状态灯、蜂鸣器、低电量检查 |
-| `log_task` | 1 Hz | 1 | 通过 RTT 打印这台车的状态 |
+| `log_task` | 1 Hz | 1 | 通过 RTT 打印这台车的状态和 control_task 的实时性统计 |
 
 中断只收数据并唤醒 `comm_rx_task`，所有协议解析都在任务里做；1 kHz 的任务里不打日志。
 
@@ -229,7 +238,7 @@ CMake 报“CMakeCache.txt directory is different”时，删掉对应的 `build
 4. 需要新机构（云台、发射……）时在 `01_applic/modules/` 里加，再在第 2、3 步里接上。
 5. 加了新的 `.c` 文件：在 CMake 里加，Keil 里拖进对应分组（或运行 `python3 tools/keil_sync.py`）。
 
-多板的车（如哨兵的云台板、底盘板）每块板一份仓库副本，用 `02_devices/board_link/` 交换数据（规划）。
+多板的车（如哨兵的云台板、底盘板）每块板一份仓库副本，用 `02_devices/board_link/` 交换数据（收发已写好；心跳和两块板的解锁互锁还没做）。
 
 分层规则、命名和安全相关代码的写法见 `docs/CODING_STANDARD.md`。
 
@@ -245,7 +254,7 @@ CMake 报“CMakeCache.txt directory is different”时，删掉对应的 `build
 | --- | --- | --- |
 | 0 骨架 | 目录、构建、CubeMX 工程、时钟、日志、单元测试 | ✅ 完成并上板 |
 | 旧模板移植 | COD-H7-Template 的电机、遥控、IMU、图传、视觉、电池等全部按新架构重写 | 🧪 代码完成（裁判系统等文档），上板验证进行中 |
-| 1 最小完整链路 | 一台电机 + 遥控 + 安全停机，停机时间台架实测；硬件看门狗、故障记录、指令层 | 进行中 |
+| 1 最小完整链路 | 一台电机 + 遥控 + 安全停机，停机时间台架实测；硬件看门狗（🧪 已写）、故障记录、指令层 | 进行中 |
 | 2 C 板移植 | 每个外设目录加 `*_stm32f4.c`，跑同一条最小链路 | 📝 |
 | 3 设备层补全 | 电机停发后的行为实测、分类发送队列 | 📝 |
 | 4 姿态 + 云台 | 云台控制、`GimbalState` | 📝 |

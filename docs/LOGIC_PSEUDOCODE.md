@@ -34,13 +34,14 @@
 | `system/safety_gate.c/.h` | 安全门：Init → Safe → Manual，决定这一周期是否全车停（第 6 节） |
 | `config/robot.h` | 这台车的全部可调参数（电机表、底盘尺寸与 PID、解锁拨杆、IMU 安装方向）和全部对象的声明 |
 | `config/robot.c` | 这台车的全部对象（遥控、IMU、电机、底盘）、`robot_init()`、任务表（6 个任务的名字、入口、优先级、栈） |
-| `tasks/ins_task.c/.h` | 1 ms：初始化 BMI088，循环调用 `ins_step()`，把事件写进日志（第 4 节） |
-| `tasks/comm_rx_task.c/.h` | 收到数据就运行：打开 CAN、串口接收，把数据交给电机、DR16 解析；CAN bus-off 恢复（第 3 节） |
-| `tasks/control_task.c` | 1 ms：读实测 → 算目标（安全门、摇杆）→ 算输出并发电机指令（第 5 节） |
-| `tasks/detect_task.c/.h` | 10 ms：打印设备上线 / 离线，只报告不停车（第 9 节） |
-| `tasks/indicator_task.c/.h` | 25 ms：状态灯、蜂鸣器、电池电压与低电量（第 9 节） |
-| `tasks/log_task.c/.h` | 1 s：通过 RTT 打印整车状态（第 9 节） |
-| `modules/chassis/chassis.c/.h` | 底盘：读实测 → 算目标（斜坡、运动学逆解）→ 各轮速度环 PID 出力矩（第 7 节） |
+| `tasks/ins_task.c` | 1 ms：初始化 BMI088，循环调用 `ins_step()`，把事件写进日志（第 4 节） |
+| `tasks/comm_rx_task.c` | 收到数据就运行：打开 CAN、串口接收，把数据交给电机、DR16 解析；CAN bus-off 恢复（第 3 节） |
+| `tasks/control_task.c` | 1 ms：读实测 → 算目标（安全门、摇杆）→ 算输出并发电机指令；心跳和实时性统计（第 5 节） |
+| `tasks/detect_task.c` | 10 ms：打印设备上线 / 离线，只报告不停车；按 control_task 心跳喂硬件看门狗（第 9 节） |
+| `tasks/indicator_task.c` | 25 ms：状态灯、蜂鸣器、电池电压与低电量（第 9 节） |
+| `tasks/log_task.c` | 1 s：通过 RTT 打印整车状态（第 9 节） |
+| `tasks/tasks.h` | 全部任务入口的声明，以及 control_task 对外的心跳、实时性统计 |
+| `modules/chassis/chassis.c/.h` | 底盘：读实测 → 算目标（斜坡、运动学逆解）→ 各轮速度环 PID 出力矩；轮子离线降级、舵轮接近开关找零（第 7 节） |
 | `modules/ins/ins.c/.h` | 惯性导航：读 BMI088 → 加热 → 零偏标定 → 安装旋转 → 低通 → EKF → 保存最新姿态，`ins_read()` 读 |
 | `modules/gimbal/`、`shooter/`、`leg/`、`arm/` | 规划中，只有 README |
 
@@ -115,9 +116,11 @@
 | `status_led/status_led.c` | 辅助：WS2812 颜色到 SPI 字节的编码 |
 | `usb_cdc/usb_cdc.h`、`usb_cdc_stm32h7.c` | USB 虚拟串口，与上位机通信的默认通道（未接线） |
 | `usb_cdc/usb_cdc.c` | 辅助：字节环形缓冲（中断写、任务读） |
+| `gpio/gpio.h`、`gpio_stm32h7.c` | 按用途命名的输入引脚，轮询读取（舵轮零点开关 `GPIO_IN_ZERO_SWITCH_1–4`） |
+| `iwdg/iwdg.h`、`iwdg_stm32h7.c` | 硬件看门狗 IWDG（50 ms）；`iwdg_fault()`：致命故障时连调试器就停在断点，否则立即复位 |
 | `stm32h7/dma_buf.h` | 把变量放进 DMA 专用段（不可缓存的 AXI SRAM） |
 | `compiler.h` | 编译器属性（`RM_NODISCARD` 等） |
-| `gpio/`、`flash/`、`iwdg/` | 规划中，只有 README |
+| `flash/` | 规划中，只有 README |
 
 ### 06_boards 板级
 
@@ -153,7 +156,7 @@
    │ ins_task      1 ms   读 IMU → 算姿态 → 保存最新姿态    │
    │ comm_rx_task  有数据  解析遥控、电机反馈                 │
    │ control_task  1 ms   读实测 → 算目标 → 算输出并发电机指令 │
-   │ detect_task   10 ms  打印设备上线 / 离线                │
+   │ detect_task   10 ms  打印设备上线 / 离线、喂硬件看门狗  │
    │ indicator_task 25 ms 灯、蜂鸣器、低电量                 │
    │ log_task      1 s    打印状态                          │
    └──────────────────────────────────────────────────────┘
@@ -284,6 +287,7 @@ CAN 接收中断（收到一帧）                                → 05_platfor
     如果 stop_all：把每个电机改写成它的停机动作（轮子 = 零力矩）
     电机组发送（见第 8 节）
 
+    记录这一拍的执行时间和周期（log_task 每秒打印最大值），心跳 control_heartbeat 加 1
     睡到下一个 1 ms
 ```
 
@@ -364,6 +368,9 @@ detect_task（每 10 ms）：                                 → 01_applic/task
     开始时打印一次“本固件有哪些设备”
     之后：设备在线 / 离线状态变了 → 打印一行
     （只报告，不决定停车；它和 dr16_read 等读取函数看的是同一个看门狗，判断结果一致）
+    硬件看门狗 IWDG：开始时启动；之后每 10 ms 看 control_heartbeat 有没有涨，涨了才喂狗
+        → control_task 卡死或被饿死、或 detect_task 自己卡死，50 ms 内芯片复位，复位后照常上电（ADR 0074）
+    致命故障（HardFault 等、栈溢出、configASSERT）→ iwdg_fault()：连着调试器停在断点，否则立即复位
 
 indicator_task（每 25 ms）：                              → 01_applic/tasks/indicator_task.c
     开始时：打开 ADC、蜂鸣器，放启动音
