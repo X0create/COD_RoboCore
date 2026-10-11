@@ -1,0 +1,122 @@
+/**
+ * @file    power.h
+ * @brief   底盘功率控制的算法（纯计算，电脑上可测）：递推最小二乘、电机功率模型与参数辨识、功率分配
+ * @note    按节排列：RLS、功率模型、功率分配。底盘在第 3 步“速度环算出力矩之后、写给电机之前”调用（ADR 0022）。
+ *          依据 reference/hardware/RM2024-PowerModule（港科大，《架构设计》“功率控制”）和
+ *          COD 26 赛季哨兵 rmcod2026_-sentry 的 Power_Ctrl()（同一方法的改写，ADR 0076）。
+ */
+#pragma once
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+/* ================================================================== */
+/* 递推最小二乘 RLS                                                    */
+/*
+ * 带遗忘因子、单输出。模型 y = wᵀx，每来一组 (x, y) 更新一次估计 w：
+ *   e = y − wᵀx，K = P x / (λ + xᵀP x)，w ← w + K e，P ← (P − K (P x)ᵀ) / λ。
+ * COD-H7-Template 的 RLS.c 没有调用者且跑不起来（增益向量只分配 1 个 float 却按 2 个使用、
+ * λ 从未赋值为 0、1×1 乘 2×2），不照搬，按上面的标准公式重写（CHANGES）。
+ */
+/* ================================================================== */
+
+#define RLS_MAX_N 4u
+
+typedef struct
+{
+    uint8_t n;    /* 参数个数 */
+    float lambda; /* 遗忘因子，0 < λ ≤ 1；越小越快跟上参数变化，噪声也越大 */
+    float w[RLS_MAX_N];
+    float p[RLS_MAX_N * RLS_MAX_N]; /* 按行存储，n×n */
+} Rls;
+
+/**
+ * @param   p0  初始协方差（单位阵乘 p0），越大初期收敛越快
+ * @param   w0  初始估计，n 个
+ * @pre     1 ≤ n ≤ RLS_MAX_N，0 < lambda ≤ 1，p0 > 0
+ */
+void rls_init(Rls *rls, uint8_t n, float lambda, float p0, const float w0[]);
+
+/** 更新一次，返回更新前的预测误差 y − wᵀx */
+float rls_update(Rls *rls, const float x[], float y);
+
+/** 按当前估计预测 wᵀx */
+float rls_predict(const Rls *rls, const float x[]);
+
+/* ================================================================== */
+/* 功率模型                                                            */
+/*
+ * 一台电机从电池取的功率（港科大模型）：Pᵢ = τᵢωᵢ + k1·|ωᵢ| + k2·τᵢ² + k3/n
+ *   τ、ω 是输出轴力矩（N·m）、转速（rad/s）；τω 是机械功率，k1|ω| 近似摩擦与铁损，k2τ² 近似铜损，k3 是整组的静态损耗。
+ * 26 哨兵用的是 k1·τ² + k2·ω² 的变体（转速项为 ω²）；本模板先用港科大的形式，哪个更准等台架辨识（ADR 0076）。
+ */
+/* ================================================================== */
+
+typedef struct
+{
+    float k1; /* W / (rad/s)，≥ 0 */
+    float k2; /* W / (N·m)²，> 0（功率分配要解以它为二次项系数的方程） */
+    float k3; /* W，整组电机的静态损耗 */
+} PowerModel;
+
+/** 一台电机的模型功率；n 是这一组的电机数（k3 平均分给每台） */
+float power_model_motor(const PowerModel *model, float torque_nm, float speed_rad_s, unsigned n);
+
+/**
+ * @brief   用实测总功率在线辨识 k1、k2（k3 不辨识，失能全部电机时实测）
+ * @param   rls          2 个参数的 RLS（rls_init 时 w0 = {k1, k2} 的初值）
+ * @param   torque_nm    各电机实测力矩（反馈，不是指令）
+ * @param   speed_rad_s  各电机实测转速
+ * @param   measured_w   同一时刻的实测总功率（超级电容或裁判系统），只在有效时调用
+ * @note    观测方程：measured − Σ τω − k3 = k1·Σ|ω| + k2·Στ²。k1、k2 不会被更新成负数或 0
+ */
+void power_model_identify(Rls *rls, PowerModel *model, const float torque_nm[],
+                          const float speed_rad_s[], unsigned n, float measured_w);
+
+/* ================================================================== */
+/* 功率分配                                                            */
+/*
+ * 一组电机的模型总功率超过上限时，按权重把上限分给各电机，再解 k2τ² + ωτ + (k1|ω| + k3/n − Pᵢ) = 0 反算力矩：
+ *   - 权重：转速误差大时按误差比例分（先让跟不上的轮子用功率），误差小时按原指令功率比例分，
+ *     两者之间按 Σ误差 在 [err_low, err_high] 里的位置线性过渡（避免在坡上抖动）；
+ *   - 模型功率为负（电机在回馈）的不压缩，它回馈的功率加进可分配的总量；
+ *   - 根取与原指令同号的那个；无实根时取功率最小的 τ = −ω / (2k2)；
+ *   - 结果限制在 0 到原指令之间：只压缩、不放大，也不反向（港科大、哨兵都可能放大或解出反向制动，ADR 0076）。
+ * 舵轮两组电机：转向电机先用 power_steer_budget() 分到最多 80%，驱动电机用剩下的（港科大 SteeringGear、哨兵同）。
+ */
+/* ================================================================== */
+
+typedef struct
+{
+    float err_low_rad_s;  /* Σ|转速误差| 低于它：完全按指令功率比例分配 */
+    float err_high_rad_s; /* 高于它：完全按误差比例分配 */
+} PowerAllocConfig;
+
+typedef struct
+{
+    bool online;           /* 离线的电机：输出 0，不参与分配 */
+    float torque_nm;       /* 速度环算出的力矩指令 */
+    float speed_rad_s;     /* 实测转速 */
+    float speed_err_rad_s; /* 目标转速 − 实测转速（取绝对值用） */
+} PowerMotor;
+
+/**
+ * @brief   把一组电机的力矩压到 max_power_w 以内
+ * @param   out_torque_nm  n 个：压缩后的力矩（没超上限时等于原指令）；可以和输入不是同一块内存
+ * @return  压缩前的模型总功率（W），供调试和舵轮分预算用
+ * @pre     model->k2 > 0；n ≤ 8；cfg->err_high_rad_s > cfg->err_low_rad_s
+ */
+float power_limit(const PowerModel *model, const PowerAllocConfig *cfg, const PowerMotor motors[],
+                  unsigned n, float max_power_w, float out_torque_nm[]);
+
+/** 舵轮：转向电机这一组本周期能用的功率 = min(指令功率, 上限 × 0.8)；驱动电机用 max_power_w 减去它 */
+float power_steer_budget(float steer_cmd_power_w, float max_power_w);
+
+#ifdef __cplusplus
+}
+#endif

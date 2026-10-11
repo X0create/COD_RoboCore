@@ -954,9 +954,9 @@
           <GroupName>03_algorithm/power</GroupName>
           <Files>
             <File>
-              <FileName>rls.c</FileName>
+              <FileName>power.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\03_algorithm\power\rls.c</FilePath>
+              <FilePath>..\..\..\03_algorithm\power\power.c</FilePath>
             </File>
           </Files>
         </Group>
