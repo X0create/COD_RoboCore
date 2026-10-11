@@ -1,15 +1,16 @@
 /**
  * @file    chassis.h
  * @brief   底盘子系统：四轮全向轮 / 麦轮 / 舵轮 / 半舵半全向，由 ChassisConfig.type 选择
- * @note    control_task 每 1 ms 调用一次 chassis_step()，分三步（与 COD-H7-Template Control_Task 的写法对应）：
- *            1. 读实测：各电机的转速（舵轮还有朝向）→ chassis.measure
- *            2. 算目标：目标底盘速度过斜坡 → 逆解出各轮目标 → chassis.target
- *            3. 算输出：各轮 PID → 电机力矩
+ * @note    control_task 每 1 ms 按顺序调用下面三个函数，各对应它自己的一步（与 COD-H7-Template Control_Task 的
+ *          Measure / Target / Output 写法对应）：
+ *            1. chassis_measure_update()：各电机的转速（舵轮还有朝向）→ chassis.measure
+ *            2. chassis_target_update()：目标底盘速度过斜坡 → 逆解出各轮目标 → chassis.target
+ *            3. chassis_output_update()：各轮 PID → 电机力矩
  *          在 Ozone 里看 chassis.measure 和 chassis.target 就能对比实测与目标。
  *
  *          两种停机（运行时契约第 5 节）：
- *          - 全车停（安全门：急停、遥控丢失、未解锁）：不写指令，发送出口统一改成零力矩；
- *            这时清积分、目标对齐实测速度，解锁时不会猛冲；
+ *          - 全车停（安全门：急停、遥控丢失、未解锁）：第 2 步传 stop_all = true，第 3 步就不写指令，
+ *            发送出口统一改成零力矩；这时清积分、目标对齐实测速度，解锁时不会猛冲；
  *          - 机构停（任一电机离线）：目标改为 0，其余轮子按斜坡减速停下；离线的电机不写指令。
  *          轮号顺序见 03_algorithm/kinematics/ 下对应的头文件（都是左前起逆时针）。
  *          功率控制以后加在第 3 步“算出力矩之后、写给电机之前”（ADR 0022）。
@@ -89,6 +90,7 @@ typedef struct
     ChassisVel velocity;                     /* 过斜坡之后的目标底盘速度 */
     float drive_speed_rad_s[CHASSIS_WHEELS]; /* 各驱动轮目标转速 */
     float heading_rad[CHASSIS_WHEELS];       /* 有转向电机的轮子：各轮目标朝向 */
+    bool stop_all; /* 本周期全车停：第 3 步不写指令、只清积分 */
 } ChassisTarget;
 
 typedef struct
@@ -114,21 +116,29 @@ RM_NODISCARD bool chassis_init(Chassis *chassis, const ChassisConfig *cfg,
                                Motor *const drive[CHASSIS_WHEELS],
                                Motor *const steer[CHASSIS_WHEELS]);
 
-/** chassis_step() / chassis_stop() 的调用周期：control_task 每 1 ms 调一次（斜坡按它算每步的速度变化；PID 参数也和它绑定，ADR 0029） */
+/** 三个函数的调用周期：control_task 每 1 ms 调一次（斜坡按它算每步的速度变化；PID 参数也和它绑定，ADR 0029） */
 #define CHASSIS_PERIOD_S 0.001f
 
 /**
- * @brief   能动时每个控制周期调用一次：读实测 → 算目标（斜坡、逆解）→ 算输出（每轮速度环，写电机力矩）
- * @param   cmd           目标底盘速度（底盘系：vx 向前、vy 向左、wz 逆时针）
- * @param   output_scale  输出限幅比例 0–1（safety_gate_output_scale()，解锁后逐渐放开）
+ * @brief   第 1 步 读实测：各电机反馈 → chassis.measure；全部在线时正解出实测底盘速度
  */
-void chassis_step(Chassis *chassis, const ChassisVel *cmd, float output_scale);
+void chassis_measure_update(Chassis *chassis);
 
 /**
- * @brief   全车停时代替 chassis_step() 每个周期调用：读实测，不写电机指令，清积分，目标对齐实测速度
- *          （解锁瞬间车还在滑行时，目标从实测速度开始，不会突然跳到 0 或摇杆值）
+ * @brief   第 2 步 算目标：目标底盘速度过斜坡 → 逆解出各轮目标 → chassis.target
+ * @param   cmd       目标底盘速度（底盘系：vx 向前、vy 向左、wz 逆时针）；stop_all 时不读
+ * @param   stop_all  全车停（安全门的结论）：目标对齐实测速度（解锁瞬间车还在滑行时，
+ *                    目标从实测速度开始，不会突然跳到 0 或摇杆值），第 3 步不写指令
+ * @pre     本周期已调用 chassis_measure_update()
  */
-void chassis_stop(Chassis *chassis);
+void chassis_target_update(Chassis *chassis, const ChassisVel *cmd, bool stop_all);
+
+/**
+ * @brief   第 3 步 算输出：每轮速度环（舵轮还有转向角度环 → 速度环）→ 写电机力矩；全车停时只清积分
+ * @param   output_scale  输出限幅比例 0–1（safety_gate_output_scale()，解锁后逐渐放开）
+ * @pre     本周期已调用 chassis_target_update()
+ */
+void chassis_output_update(Chassis *chassis, float output_scale);
 
 #ifdef __cplusplus
 }

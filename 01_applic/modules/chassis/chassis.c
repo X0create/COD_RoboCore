@@ -1,16 +1,12 @@
 /**
  * @file    chassis.c
- * @brief   底盘子系统：读实测 → 算目标 → 算输出（说明见 chassis.h）
+ * @brief   底盘子系统：读实测 → 算目标 → 算输出，三个函数按顺序排在下面（说明见 chassis.h）
  */
 #include "chassis.h"
 
 #include <math.h>
 
 #include "03_algorithm/control/ramp.h"
-
-static void chassis_measure_update(Chassis *chassis);
-static void chassis_target_update(Chassis *chassis, const ChassisVel *cmd);
-static void chassis_output_update(Chassis *chassis, float output_scale);
 
 /* 轮 i 有没有转向电机：舵轮全部有；半舵半全向只有舵轮那条对角线有 */
 static bool has_steer_motor(const ChassisConfig *cfg, unsigned i)
@@ -54,32 +50,11 @@ bool chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive
     return true;
 }
 
-void chassis_step(Chassis *chassis, const ChassisVel *cmd, float output_scale)
-{
-    /* 一个控制周期：读实测 → 算目标 → 算输出（三步的函数都在下面，按顺序排列） */
-    chassis_measure_update(chassis);
-    chassis_target_update(chassis, cmd);
-    chassis_output_update(chassis, output_scale);
-}
-
-void chassis_stop(Chassis *chassis)
-{
-    chassis_measure_update(chassis);
-    /* 目标从当前实测速度开始：解锁时车还在滑行，目标也不会突然跳到 0 或摇杆值 */
-    chassis->target.velocity = chassis->measure.velocity;
-    for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
-    {
-        pid_reset(&chassis->drive_pid[i]);
-        pid_reset(&chassis->steer_angle_pid[i]);
-        pid_reset(&chassis->steer_speed_pid[i]);
-    }
-}
-
 /* ------------------------------------------------------------------ */
 /* 第 1 步：读实测                                                     */
 /* ------------------------------------------------------------------ */
 
-static void chassis_measure_update(Chassis *chassis)
+void chassis_measure_update(Chassis *chassis)
 {
     ChassisMeasure *m = &chassis->measure;
     const ChassisConfig *cfg = chassis->cfg;
@@ -164,10 +139,18 @@ static void ramp_translation(ChassisVel *v, const ChassisVel *goal, float step)
 }
 
 /* 目标速度 → 斜坡限加速度 → 运动学逆解，得到每个轮子的目标转速（舵轮还有目标朝向） */
-static void chassis_target_update(Chassis *chassis, const ChassisVel *cmd)
+void chassis_target_update(Chassis *chassis, const ChassisVel *cmd, bool stop_all)
 {
     const ChassisConfig *cfg = chassis->cfg;
     ChassisTarget *t = &chassis->target;
+
+    /* 全车停：目标从当前实测速度开始，解锁时车还在滑行，目标也不会突然跳到 0 或摇杆值 */
+    t->stop_all = stop_all;
+    if (stop_all)
+    {
+        t->velocity = chassis->measure.velocity;
+        return;
+    }
 
     /* 机构停：有电机离线时目标改为 0，下面的斜坡让车受控减速 */
     const ChassisVel goal = chassis->measure.all_online ? *cmd : (ChassisVel){ 0 };
@@ -223,11 +206,23 @@ static float clamp(float x, float limit)
 }
 
 /* 离线的电机不写指令（电机组会填零力矩），并清积分，恢复时不猛冲 */
-static void chassis_output_update(Chassis *chassis, float output_scale)
+void chassis_output_update(Chassis *chassis, float output_scale)
 {
     const ChassisConfig *cfg = chassis->cfg;
     const ChassisMeasure *m = &chassis->measure;
     const ChassisTarget *t = &chassis->target;
+
+    /* 全车停：不写指令（发送出口统一改写成停机动作），清积分 */
+    if (t->stop_all)
+    {
+        for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
+        {
+            pid_reset(&chassis->drive_pid[i]);
+            pid_reset(&chassis->steer_angle_pid[i]);
+            pid_reset(&chassis->steer_speed_pid[i]);
+        }
+        return;
+    }
     const float drive_limit_nm = cfg->drive_speed_pid.output_limit * output_scale;
     const float steer_limit_nm = cfg->steer.speed_pid.output_limit * output_scale;
 

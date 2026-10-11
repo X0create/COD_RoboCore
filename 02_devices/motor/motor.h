@@ -37,8 +37,8 @@ extern "C"
 #define DJI_M2006_GEAR_RATIO 36.0f
 
 /*
- * M3508 + C620 的换算常数（附录 A.2），全仓库只在这里定义：motor.c 编解码、robot.h 把旧工程的 PID
- * 换算到国际单位都用这里。C620 电流原始值 ±16384 对应 ±20 A；原装减速箱输出轴 0.3 N·m/A
+ * M3508 + C620 的换算常数（附录 A.2），全仓库只在这里定义：motor.c 编解码、MuJoCo 虚拟电调都用这里
+ *（robot.h 的 PID 是按它换算好的数字）。C620 电流原始值 ±16384 对应 ±20 A；原装减速箱输出轴 0.3 N·m/A
  */
 #define DJI_C620_RAW_MAX   16384
 #define DJI_C620_MAX_A     20.0f

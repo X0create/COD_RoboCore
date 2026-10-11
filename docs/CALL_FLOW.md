@@ -50,7 +50,7 @@ COD-H7-Template/
 | `Application/` | `01_applic/` | 通用（`system/`）、机构（`modules/chassis/`、`modules/ins/`）、这台车（`config/`） |
 | `Application/Task/INS_Task.c` | `01_applic/tasks/ins_task.c` + `ins.c` | 通用 |
 | `Application/Task/Control_Task.c` | `01_applic/tasks/control_task.c` + `01_applic/modules/chassis/chassis.c` | |
-| `Application/Task/CAN_Task.c` | `control_task.c` 第 4 步 → `02_devices/motor/motor.c` | 发送与控制同一周期，不再单独一个任务 |
+| `Application/Task/CAN_Task.c` | `control_task.c` 第 3 步 → `02_devices/motor/motor.c` | 发送与控制同一周期，不再单独一个任务 |
 | `Application/Task/Detect_Task.c` | `01_applic/tasks/detect_task.c` | 只报告上线 / 离线；是否停车由读数据的地方按时间戳当场判断 |
 | `Core/Src/freertos.c` 的任务列表 | `01_applic/config/robot.c` 的 `task_table[]` | 6 个任务的优先级、栈都在这一处 |
 | 全局变量 `remote_ctrl`、`Chassis_Motor[]` … | `01_applic/config/robot.h`（定义在 `robot.c` 第 1 节） | 只给 `config/`、`tasks/` 用 |
@@ -61,7 +61,7 @@ COD-H7-Template/
 ```
 01_applic/tasks/（全部任务，≈ 老模板 Application/Task）
 ├── ins_task.c         1 kHz：姿态解算（调用 modules/ins/ins.c）       ← INS_Task
-├── control_task.c     1 kHz：读输入 → 安全门 → 底盘 → 发送          ← Control_Task + CAN_Task
+├── control_task.c     1 kHz：读实测 → 算目标 → 算输出并发送        ← Control_Task + CAN_Task
 ├── comm_rx_task.c     收到数据就运行：打开接收，CAN → 电机，UART5 → DR16 ← BSP 里的接收回调
 ├── detect_task.c      10 ms：上线 / 离线报告                        ← Detect_Task
 ├── indicator_task.c   25 ms：状态灯、蜂鸣器、低电量（照 UniC 的 app_indicator）
@@ -97,19 +97,18 @@ startup_task()                                  最高优先级，第一个运�
 ### control_task（1 kHz）：`01_applic/tasks/control_task.c:control_task_entry`
 
 ```
-for (;;)
-├─ 1. 读输入
+for (;;)                                        control_info（本文件）存这一拍的输入和决定
+├─ 1. control_measure_update()                 读实测
 │  ├─ dr16_read(&dr16, &rc)                     02_devices/remote/dr16.c         200 ms 没更新 = 遥控丢失
-│  └─ ins_read(&ins, &imu)                      01_applic/modules/ins/ins.c      20 ms 没更新 = IMU 未就绪
-├─ 2. safety_gate_update(&safety_gate, ...)     01_applic/system/safety_gate.c   → stop_all（全车停）
-├─ 3. 全车停：chassis_stop(&chassis)            01_applic/modules/chassis/chassis.c  只读实测、清积分
-│     能动：摇杆换算成 cmd（本文件）→ chassis_step(&chassis, &cmd, scale)
-│  └─ chassis_step(&chassis, ...)               01_applic/modules/chassis/chassis.c
-│     ├─ chassis_measure_update()               读 4 个电机实测（motor_read_feedback）→ 正解出底盘速度
-│     ├─ （全车停）chassis_stop()               清积分，目标对齐实测，不写指令
-│     ├─ chassis_target_update()                斜坡限加速度 → 逆解出每个轮子的目标转速（omni_inverse）
-│     └─ chassis_output_update()                每轮速度环 pid_step → motor_set_torque
-└─ 4. 发送
+│  ├─ ins_read(&ins, &imu)                      01_applic/modules/ins/ins.c      20 ms 没更新 = IMU 未就绪
+│  └─ chassis_measure_update(&chassis)          01_applic/modules/chassis/chassis.c  读 4 个电机实测（motor_read_feedback）→ 正解出底盘速度
+├─ 2. control_target_update()                  算目标
+│  ├─ safety_gate_update(&safety_gate, ...)     01_applic/system/safety_gate.c   → stop_all（全车停）
+│  ├─ 能动：摇杆换算成目标底盘速度（满杆速度在本文件顶部）
+│  └─ chassis_target_update(&chassis, &vel, stop_all)  斜坡限加速度 → 逆解出每个轮子的目标转速（按 .type 选 omni_inverse 等）；
+│                                                       全车停：目标对齐实测
+└─ 3. control_output_update()                  算输出并发送
+   ├─ chassis_output_update(&chassis, scale)   每轮速度环 pid_step → motor_set_torque；全车停：只清积分、不写指令
    ├─ （全车停）motor_group_apply_stop_all()    02_devices/motor/motor.c   每个电机改写成它的停机动作
    └─ motor_group_send(&motors)                02_devices/motor/motor.c
       ├─ 1. 确定指令：final_output()             每个电机最终发什么：停机动作 > 没写指令 > 离线 > 力矩
@@ -118,8 +117,9 @@ for (;;)
       └─ 4. 清理                               清空本周期指令：下个周期不写就发零力矩
 ```
 
-和老模板一一对应：`chassis_measure_update` ↔ `Control_Measure_Update`，`chassis_target_update` ↔ `Control_Target_Update`，
-`chassis_output_update` ↔ `Control_Info_Update`，`motor_group_send` ↔ `CAN_Task` 里拆字节发送。
+和老模板一一对应：`control_info` ↔ `Control_Info`，`control_measure_update` ↔ `Control_Measure_Update`，
+`control_target_update` ↔ `Control_Target_Update`，`control_output_update` ↔ `Control_Info_Update`，
+`motor_group_send` ↔ `CAN_Task` 里拆字节发送。底盘的三步（`chassis_*_update`）各在对应的一步里调用（ADR 0070）。
 
 ### ins_task（1 kHz）：`01_applic/tasks/ins_task.c:ins_task_entry`
 

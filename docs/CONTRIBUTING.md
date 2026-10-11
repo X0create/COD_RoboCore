@@ -79,7 +79,8 @@
 | 想做的事 | 去哪里 |
 | --- | --- |
 | 改电机 ID、CAN 总线、方向、停机动作 | `01_applic/config/robot.h` 的电机表 |
-| 调底盘 PID、改尺寸、满杆速度 | `01_applic/config/robot.h` |
+| 调底盘 PID、改尺寸 | `01_applic/config/robot.h` |
+| 改遥控满杆速度 | `01_applic/tasks/control_task.c` 顶部 |
 | 改解锁 / 急停的拨杆、IMU 安装方向 | `01_applic/config/robot.h` |
 | 其他参数（超时、加热、EKF 噪声……）在哪 | `01_applic/README.md`“参数在哪里”表，**每个参数只在一处定义** |
 | 改每个控制周期做什么 | `01_applic/tasks/control_task.c` |

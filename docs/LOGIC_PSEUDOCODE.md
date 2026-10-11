@@ -32,11 +32,11 @@
 | --- | --- |
 | `system/app_main.c/.h` | 上电顺序：DWT 计时 → RTT 日志 → `robot_init()` → 按任务表建任务；`startup_task` 允许解锁后删除自己（第 1 节） |
 | `system/safety_gate.c/.h` | 安全门：Init → Safe → Manual，决定这一周期是否全车停（第 6 节） |
-| `config/robot.h` | 这台车的全部可调参数（电机表、底盘尺寸与 PID、满杆速度、解锁拨杆、IMU 安装方向）和全部对象的声明 |
+| `config/robot.h` | 这台车的全部可调参数（电机表、底盘尺寸与 PID、解锁拨杆、IMU 安装方向）和全部对象的声明 |
 | `config/robot.c` | 这台车的全部对象（遥控、IMU、电机、底盘）、`robot_init()`、任务表（6 个任务的名字、入口、优先级、栈） |
 | `tasks/ins_task.c/.h` | 1 ms：初始化 BMI088，循环调用 `ins_step()`，把事件写进日志（第 4 节） |
 | `tasks/comm_rx_task.c/.h` | 收到数据就运行：打开 CAN、串口接收，把数据交给电机、DR16 解析；CAN bus-off 恢复（第 3 节） |
-| `tasks/control_task.c/.h` | 1 ms：读输入 → 安全门 → 底盘 → 发电机指令（第 5 节） |
+| `tasks/control_task.c` | 1 ms：读实测 → 算目标（安全门、摇杆）→ 算输出并发电机指令（第 5 节） |
 | `tasks/detect_task.c/.h` | 10 ms：打印设备上线 / 离线，只报告不停车（第 9 节） |
 | `tasks/indicator_task.c/.h` | 25 ms：状态灯、蜂鸣器、电池电压与低电量（第 9 节） |
 | `tasks/log_task.c/.h` | 1 s：通过 RTT 打印整车状态（第 9 节） |
@@ -151,7 +151,7 @@
    ┌──────────── 6 个任务同时运行，各自按周期 ────────────┐
    │ ins_task      1 ms   读 IMU → 算姿态 → 保存最新姿态    │
    │ comm_rx_task  有数据  解析遥控、电机反馈                 │
-   │ control_task  1 ms   读输入 → 安全门 → 底盘 → 发电机指令 │
+   │ control_task  1 ms   读实测 → 算目标 → 算输出并发电机指令 │
    │ detect_task   10 ms  打印设备上线 / 离线                │
    │ indicator_task 25 ms 灯、蜂鸣器、低电量                 │
    │ log_task      1 s    打印状态                          │
@@ -266,21 +266,21 @@ CAN 接收中断（收到一帧）                                → 05_platfor
 
 ```
 永远循环（每 1 ms）：                                   → 01_applic/tasks/control_task.c:control_task_entry
-    now = 当前时刻
+    （这一拍读到的和决定的都存进 control_info）
 
-    【第 1 步 读输入】
+    【第 1 步 读实测】                                   → control_measure_update
     rc  = dr16_read()：整份拷贝最新一帧；超过 200 ms 没更新 → 遥控丢失
     imu = ins_read()：整份拷贝最新姿态；超过 20 ms 没更新 → IMU 未就绪
+    底盘读实测（见第 7 节）
 
-    【第 2 步 安全门】                                   → 01_applic/system/safety_gate.c:safety_gate_update
-    （见第 6 节）得到 stop_all（这一周期是否全车停）
-
-    【第 3 步 底盘】
+    【第 2 步 算目标】                                   → control_target_update
+    安全门（见第 6 节）得到 stop_all（这一周期是否全车停）
     如果 stop_all：目标速度 = 0
-    否则：目标速度 = 摇杆换算（ch[3] 前后、ch[2] 左右、ch[0] 旋转，满杆速度见 robot.h）
-    底盘计算（见第 7 节），解锁后 300 ms 内输出限幅从 0 逐渐升到 1 倍
+    否则：目标速度 = 摇杆换算（ch[3] 前后、ch[2] 左右、ch[0] 旋转，满杆速度在 control_task.c 顶部）
+    底盘算目标（见第 7 节）
 
-    【第 4 步 发送】
+    【第 3 步 算输出并发送】                             → control_output_update
+    底盘算输出（见第 7 节），解锁后 300 ms 内输出限幅从 0 逐渐升到 1 倍
     如果 stop_all：把每个电机改写成它的停机动作（轮子 = 零力矩）
     电机组发送（见第 8 节）
 
@@ -316,23 +316,21 @@ safety_gate_update(遥控, IMU 是否就绪, now)：           → 01_applic/sys
 ## 7. 底盘：一次计算
 
 ```
-chassis_step(目标速度, 输出比例)（全车停时改调 chassis_stop：只读实测、清积分）：            → 01_applic/modules/chassis/chassis.c:chassis_step
-    【读实测】
+底盘三步，由 control_task 的三步分别调用：                   → 01_applic/modules/chassis/chassis.c
+    【读实测】chassis_measure_update
     对 4 个轮子：拷贝电机反馈；20 ms 内收到过反馈才算在线
     全部在线 → 用运动学正解算出底盘当前速度；否则当前速度记为 0
 
+    【算目标】chassis_target_update(目标速度, stop_all)
     如果 stop_all：
         目标速度 = 当前实测速度（解锁时不会突然跳变）
-        清掉所有 PID 积分
-        不写任何电机指令
-        结束
-
-    【算目标】
+        记下 stop_all，结束
     有电机离线 → 目标改为 0（机构停：车受控减速）
     斜坡：平移加速度不超过 max_accel、旋转加速度不超过 max_alpha
     运动学逆解：底盘速度 → 每个轮子的目标转速（全向轮 / 麦轮 / 舵轮）
 
-    【算输出】
+    【算输出】chassis_output_update(输出比例)
+    如果 stop_all：清掉所有 PID 积分，不写任何电机指令，结束
     对每个轮子：
         在线 → 速度环 PID（目标转速 vs 实测转速）→ 力矩，按“PID 限幅 × 输出比例”限幅 → 记下这个电机本周期的力矩指令
         离线 → 清积分，不写指令（发送时会发零力矩）

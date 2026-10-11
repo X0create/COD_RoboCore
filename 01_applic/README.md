@@ -25,7 +25,7 @@
 
 ```
 config/
-├── robot.h   全部参数（电机表、底盘尺寸与 PID、满杆速度、解锁拨杆、IMU 安装方向）≈ Config.h
+├── robot.h   全部参数（电机表、底盘尺寸与 PID、解锁拨杆、IMU 安装方向）≈ Config.h
 │             + 全部对象的声明                                                ≈ 全局变量
 └── robot.c   对象定义 + robot_init()（设备 → 机构 → 安全门）+ 任务表 task_table[]（6 个任务的优先级、栈）≈ freertos.c 任务列表
 ```
@@ -50,7 +50,8 @@ config/
 | --- | --- | --- |
 | 电机 ID、方向、总线、停机动作 | `config/robot.h` 的电机表（如 `wheel_config`） | comm_rx_task 把每一帧交给电机组（`motor_group_receive`），总线不在别处重复 |
 | 底盘尺寸、加速度、速度环 PID | `config/robot.h` 的 `chassis_config` | PID 不带 dt，和 1 kHz 绑定（ADR 0029） |
-| 满杆速度、解锁拨杆、IMU 安装方向 | `config/robot.h` | |
+| 遥控满杆速度 | `tasks/control_task.c` 顶部 | 只在那里用，挨着摇杆换算（ADR 0070） |
+| 解锁拨杆、IMU 安装方向 | `config/robot.h` | |
 | 串口接线（哪个串口接什么） | `tasks/comm_rx_task.c` 开头 | |
 | 任务优先级、栈大小 | `config/robot.c` 的 `task_table[]` | |
 | 电池：分压比、低电量阈值 | `tasks/indicator_task.c` 的 `battery_config` | 板子和电池的属性，通用（ADR 0038） |

@@ -162,7 +162,7 @@ COD_RoboCore/
 | --- | --- | --- | --- |
 | `ins_task` | 1 kHz | 6（最高） | 读 BMI088，零偏标定与在线修正，四元数 EKF 算姿态，IMU 恒温加热，保存最新姿态（`ins_read()` 读） |
 | `comm_rx_task` | 有数据就运行 | 5 | 中断收到 CAN 帧 / 串口字节 / USB 数据后被唤醒，交给对应设备解析；CAN bus-off 恢复 |
-| `control_task` | 1 kHz | 4 | 读输入 → 安全门 → 各机构计算 → 全车停改写 → 发电机指令（下图 ①–⑤） |
+| `control_task` | 1 kHz | 4 | 读实测 → 算目标（安全门、各机构目标）→ 算输出（全车停改写、发电机指令）（下图 ①–⑤） |
 | `detect_task` | 100 Hz | 3 | 报告设备上线 / 离线（只报告，不参与安全判断） |
 | `indicator_task` | 40 Hz | 2 | 状态灯、蜂鸣器、低电量检查 |
 | `log_task` | 1 Hz | 1 | 通过 RTT 打印这台车的状态 |
@@ -223,7 +223,7 @@ CMake 报“CMakeCache.txt directory is different”时，删掉对应的 `build
 
 1. 改 `config/robot.h`：电机表（CAN 总线、ID、方向、停机动作）、PID、尺寸、解锁拨杆、IMU 安装方向。
 2. 改 `config/robot.c`：定义对象、在 `robot_init()` 里初始化设备和机构，`robot.h` 同步声明；加任务时改同一文件的 `task_table[]`，入口声明在 `tasks/tasks.h`。电机 `motor_init()` 时就进了电机组，CAN 接收不用改。
-3. 改 `01_applic/tasks/control_task.c`：每个控制周期做什么（读输入 → 安全门 → 各机构 → 发送，四步写在循环里）；
+3. 改 `01_applic/tasks/control_task.c`：每个控制周期做什么（读实测 → 算目标 → 算输出，三步各一个函数，照老模板 Control_Task）、遥控满杆速度；
    `tasks/comm_rx_task.c` 改接线，`tasks/log_task.c` 改打印内容。各任务的调用关系见 `docs/CALL_FLOW.md`。
 4. 需要新机构（云台、发射……）时在 `01_applic/modules/` 里加，再在第 2、3 步里接上。
 5. 加了新的 `.c` 文件：在 CMake 里加，Keil 里拖进对应分组（或运行 `python3 tools/keil_sync.py`）。

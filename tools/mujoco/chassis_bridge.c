@@ -1,6 +1,6 @@
 /**
  * @file    chassis_bridge.c
- * @brief   虚拟反馈 → 原安全门 / chassis_step → 原电机发送出口 → 虚拟 CAN 力矩
+ * @brief   虚拟反馈 → 原安全门 / chassis 三步 → 原电机发送出口 → 虚拟 CAN 力矩
  */
 #include "chassis_bridge.h"
 
@@ -138,14 +138,12 @@ void chassis_bridge_step(const ChassisBridgeInput *in, ChassisBridgeOutput *out)
     const SafetyDecision decision = safety_gate_update(
         &safety_gate, in->rc_online != 0u ? &rc : NULL, in->imu_ready != 0u, in->now_us);
     const ChassisVel cmd = { .vx_m_s = in->cmd[0], .vy_m_s = in->cmd[1], .wz_rad_s = in->cmd[2] };
+    chassis_measure_update(&sim_chassis);
+    chassis_target_update(&sim_chassis, &cmd, decision.stop_all);
+    chassis_output_update(&sim_chassis, safety_gate_output_scale(&safety_gate, in->now_us));
     if (decision.stop_all)
     {
-        chassis_stop(&sim_chassis);
         motor_group_apply_stop_all(&sim_motors);
-    }
-    else
-    {
-        chassis_step(&sim_chassis, &cmd, safety_gate_output_scale(&safety_gate, in->now_us));
     }
     motor_group_send(&sim_motors);
     for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)

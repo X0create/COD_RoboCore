@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | `ins_task` | 1 ms | 读 IMU，算姿态 |
 | `comm_rx_task` | 收到数据就跑 | 收遥控器和电机反馈 |
-| `control_task` | 1 ms | **核心**：读输入 → 判断能不能动 → 算底盘 → 发给电机 |
+| `control_task` | 1 ms | **核心**：读实测 → 算目标（先判断能不能动）→ 算输出并发给电机 |
 | `detect_task` | 10 ms | 报告哪个设备上线、掉线 |
 | `indicator_task` | 25 ms | 状态灯、蜂鸣器、电池电压 |
 | `log_task` | 1 s | 通过 RTT 打印状态 |
@@ -28,7 +28,7 @@
 | --- | --- | --- |
 | 1 | `01_applic/config/robot.h` | 这台车有哪些电机、什么参数、有哪些对象 |
 | 2 | `01_applic/config/robot.c` | 对象怎么初始化（`robot_init()`），最下面是任务表：6 个任务的优先级、栈大小 |
-| 3 | `01_applic/tasks/control_task.c` | **最重要**，约 60 行。循环里写着 1、2、3、4 四步，从上往下读 |
+| 3 | `01_applic/tasks/control_task.c` | **最重要**，约 120 行。循环里只有三步：读实测、算目标、算输出，每步一个函数，和老模板 Control_Task 一样 |
 | 4 | `01_applic/tasks/comm_rx_task.c` | 遥控器和电机的数据从哪来 |
 | 5 | `01_applic/tasks/` 里其余的任务 | 每个都很短；入口函数都声明在 `tasks.h` |
 
@@ -36,14 +36,15 @@
 
 ## 第三步：需要时再往下钻
 
-只顺着 `control_task.c` 循环里那四步往下点：
+只顺着 `control_task.c` 那三步往下点：
 
 | 步骤 | 往下看 | 讲的是什么 |
 | --- | --- | --- |
-| 1. 读输入 | `02_devices/remote/dr16.c` 的 `dr16_read()`、`01_applic/modules/ins/ins.c` 的 `ins_read()` | 遥控、姿态怎么读；多久没更新算掉线 |
-| 2. 安全门 | `01_applic/system/safety_gate.c` | 什么情况下全车停：急停、遥控丢失、未解锁、IMU 未就绪 |
-| 3. 底盘 | `01_applic/modules/chassis/chassis.c` 的 `chassis_step()` → `03_algorithm/kinematics/omni.c`、`03_algorithm/control/pid.c` | 速度怎么分到四个轮子，PID 怎么算出力矩 |
-| 4. 发送 | `02_devices/motor/motor.c` 的 `motor_group_send()` | 每个电机最终发什么（停机 > 没写指令 > 离线 > 力矩），怎么打包成 CAN 帧 |
+| 1. 读实测 | `02_devices/remote/dr16.c` 的 `dr16_read()`、`01_applic/modules/ins/ins.c` 的 `ins_read()`、`chassis.c` 的 `chassis_measure_update()` | 遥控、姿态、电机怎么读；多久没更新算掉线 |
+| 2. 算目标：安全门 | `01_applic/system/safety_gate.c` | 什么情况下全车停：急停、遥控丢失、未解锁、IMU 未就绪 |
+| 2. 算目标：底盘 | `01_applic/modules/chassis/chassis.c` 的 `chassis_target_update()` → `03_algorithm/kinematics/omni.c` | 速度怎么分到四个轮子 |
+| 3. 算输出 | `chassis.c` 的 `chassis_output_update()` → `03_algorithm/control/pid.c` | PID 怎么算出力矩 |
+| 3. 发送 | `02_devices/motor/motor.c` 的 `motor_group_send()` | 每个电机最终发什么（停机 > 没写指令 > 离线 > 力矩），怎么打包成 CAN 帧 |
 
 刚开始可以完全跳过：`05_platform/`、`06_boards/`、`04_core/log/segger_rtt/`、`tests/host/unity/`。
 它们是和芯片、第三方库打交道的底层，平时不用改。
@@ -59,8 +60,9 @@
  → 拼成 18 字节一帧，校验后存进 dr16             02_devices/remote/dr16.c：dr16_on_bytes() → dr16_decode()
  → control_task 读出最新一帧                    01_applic/tasks/control_task.c：dr16_read()
  → 安全门判断能不能动                           01_applic/system/safety_gate.c：safety_gate_update()
- → 摇杆换算成底盘速度                           01_applic/tasks/control_task.c：循环第 3 步
- → 速度分到四个轮子，PID 算出力矩，写进电机      01_applic/modules/chassis/chassis.c：chassis_step()
+ → 摇杆换算成底盘速度                           01_applic/tasks/control_task.c：control_target_update()
+ → 速度分到四个轮子                             01_applic/modules/chassis/chassis.c：chassis_target_update()
+ → PID 算出力矩，写进电机                        01_applic/modules/chassis/chassis.c：chassis_output_update()
                                                   → omni_inverse()、pid_step()、motor_set_torque()
  → 全部电机的指令打包成 CAN 帧发出去             02_devices/motor/motor.c：motor_group_send() → can_send()
 ```

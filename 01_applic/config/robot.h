@@ -79,32 +79,26 @@ static const MotorConfig wheel_config[CHASSIS_WHEELS] = {
 
 /*
  * X 形四轮全向轮。轮半径、中心距待量；加速度先取保守值，台架整定。
- * 速度环沿用旧工程（COD-H7-Template Control_Task.c）的底盘参数，换算到国际单位：
- * kp 13、ki 0.1、积分限幅 5000 rpm、输出限幅 12000 电流原始值（换算常数在 02_devices/motor/motor.h）
+ * 速度环沿用旧工程（COD-H7-Template Control_Task.c）的底盘参数，已换算成国际单位（输出轴 rad/s → N·m）：
+ *   旧值 kp 13、ki 0.1（rpm → 电流原始值）、积分限幅 5000 rpm、输出限幅 12000 电流原始值；
+ *   换算：输出轴 1 rad/s = 转子 183.38 rpm，1 N·m = 2730.7 电流原始值（M3508 + C620，02_devices/motor/motor.h）
  */
 static const ChassisConfig chassis_config = {
     .type = CHASSIS_OMNI,
     .omni = { .wheel_radius_m = 0.076f, .center_dist_m = 0.25f, .first_wheel_rad = RM_PI / 4.0f },
     .max_accel_m_s2 = 2.0f,
     .max_alpha_rad_s2 = 4.0f,
-    .drive_speed_pid = { .kp = 13.0f * DJI_M3508_RPM_PER_RAD_S / DJI_M3508_RAW_PER_NM,
-                         .ki = 0.1f * DJI_M3508_RPM_PER_RAD_S / DJI_M3508_RAW_PER_NM,
-                         .integral_limit = 5000.0f / DJI_M3508_RPM_PER_RAD_S,
-                         .output_limit = 12000.0f / DJI_M3508_RAW_PER_NM },
+    .drive_speed_pid = { .kp = 0.8730f,             /* N·m 每 rad/s */
+                         .ki = 0.006715f,           /* N·m 每 rad/s，每 1 ms 累加一次 */
+                         .integral_limit = 27.27f,  /* rad/s */
+                         .output_limit = 4.3945f }, /* N·m */
 };
 
 /* ------------------------------------------------------------------ */
 /* 遥控                                                                */
 /* ------------------------------------------------------------------ */
 
-/*
- * 遥控 → 底盘速度（满杆时的速度）。第一版底盘直接读遥控（ADR 0043）：
- * 左摇杆上下 ch[3] → 前后，左摇杆左右 ch[2] → 左右，右摇杆左右 ch[0] → 旋转；
- * 通道对应沿用旧工程编号，待 V11 核对。首次上台架先用小值
- */
-static const float max_vx_m_s = 1.0f;
-static const float max_vy_m_s = 1.0f;
-static const float max_wz_rad_s = 2.0f;
+/* 遥控满杆对应的底盘速度在 01_applic/tasks/control_task.c 顶部（只有那里用） */
 
 /* 解锁 / 急停拨杆：右拨杆 sw[1]（ADR 0032；左右以 V11 上板核对为准） */
 static const uint8_t arm_switch = 1u;
