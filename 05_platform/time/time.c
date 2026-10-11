@@ -1,8 +1,8 @@
 /**
  * @file    time.c
- * @brief   time 的芯片实现共用的辅助代码（与芯片无关，电脑上测试），见 time.h 末尾一节
+ * @brief   time 的芯片实现共用的辅助代码（与芯片无关，电脑上测试），见 time_internal.h
  */
-#include "time.h"
+#include "time_internal.h"
 
 void cycle_extend_init(CycleExtend *ext, uint32_t raw)
 {

@@ -4,6 +4,7 @@
  * @note    做法参考 COD_UniCFramework `impl_stm32_dwt.c`（Cortex-M7 的 DWT 解锁）
  */
 #include "05_platform/time/time.h"
+#include "05_platform/time/time_internal.h"
 
 #include <stm32h7xx.h>
 

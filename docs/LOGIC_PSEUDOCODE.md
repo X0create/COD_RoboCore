@@ -108,7 +108,7 @@
 | `spi/spi.h`、`spi_stm32h7.c` | SPI 阻塞传输，设备按用途命名（`SPI_DEV_IMU_ACCEL` 等） |
 | `pwm/pwm.h`、`pwm_stm32h7.c` | PWM 输出，通道按用途命名（`PWM_IMU_HEATER` 等），设置占空比和频率 |
 | `adc/adc.h`、`adc_stm32h7.c` | ADC DMA 连续采样，读引脚电压 |
-| `time/time.h`、`time_stm32h7.c` | 全工程唯一的时间基准：上电以来的微秒数（DWT） |
+| `time/time.h`、`time_stm32h7.c`（`time_internal.h` 是芯片实现共用的内部辅助） | 全工程唯一的时间基准：`rm_time_init()` 以来的微秒数（DWT，初始化时清零） |
 | `time/time.c` | 辅助：把会回绕的 32 位周期计数扩展成 64 位 |
 | `status_led/status_led.h`、`status_led_stm32h7.c` | 板载状态灯（MC02 是 SPI6 上的一颗 WS2812） |
 | `status_led/status_led.c` | 辅助：WS2812 颜色到 SPI 字节的编码 |

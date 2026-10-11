@@ -2,7 +2,7 @@
  * @file    test_time.c
  * @brief   cycle_extend（time 的辅助代码）的单元测试：正常前进、跨过回绕、连续多圈
  */
-#include "05_platform/time/time.h"
+#include "05_platform/time/time_internal.h"
 
 #include "unity.h"
 

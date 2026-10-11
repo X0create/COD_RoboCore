@@ -40,12 +40,13 @@ void app_main(void)
 {
     const bool time_ok = rm_time_init(); /* 1. DWT 计时 */
     rm_log_init();                       /* 2. RTT 日志 */
-    RM_LOG_I("COD RoboCore booting");
     if (!time_ok)
     {
-        RM_LOG_E("DWT cycle counter not running");
+        /* 时间基准不可用：RM_LOG_* 的时间戳要读 rm_time_now_us()，这里只能用不带时间戳的输出 */
+        RM_LOG_E_NO_TIME("DWT cycle counter not running");
         halt_on_init_failure();
     }
+    RM_LOG_I("COD RoboCore booting");
 
     /* 读故障记录、board_init、参数在阶段 1 加入 */
 

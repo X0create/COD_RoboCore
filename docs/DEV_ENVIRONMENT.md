@@ -444,7 +444,7 @@ RTT 之前，或者板上还是旧程序时，程序跑起来后就会停止。
 注意：Terminal 窗口底部的输入框是**发给单片机的 RTT 数据**，Ozone 命令要输在 Console 窗口的输入框里；
 输错时会报 `... could not be written to target's real time transfer buffer`。
 
-正常输出：`booting` → `starting scheduler` → `startup done` → 每 500 ms 一行 `alive N`，左边是上电以来的毫秒数。
+正常输出：`booting` → `starting scheduler` → `startup done` → 每 500 ms 一行 `alive N`，左边是 `rm_time_init()` 以来的毫秒数（不含此前的启动时间）。
 
 Console 里在程序跑到 `rm_log_init()` 之前会刷 `RTT: Failed to load RTT control block at address ...`，这是正常的：
 RTT 控制块在运行时才写好。地址应与 ELF 中 `_SEGGER_RTT` 一致（2026-09-28 为 `0x2000322C`）。
