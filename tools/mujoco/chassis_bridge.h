@@ -22,7 +22,6 @@ typedef struct
     uint32_t feedback_mask; /* 位 0–3：驱动轮反馈；位 4–7：对应轮的转向反馈 */
     uint32_t armed; /* 虚拟拨杆：0 = 下，非 0 = 中；仍由原安全门处理解锁边沿 */
     uint32_t rc_online; /* 虚拟遥控在线；不模拟 DR16 串口链路 */
-    uint32_t imu_ready; /* 虚拟 IMU 就绪；不模拟 BMI088 / INS */
 } ChassisBridgeInput;
 
 typedef struct

@@ -46,7 +46,7 @@ void ins_task_entry(void *arg)
 {
     Ins *ins = arg;
     Bmi088Status status;
-    /* BMI088 初始化失败（没接、片选错）就每秒重试；这期间 IMU 未就绪，安全门保持全车停 */
+    /* BMI088 初始化失败（没接、片选错）就每秒重试；这期间 IMU 未就绪，用到 IMU 的机构自己处理（底盘不用，ADR 0073） */
     while ((status = bmi088_init(&ins->imu))
            != BMI088_OK) /* 复位、查芯片 ID、配量程，阻塞约 170 ms */
     {

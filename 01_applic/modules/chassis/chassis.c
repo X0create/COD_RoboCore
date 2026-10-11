@@ -65,15 +65,16 @@ void chassis_measure_update(Chassis *chassis)
         MotorFeedback fb;
         m->drive_online[i] = motor_read_feedback(chassis->drive[i], &fb);
         m->drive_speed_rad_s[i] = fb.speed_rad_s;
-        m->all_online = m->all_online && m->drive_online[i];
+        m->wheel_ok[i] = m->drive_online[i];
 
         if (has_steer_motor(cfg, i))
         {
             m->steer_online[i] = motor_read_feedback(chassis->steer[i], &fb);
             m->heading_rad[i] = fb.angle_rad - cfg->steer.zero_rad[i];
             m->steer_speed_rad_s[i] = fb.speed_rad_s;
-            m->all_online = m->all_online && m->steer_online[i];
+            m->wheel_ok[i] = m->wheel_ok[i] && m->steer_online[i];
         }
+        m->all_online = m->all_online && m->wheel_ok[i];
     }
 
     /* 正解出实测底盘速度；有电机离线时各轮数据不全，记为 0 */
@@ -152,13 +153,16 @@ void chassis_target_update(Chassis *chassis, const ChassisVel *cmd, bool stop_al
         return;
     }
 
-    /* 机构停：有电机离线时目标改为 0，下面的斜坡让车受控减速 */
-    const ChassisVel goal = chassis->measure.all_online ? *cmd : (ChassisVel){ 0 };
+    /* 降级：有轮子不能用时其余轮子继续，目标速度和加速度都打折（ADR 0073） */
+    const float scale = chassis->measure.all_online ? 1.0f : CHASSIS_DEGRADED_SCALE;
+    const ChassisVel goal = { .vx_m_s = cmd->vx_m_s * scale,
+                              .vy_m_s = cmd->vy_m_s * scale,
+                              .wz_rad_s = cmd->wz_rad_s * scale };
 
     /* 斜坡：限制加速度 */
-    ramp_translation(&t->velocity, &goal, cfg->max_accel_m_s2 * CHASSIS_PERIOD_S);
-    t->velocity.wz_rad_s =
-        ramp_step(t->velocity.wz_rad_s, goal.wz_rad_s, cfg->max_alpha_rad_s2 * CHASSIS_PERIOD_S);
+    ramp_translation(&t->velocity, &goal, cfg->max_accel_m_s2 * scale * CHASSIS_PERIOD_S);
+    t->velocity.wz_rad_s = ramp_step(t->velocity.wz_rad_s, goal.wz_rad_s,
+                                     cfg->max_alpha_rad_s2 * scale * CHASSIS_PERIOD_S);
 
     /* 逆解：底盘速度 → 各轮目标 */
     switch (cfg->type)
@@ -205,7 +209,7 @@ static float clamp(float x, float limit)
     return (x > limit) ? limit : ((x < -limit) ? -limit : x);
 }
 
-/* 离线的电机不写指令（电机组会填零力矩），并清积分，恢复时不猛冲 */
+/* 不能用的轮子、离线的转向电机不写指令（电机组会填零力矩），并清积分，恢复时不猛冲 */
 void chassis_output_update(Chassis *chassis, float output_scale)
 {
     const ChassisConfig *cfg = chassis->cfg;
@@ -228,8 +232,8 @@ void chassis_output_update(Chassis *chassis, float output_scale)
 
     for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
     {
-        /* 驱动轮：速度环 */
-        if (m->drive_online[i])
+        /* 驱动轮：速度环（转向电机离线的舵轮也不驱动：朝向不受控） */
+        if (m->wheel_ok[i])
         {
             const float torque_nm =
                 pid_step(&chassis->drive_pid[i], t->drive_speed_rad_s[i], m->drive_speed_rad_s[i]);

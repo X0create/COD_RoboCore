@@ -3,12 +3,12 @@
  * @brief   安全门：决定整车能不能动（全车停），以及 Init → Safe → Manual 模式（运行时契约第 5 节、ADR 0026）
  * @note    纯逻辑，control_task 每个周期调用一次 safety_gate_update()，电脑上可测。
  *
- *          全车停的条件：尚未启动完成、遥控丢失、急停、尚未解锁、IMU 未就绪。
- *          - 急停：解锁拨杆在“下”（电平信号，每个周期重新判断）；
- *          - 解锁：在 Safe 模式、遥控在线时先看到拨杆在“下”，再拨到“中”或“上”；
- *          - 回到 Safe 后必须重新做一次解锁动作；遥控恢复、上电时拨杆已在上方，都不会自己动起来。
- *          - IMU 未就绪（ins_read() 返回 false）：全车停并回到 Safe，恢复后同样要重新解锁。
- *          机构停（本机构设备离线）不在这里，由子系统自己处理。
+ *          赛场上优先保证车能继续跑（ADR 0073）：全车停只有三种情况——尚未启动完成、尚未解锁、急停。
+ *          - 急停：解锁拨杆在“下”（电平信号，每个周期重新判断），回到 Safe，之后要重新解锁；
+ *          - 解锁：在 Safe 模式、遥控在线时先看到拨杆在“下”，再拨到“中”或“上”；上电时拨杆已在上方不会自己动起来；
+ *          - 遥控丢失：Manual 下**不**全车停、不退出 Manual，由 control_task 把目标速度改为 0、底盘按斜坡减速；
+ *            遥控恢复、拨杆不在“下”就直接继续（不用重新解锁）。Safe 下丢失期间的拨杆位置不作数。
+ *          IMU 状态不在这里：只影响用到 IMU 的机构。机构降级（本机构设备离线）由子系统自己处理。
  */
 #pragma once
 
@@ -61,11 +61,9 @@ void safety_gate_set_system_ready(SafetyGate *gate);
 
 /**
  * @brief   每个控制周期调用一次
- * @param   rc         本周期读到的遥控数据；遥控丢失（dr16_read 返回 false）时传 NULL
- * @param   imu_ready  本周期 ins_read() 是否读到（IMU 就绪）
+ * @param   rc  本周期读到的遥控数据；遥控丢失（dr16_read 返回 false）时传 NULL
  */
-SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, bool imu_ready,
-                                  uint64_t now_us);
+SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, uint64_t now_us);
 
 /** 模式的名字（"init" / "safe" / "manual"），用于日志 */
 const char *safety_gate_mode_name(SafetyMode mode);

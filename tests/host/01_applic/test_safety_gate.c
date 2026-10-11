@@ -1,6 +1,7 @@
 /**
  * @file    test_safety_gate.c
- * @brief   安全门的单元测试：启动前不能解锁、必须先拨下再拨上、急停、遥控丢失、IMU 未就绪、重新解锁、输出斜坡
+ * @brief   安全门的单元测试：启动前不能解锁、必须先拨下再拨上、急停与重新解锁、
+ *          遥控丢失不全车停且恢复后直接继续（ADR 0073）、输出斜坡
  */
 #include "01_applic/system/safety_gate.h"
 
@@ -8,13 +9,11 @@
 
 static SafetyGate gate;
 static uint64_t now_us;
-static bool imu_ready;
 
 void setUp(void)
 {
     safety_gate_init(&gate, 1u); /* 右拨杆 sw[1] */
     now_us = 1000000u;
-    imu_ready = true;
 }
 
 void tearDown(void)
@@ -34,7 +33,7 @@ static SafetyDecision step(bool online, RcSwitch arm)
 {
     const RcState rc = rc_with(arm, RC_SW_MID);
     now_us += 1000u;
-    return safety_gate_update(&gate, online ? &rc : NULL, imu_ready, now_us);
+    return safety_gate_update(&gate, online ? &rc : NULL, now_us);
 }
 
 static void arm(void)
@@ -75,17 +74,26 @@ static void test_estop_then_rearm(void)
     TEST_ASSERT_FALSE(step(true, RC_SW_UP).stop_all); /* 拨下再拨上：重新解锁 */
 }
 
-/* 遥控丢失后恢复：拨杆仍在上方也不动，要重新拨一次 */
-static void test_rc_lost_requires_rearm(void)
+/* 遥控丢失：不全车停、留在 Manual（control_task 把目标改为 0 减速）；恢复后拨杆不在下就直接继续 */
+static void test_rc_lost_keeps_manual_and_resumes(void)
 {
     safety_gate_set_system_ready(&gate);
     step(true, RC_SW_UP);
     arm();
-    TEST_ASSERT_TRUE(step(false, RC_SW_UP).stop_all);
-    TEST_ASSERT_TRUE(step(true, RC_SW_UP).stop_all);
-    TEST_ASSERT_TRUE(step(true, RC_SW_UP).stop_all);
-    step(true, RC_SW_DOWN);
-    TEST_ASSERT_FALSE(step(true, RC_SW_UP).stop_all);
+    TEST_ASSERT_FALSE(step(false, RC_SW_UP).stop_all);
+    TEST_ASSERT_EQUAL_INT(SAFETY_MODE_MANUAL, gate.mode);
+    TEST_ASSERT_FALSE(step(true, RC_SW_UP).stop_all); /* 恢复：不用重新解锁 */
+}
+
+/* 遥控丢失后恢复时拨杆已在下：照常急停 */
+static void test_rc_restored_with_switch_down_is_estop(void)
+{
+    safety_gate_set_system_ready(&gate);
+    step(true, RC_SW_UP);
+    arm();
+    step(false, RC_SW_UP);
+    TEST_ASSERT_TRUE(step(true, RC_SW_DOWN).stop_all);
+    TEST_ASSERT_EQUAL_INT(SAFETY_MODE_SAFE, gate.mode);
 }
 
 /* Safe 里看到过“下”，但随后遥控丢失：恢复后不能凭旧记录解锁 */
@@ -106,28 +114,7 @@ static void test_only_configured_switch_counts(void)
     arm();
     const RcState rc = rc_with(RC_SW_UP, RC_SW_DOWN);
     now_us += 1000u;
-    TEST_ASSERT_FALSE(safety_gate_update(&gate, &rc, true, now_us).stop_all);
-}
-
-/* IMU 未就绪：不能解锁；运行中失去 IMU 立即全车停，恢复后要重新解锁 */
-static void test_imu_not_ready_stops_and_requires_rearm(void)
-{
-    safety_gate_set_system_ready(&gate);
-    imu_ready = false;
-    step(true, RC_SW_UP);
-    step(true, RC_SW_DOWN);
-    TEST_ASSERT_TRUE(step(true, RC_SW_UP).stop_all); /* IMU 未就绪时解锁无效 */
-
-    imu_ready = true;
-    step(true, RC_SW_DOWN);
-    TEST_ASSERT_FALSE(step(true, RC_SW_UP).stop_all);
-
-    imu_ready = false;
-    TEST_ASSERT_TRUE(step(true, RC_SW_UP).stop_all);
-    imu_ready = true;
-    TEST_ASSERT_TRUE(step(true, RC_SW_UP).stop_all); /* 恢复后不自动动 */
-    step(true, RC_SW_DOWN);
-    TEST_ASSERT_FALSE(step(true, RC_SW_UP).stop_all);
+    TEST_ASSERT_FALSE(safety_gate_update(&gate, &rc, now_us).stop_all);
 }
 
 /* 进入 Manual 后 300 ms 内输出比例从 0 线性升到 1 */
@@ -150,10 +137,10 @@ int main(void)
     RUN_TEST(test_cannot_arm_before_system_ready);
     RUN_TEST(test_needs_down_then_up);
     RUN_TEST(test_estop_then_rearm);
-    RUN_TEST(test_rc_lost_requires_rearm);
+    RUN_TEST(test_rc_lost_keeps_manual_and_resumes);
+    RUN_TEST(test_rc_restored_with_switch_down_is_estop);
     RUN_TEST(test_rc_lost_in_safe_forgets_down);
     RUN_TEST(test_only_configured_switch_counts);
-    RUN_TEST(test_imu_not_ready_stops_and_requires_rearm);
     RUN_TEST(test_output_ramp);
     return UNITY_END();
 }

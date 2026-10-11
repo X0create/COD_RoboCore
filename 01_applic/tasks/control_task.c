@@ -33,14 +33,12 @@ typedef struct
     {
         RcState rc;
         bool rc_online; /* 200 ms 内有新帧；不在线时 rc 是旧数据 */
-        ImuState imu;
-        bool imu_ready; /* 标定完成且 20 ms 内有更新 */
     } measure;
     struct
     {
-        SafetyDecision gate;    /* 安全门的结论：stop_all = 全车停 */
-        float output_scale;     /* 输出限幅比例：解锁后从 0 逐渐放开到 1 */
-        ChassisVel chassis_vel; /* 摇杆换算出的目标底盘速度（全车停时为 0） */
+        SafetyDecision gate; /* 安全门的结论：stop_all = 全车停 */
+        float output_scale;  /* 输出限幅比例：解锁后从 0 逐渐放开到 1 */
+        ChassisVel chassis_vel; /* 摇杆换算出的目标底盘速度（全车停、遥控丢失时为 0） */
     } target;
 } ControlInfo;
 
@@ -64,30 +62,28 @@ void control_task_entry(void *arg)
     }
 }
 
-/* 第 1 步 读实测：遥控、IMU、底盘各电机 */
+/* 第 1 步 读实测：遥控、底盘各电机（底盘不用 IMU；IMU 只影响用到它的机构，ADR 0073） */
 static void control_measure_update(ControlInfo *info)
 {
     info->measure.rc_online = dr16_read(&dr16, &info->measure.rc);
-    info->measure.imu_ready = ins_read(&ins, &info->measure.imu);
     chassis_measure_update(&chassis);
 }
 
 /*
  * 第 2 步 算目标：
- *   安全门：急停、遥控丢失、未解锁、IMU 未就绪 → 全车停（stop_all）；
- *   能动时摇杆换算成目标底盘速度（摇杆向右为正，底盘向左、逆时针为正，所以左右和旋转取反），
- *   能动时遥控一定在线（安全门保证），rc 有效；
+ *   安全门：急停、未解锁 → 全车停（stop_all）；
+ *   遥控丢失（不全车停，ADR 0073）→ 目标速度 0，底盘按斜坡减速停下；恢复后直接按摇杆继续；
+ *   否则摇杆换算成目标底盘速度（摇杆向右为正，底盘向左、逆时针为正，所以左右和旋转取反）；
  *   底盘：斜坡 → 逆解出各轮目标（全车停时目标对齐实测速度）
  */
 static void control_target_update(ControlInfo *info)
 {
     const uint64_t now_us = rm_time_now_us();
-    info->target.gate =
-        safety_gate_update(&safety_gate, info->measure.rc_online ? &info->measure.rc : NULL,
-                           info->measure.imu_ready, now_us);
+    info->target.gate = safety_gate_update(
+        &safety_gate, info->measure.rc_online ? &info->measure.rc : NULL, now_us);
     info->target.output_scale = safety_gate_output_scale(&safety_gate, now_us);
 
-    if (info->target.gate.stop_all)
+    if (info->target.gate.stop_all || !info->measure.rc_online)
     {
         info->target.chassis_vel = (ChassisVel){ 0 };
     }

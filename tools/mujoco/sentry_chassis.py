@@ -27,7 +27,7 @@ class BridgeInput(ct.Structure):
                 ("drive_angle_rad", Float4), ("drive_speed_rad_s", Float4),
                 ("steer_angle_rad", Float4), ("steer_speed_rad_s", Float4),
                 ("feedback_mask", ct.c_uint32), ("armed", ct.c_uint32),
-                ("rc_online", ct.c_uint32), ("imu_ready", ct.c_uint32)]
+                ("rc_online", ct.c_uint32)]
 
 
 class BridgeOutput(ct.Structure):
@@ -172,7 +172,6 @@ class Simulation:
         inp.cmd[:] = phase.cmd
         inp.armed = int(phase.armed)
         inp.rc_online = int(phase.rc_online)
-        inp.imu_ready = 1
         inp.feedback_mask = phase.feedback_mask
         for i in range(4):
             joint = self.drive_joints[i]
@@ -234,19 +233,25 @@ def check_result(rows, sim):
             raise RuntimeError(f"Physical chassis tracking failed: {phase.name}")
     for phase in CHECK_PHASES:
         tail = data[(data[:, 0] >= phase.end_s - 0.2) & (data[:, 0] < phase.end_s)]
+        # ADR 0073：轮子离线 → 降级（其余轮子继续，目标打到 CHASSIS_DEGRADED_SCALE = 0.5）
         if phase.name == "wheel_offline":
             if np.any(tail[:, 8] != 0) or np.any(tail[:, 14] != 0):
                 raise RuntimeError("Offline wheel did not receive zero torque")
-            if np.max(np.abs(tail[:, 11:14])) > 0.01:
-                raise RuntimeError("Offline mechanism did not ramp its target to zero")
-        if phase.name in ("settle", "rc_loss", "rc_restored", "rearm_down", "stop"):
+            if np.any(tail[:, 7] != 2) or np.max(np.abs(tail[:, 11] - 0.5 * phase.cmd[0])) > 0.01:
+                raise RuntimeError("Degraded chassis did not keep running at half speed")
+        # 遥控丢失 → 不全车停、留在 Manual，目标按斜坡减到 0；恢复后不用重新解锁
+        if phase.name == "rc_loss":
+            if np.any(tail[:, 7] != 2) or np.max(np.abs(tail[:, 11:14])) > 0.01:
+                raise RuntimeError("RC loss did not ramp the target to zero while staying armed")
+        if phase.name in ("rc_restored", "rearmed") and np.any(tail[:, 7] != 2):
+            raise RuntimeError("Chassis did not resume in Manual")
+        # 急停（拨杆在下）、未解锁 → 全车停、零力矩
+        if phase.name in ("settle", "rearm_down", "stop"):
             if np.any(tail[:, 7] == 2) or np.any(tail[:, 14:22] != 0):
                 raise RuntimeError("Safety gate stop or rearm requirement failed")
-        if phase.name == "rearmed" and np.any(tail[:, 7] != 2):
-            raise RuntimeError("Explicit rearm did not enter Manual")
     if np.max(np.abs(data[:, 14:18])) > 6.0 or np.max(np.abs(data[:, 18:22])) > 2.001:
         raise RuntimeError("Motor torque bound exceeded")
-    print("PASS: physical chassis motion, wheel offline stop, RC loss, explicit rearm, torque bounds")
+    print("PASS: physical chassis motion, wheel offline degraded, RC loss ramp and resume, e-stop and rearm, torque bounds")
 
 
 def main():

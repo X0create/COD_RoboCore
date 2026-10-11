@@ -8,10 +8,12 @@
  *            3. chassis_output_update()：各轮 PID → 电机力矩
  *          在 Ozone 里看 chassis.measure 和 chassis.target 就能对比实测与目标。
  *
- *          两种停机（运行时契约第 5 节）：
- *          - 全车停（安全门：急停、遥控丢失、未解锁）：第 2 步传 stop_all = true，第 3 步就不写指令，
+ *          全车停与降级（ADR 0073：赛场上优先保证车能继续跑）：
+ *          - 全车停（安全门：急停、未解锁）：第 2 步传 stop_all = true，第 3 步就不写指令，
  *            发送出口统一改成零力矩；这时清积分、目标对齐实测速度，解锁时不会猛冲；
- *          - 机构停（任一电机离线）：目标改为 0，其余轮子按斜坡减速停下；离线的电机不写指令。
+ *          - 降级（有轮子不能用）：不能用的轮子不写指令（发送时为零力矩，被动滚动）、清积分；
+ *            其余轮子继续闭环，目标速度和加速度都乘 CHASSIS_DEGRADED_SCALE。
+ *            “不能用”= 驱动电机离线，或这个轮子的转向电机离线（朝向控制不了，驱动它会往错的方向推）。
  *          轮号顺序见 03_algorithm/kinematics/kinematics.h 对应的一节（都是左前起逆时针）。
  *          功率控制以后加在第 3 步“算出力矩之后、写给电机之前”（ADR 0022）。
  */
@@ -64,7 +66,7 @@ typedef struct
     HalfSteerConfig half_steer; /* 只有半舵半全向使用（几何和哪条对角线是舵轮） */
     PidParam
         drive_speed_pid; /* 驱动轮速度环：rad/s → N·m；PID 不带 dt，按 1 kHz 整定（ADR 0029） */
-    float max_accel_m_s2;   /* 平移加速度上限（加速、减速、机构停都按它） */
+    float max_accel_m_s2; /* 平移加速度上限（加速、减速都按它；降级时 × CHASSIS_DEGRADED_SCALE） */
     float max_alpha_rad_s2; /* 旋转角加速度上限 */
 } ChassisConfig;
 
@@ -75,8 +77,9 @@ typedef struct
     float heading_rad[CHASSIS_WHEELS];       /* 有转向电机的轮子：各轮朝向 */
     float steer_speed_rad_s[CHASSIS_WHEELS]; /* 有转向电机的轮子：各转向电机转速 */
     bool drive_online[CHASSIS_WHEELS];
-    bool steer_online[CHASSIS_WHEELS]; /* 没有转向电机的轮子恒为 false，不参与 all_online */
-    bool all_online;                   /* 全部电机在线；有一个离线就是机构停 */
+    bool steer_online[CHASSIS_WHEELS]; /* 没有转向电机的轮子恒为 false */
+    bool wheel_ok[CHASSIS_WHEELS]; /* 轮子能用：驱动电机在线，有转向电机的还要转向电机在线 */
+    bool all_online;     /* 全部轮子能用；有一个不能用就降级 */
     ChassisVel velocity; /* 由各轮实测正解出的底盘速度（有电机离线时为 0） */
 } ChassisMeasure;
 
@@ -111,6 +114,9 @@ typedef struct
 RM_NODISCARD bool chassis_init(Chassis *chassis, const ChassisConfig *cfg,
                                Motor *const drive[CHASSIS_WHEELS],
                                Motor *const steer[CHASSIS_WHEELS]);
+
+/** 降级时目标速度和加速度的比例（ADR 0073）：少了轮子跑偏时给操作手留出修正的余量；数值未经台架验证 */
+#define CHASSIS_DEGRADED_SCALE 0.5f
 
 /** 三个函数的调用周期：control_task 每 1 ms 调一次（斜坡按它算每步的速度变化；PID 参数也和它绑定，ADR 0029） */
 #define CHASSIS_PERIOD_S 0.001f

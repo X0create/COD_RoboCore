@@ -258,8 +258,8 @@ static void test_output_scale_limits_torque(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, wheel[0]->torque_cmd_nm);
 }
 
-/* 机构停：轮 2 离线后目标改为 0，斜坡按最大减速度下降；轮 2 不写指令，其余照常闭环 */
-static void test_wheel_offline_decelerates_under_control(void)
+/* 降级（ADR 0073）：轮 2 离线后其余轮子继续，目标朝一半速度、按一半的加速度走；轮 2 不写指令 */
+static void test_wheel_offline_degrades_to_half_speed(void)
 {
     feed_all(0.0f);
     run_stop(&chassis);
@@ -284,10 +284,28 @@ static void test_wheel_offline_decelerates_under_control(void)
     const float before = chassis.target.velocity.vx_m_s;
     run_step(&chassis, &target, 1.0f);
     TEST_ASSERT_FALSE(chassis.measure.all_online);
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, before - 2.0f * DT_S, chassis.target.velocity.vx_m_s);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, before - 2.0f * CHASSIS_DEGRADED_SCALE * DT_S,
+                             chassis.target.velocity.vx_m_s);
     TEST_ASSERT_FALSE(wheel[2]->torque_set);
     TEST_ASSERT_TRUE(wheel[0]->torque_set);
     TEST_ASSERT_TRUE(wheel[3]->torque_set);
+
+    for (int k = 0; k < 1000; k++) /* 1 s 后稳定在一半速度，不会停下 */
+    {
+        feed(0, 0.0f);
+        feed(1, 0.0f);
+        feed(3, 0.0f);
+        run_step(&chassis, &target, 1.0f);
+        motor_group_send(&group);
+        fake_time_advance_ms(1u);
+    }
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, CHASSIS_DEGRADED_SCALE * 1.0f, chassis.target.velocity.vx_m_s);
+    feed(0, 0.0f);
+    feed(1, 0.0f);
+    feed(3, 0.0f);
+    run_step(&chassis, &target, 1.0f); /* 再算一拍、不发送：发送会清掉本周期的指令标记 */
+    TEST_ASSERT_FALSE(wheel[2]->torque_set);
+    TEST_ASSERT_TRUE(wheel[1]->torque_set);
 }
 
 /* 麦轮：向左平移时左前、右后轮负力矩，左后、右前轮正力矩 */
@@ -374,8 +392,8 @@ static void test_steer_rejects_motor_without_torque_command(void)
     TEST_ASSERT_FALSE(chassis_init(&c, &steer_cfg, wheel, mixed));
 }
 
-/* 舵轮：转向电机离线也算机构停，受控减速，不给它写指令 */
-static void test_steer_motor_offline_is_mechanism_stop(void)
+/* 舵轮：转向电机离线 → 这个轮子朝向不受控，驱动和转向都不写指令；其余轮子降级继续（ADR 0073） */
+static void test_steer_motor_offline_drops_that_wheel(void)
 {
     add_steer_motors();
     Chassis c;
@@ -403,9 +421,12 @@ static void test_steer_motor_offline_is_mechanism_stop(void)
     const float before = c.target.velocity.vx_m_s;
     run_step(&c, &target, 1.0f);
     TEST_ASSERT_FALSE(c.measure.all_online);
-    TEST_ASSERT_FLOAT_WITHIN(1e-6f, before - 2.0f * DT_S, c.target.velocity.vx_m_s);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, before + 2.0f * CHASSIS_DEGRADED_SCALE * DT_S,
+                             c.target.velocity.vx_m_s); /* 还没到一半速度：按一半的加速度继续加速 */
     TEST_ASSERT_FALSE(steer[3]->torque_set);
+    TEST_ASSERT_FALSE(wheel[3]->torque_set); /* 驱动电机在线，但朝向不受控，不驱动 */
     TEST_ASSERT_TRUE(steer[0]->torque_set);
+    TEST_ASSERT_TRUE(wheel[0]->torque_set);
 }
 
 int main(void)
@@ -415,11 +436,11 @@ int main(void)
     RUN_TEST(test_stop_all_writes_nothing_and_aligns_to_measured);
     RUN_TEST(test_ramps_and_drives_wheels_by_inverse_kinematics);
     RUN_TEST(test_output_scale_limits_torque);
-    RUN_TEST(test_wheel_offline_decelerates_under_control);
+    RUN_TEST(test_wheel_offline_degrades_to_half_speed);
     RUN_TEST(test_mecanum_drives_by_mecanum_inverse);
     RUN_TEST(test_steer_turns_wheels_toward_target);
     RUN_TEST(test_steer_rejects_motor_without_torque_command);
-    RUN_TEST(test_steer_motor_offline_is_mechanism_stop);
+    RUN_TEST(test_steer_motor_offline_drops_that_wheel);
     RUN_TEST(test_half_steer_turns_only_steer_wheels);
     return UNITY_END();
 }

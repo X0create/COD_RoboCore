@@ -19,19 +19,18 @@ void safety_gate_set_system_ready(SafetyGate *gate)
     gate->system_ready = true;
 }
 
-SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, bool imu_ready,
-                                  uint64_t now_us)
+SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, uint64_t now_us)
 {
-    /* 遥控在线且 IMU 就绪才算输入可用；任一不满足都全车停，期间的拨杆位置也不用来解锁 */
-    const bool inputs_ready = rc != NULL && imu_ready;
-    const bool stop_position = inputs_ready && rc->sw[gate->arm_switch] == RC_SW_DOWN;
+    /* 遥控丢失时拨杆位置未知：既不用来解锁，也不算急停 */
+    const bool rc_online = rc != NULL;
+    const bool stop_position = rc_online && rc->sw[gate->arm_switch] == RC_SW_DOWN;
     SafetyDecision d = { .stop_all = true, .entered_manual = false };
 
     /*
      * 模式转换（每个周期最多转一次）：
      *   Init   --启动完成-->               Safe
      *   Safe   --先看到“下”、再拨离“下”--> Manual（解锁）
-     *   Manual --拨到“下”或输入不可用-->   Safe（之后必须重新解锁）
+     *   Manual --拨到“下”（急停）-->       Safe（之后必须重新解锁）；遥控丢失仍留在 Manual
      */
     switch (gate->mode)
     {
@@ -44,9 +43,9 @@ SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, bool imu_
             break;
 
         case SAFETY_MODE_SAFE:
-            if (!inputs_ready)
+            if (!rc_online)
             {
-                /* 遥控丢失（或 IMU 未就绪）期间的拨杆位置不作数，恢复后重新拨一次 */
+                /* 遥控丢失期间的拨杆位置不作数，恢复后重新拨一次 */
                 gate->saw_stop_position = false;
             }
             else if (stop_position)
@@ -62,7 +61,7 @@ SafetyDecision safety_gate_update(SafetyGate *gate, const RcState *rc, bool imu_
             break;
 
         case SAFETY_MODE_MANUAL:
-            if (!inputs_ready || stop_position)
+            if (stop_position)
             {
                 gate->mode = SAFETY_MODE_SAFE;
                 gate->saw_stop_position = stop_position; /* 急停时已在“下”，拨上即可重新解锁 */

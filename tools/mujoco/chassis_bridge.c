@@ -135,9 +135,13 @@ void chassis_bridge_step(const ChassisBridgeInput *in, ChassisBridgeOutput *out)
     }
     RcState rc = { 0 };
     rc.sw[arm_switch] = in->armed != 0u ? RC_SW_MID : RC_SW_DOWN;
-    const SafetyDecision decision = safety_gate_update(
-        &safety_gate, in->rc_online != 0u ? &rc : NULL, in->imu_ready != 0u, in->now_us);
-    const ChassisVel cmd = { .vx_m_s = in->cmd[0], .vy_m_s = in->cmd[1], .wz_rad_s = in->cmd[2] };
+    const SafetyDecision decision =
+        safety_gate_update(&safety_gate, in->rc_online != 0u ? &rc : NULL, in->now_us);
+    /* 与 control_task 相同：遥控丢失时目标速度为 0，底盘按斜坡减速（ADR 0073） */
+    const ChassisVel cmd =
+        in->rc_online != 0u
+            ? (ChassisVel){ .vx_m_s = in->cmd[0], .vy_m_s = in->cmd[1], .wz_rad_s = in->cmd[2] }
+            : (ChassisVel){ 0 };
     chassis_measure_update(&sim_chassis);
     chassis_target_update(&sim_chassis, &cmd, decision.stop_all);
     chassis_output_update(&sim_chassis, safety_gate_output_scale(&safety_gate, in->now_us));

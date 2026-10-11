@@ -183,7 +183,6 @@ static void test_two_frames_in_one_chunk(void)
     TEST_ASSERT_EQUAL_UINT32(0, dr16->bad_frames);
 }
 
-/* 超过 DR16_TIMEOUT_MS 没有合法帧：dr16_read 返回 false，即遥控丢失（ADR 0030） */
 /* 积压的旧帧：300 ms 前收到、现在才解析，按它的接收时刻喂狗，仍判遥控丢失 */
 static void test_stale_frame_by_rx_time_is_offline(void)
 {
@@ -196,6 +195,7 @@ static void test_stale_frame_by_rx_time_is_offline(void)
     TEST_ASSERT_FALSE(dr16_read(dr16, &rc));
 }
 
+/* 超过 DR16_TIMEOUT_MS 没有合法帧：dr16_read 返回 false，即遥控丢失（ADR 0030） */
 static void test_lost_after_timeout(void)
 {
     uint8_t f[DR16_FRAME_LEN];

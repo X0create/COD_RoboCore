@@ -41,7 +41,7 @@
 | 步骤 | 往下看 | 讲的是什么 |
 | --- | --- | --- |
 | 1. 读实测 | `02_devices/remote/dr16.c` 的 `dr16_read()`、`01_applic/modules/ins/ins.c` 的 `ins_read()`、`chassis.c` 的 `chassis_measure_update()` | 遥控、姿态、电机怎么读；多久没更新算掉线 |
-| 2. 算目标：安全门 | `01_applic/system/safety_gate.c` | 什么情况下全车停：急停、遥控丢失、未解锁、IMU 未就绪 |
+| 2. 算目标：安全门 | `01_applic/system/safety_gate.c` | 什么情况下全车停：急停、未解锁（遥控丢失只减速，ADR 0073） |
 | 2. 算目标：底盘 | `01_applic/modules/chassis/chassis.c` 的 `chassis_target_update()` → `03_algorithm/kinematics/kinematics.c` 的全向轮一节 | 速度怎么分到四个轮子 |
 | 3. 算输出 | `chassis.c` 的 `chassis_output_update()` → `03_algorithm/control/control.c` 的 PID 一节 | PID 怎么算出力矩 |
 | 3. 发送 | `02_devices/motor/motor.c` 的 `motor_group_send()` | 每个电机最终发什么（停机 > 没写指令 > 离线 > 力矩），怎么打包成 CAN 帧 |

@@ -71,7 +71,7 @@ COD-H7-Template/
 └── robot.c            对象定义 + robot_init() + 任务表 task_table[]    ← freertos.c 的任务列表
 01_applic/system/（通用的框架）
 ├── app_main.c         上电顺序（只有这一份）：app_main()、startup_task()
-└── safety_gate.c      全车唯一的安全门：急停、遥控丢失、未解锁、IMU 未就绪 → 全车停
+└── safety_gate.c      全车唯一的安全门：急停、未解锁 → 全车停（遥控丢失只减速，ADR 0073）
 01_applic/modules/ins/ins.c              惯性导航：一次姿态计算 ins_step()
 01_applic/modules/chassis/chassis.c      底盘：读实测 → 算目标 → 算输出
 ```
@@ -100,7 +100,6 @@ startup_task()                                  最高优先级，第一个运�
 for (;;)                                        control_info（本文件）存这一拍的输入和决定
 ├─ 1. control_measure_update()                 读实测
 │  ├─ dr16_read(&dr16, &rc)                     02_devices/remote/dr16.c         200 ms 没更新 = 遥控丢失
-│  ├─ ins_read(&ins, &imu)                      01_applic/modules/ins/ins.c      20 ms 没更新 = IMU 未就绪
 │  └─ chassis_measure_update(&chassis)          01_applic/modules/chassis/chassis.c  读 4 个电机实测（motor_read_feedback）→ 正解出底盘速度
 ├─ 2. control_target_update()                  算目标
 │  ├─ safety_gate_update(&safety_gate, ...)     01_applic/system/safety_gate.c   → stop_all（全车停）
