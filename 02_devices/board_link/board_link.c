@@ -99,10 +99,10 @@ bool board_link_receive(BoardLink *link, CanBusId bus, const CanFrame *frame)
     }
 
     const uint8_t seq = frame->data[0];
-    if (link->have_rx_seq)
+    /* 按 8 位回绕计算丢了几帧；序号和上一帧相同（重复帧）不算丢。对方重启时会多算一次 */
+    if (link->have_rx_seq && seq != link->last_rx_seq)
     {
-        link->lost +=
-            (uint8_t)(seq - link->last_rx_seq - 1u); /* 按 8 位回绕计算；对方重启时会多算一次 */
+        link->lost += (uint8_t)(seq - link->last_rx_seq - 1u);
     }
     link->last_rx_seq = seq;
     link->have_rx_seq = true;

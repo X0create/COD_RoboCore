@@ -99,9 +99,10 @@ RM_NODISCARD bool dr16_read(const Dr16 *self, RcState *out);
 
 /**
  * @brief   喂入从串口读到的一段字节（comm_rx_task 里调用）
- * @param   now_us  读到这段字节的时刻（rm_time_now_us()），用来按时间间隔分帧
+ * @param   rx_us  这段字节实际收到的时刻（uart_read() 给出的串口接收时刻，不是任务处理的时刻），
+ *                 用来按时间间隔分帧和喂狗：积压的旧帧按它当时的时刻算，不会让遥控显得在线
  */
-void dr16_on_bytes(Dr16 *self, const uint8_t *data, uint32_t len, uint64_t now_us);
+void dr16_on_bytes(Dr16 *self, const uint8_t *data, uint32_t len, uint64_t rx_us);
 
 /**
  * @brief   解析并校验一帧（纯计算）

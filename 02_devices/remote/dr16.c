@@ -71,18 +71,18 @@ bool dr16_read(const Dr16 *self, RcState *out)
     return online;
 }
 
-void dr16_on_bytes(Dr16 *self, const uint8_t *data, uint32_t len, uint64_t now_us)
+void dr16_on_bytes(Dr16 *self, const uint8_t *data, uint32_t len, uint64_t rx_us)
 {
     if (len == 0u)
     {
         return;
     }
-    if (!self->have_last || now_us - self->last_rx_us > DR16_FRAME_GAP_US)
+    if (!self->have_last || rx_us - self->last_rx_us > DR16_FRAME_GAP_US)
     {
         self->len = 0u; /* 空闲了一段时间：这一段从新帧开头开始，丢掉上一帧没收完的部分 */
     }
     self->have_last = true;
-    self->last_rx_us = now_us;
+    self->last_rx_us = rx_us;
 
     /* 任务被耽误时一次可能读到好几帧；帧是首尾相接的，按 18 字节依次切开 */
     for (uint32_t i = 0u; i < len; i++)
@@ -96,7 +96,7 @@ void dr16_on_bytes(Dr16 *self, const uint8_t *data, uint32_t len, uint64_t now_u
             {
                 rm_critical_enter(); /* 最新一帧和它的时刻一起写，读的一方拿到的两者对得上 */
                 self->rc = state;
-                watchdog_feed(&self->wd, now_us);
+                watchdog_feed(&self->wd, rx_us);
                 rm_critical_exit();
             }
             else

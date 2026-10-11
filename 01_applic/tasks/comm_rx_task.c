@@ -73,6 +73,7 @@ void comm_rx_task_entry(void *arg)
     CanFrame frame;
     uint8_t buf[64];
     uint32_t n;
+    uint64_t rx_us;
     for (;;)
     {
         (void)rm_task_wait_notify(COMM_RX_IDLE_MS); /* 等中断通知“有新数据”，最多 10 ms */
@@ -88,10 +89,11 @@ void comm_rx_task_entry(void *arg)
         }
         recover_bus_off(); /* bus-off 的总线每 100 ms 重启一次 */
 
-        /* UART5 → DR16：凑满 18 字节一帧 → 校验 → 保存为最新一帧 */
-        while ((n = uart_read(DBUS_UART, buf, sizeof(buf))) > 0u)
+        /* UART5 → DR16：凑满 18 字节一帧 → 校验 → 保存为最新一帧。
+         * 用串口中断记下的接收时刻喂狗（ADR 0060）：本任务被耽误时，积压的旧帧不会被当成刚收到的 */
+        while ((n = uart_read(DBUS_UART, buf, sizeof(buf), &rx_us)) > 0u)
         {
-            dr16_on_bytes(&dr16, buf, n, rm_time_now_us());
+            dr16_on_bytes(&dr16, buf, n, rx_us);
         }
     }
 }

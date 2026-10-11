@@ -2,12 +2,14 @@
  * @file    uart_stm32h7.c
  * @brief   STM32H7 串口接收：HAL 的 ReceiveToIdle + 循环 DMA，见 05_platform/uart/uart.h
  * @note    - 接收 DMA 必须在 CubeMX 里配置成循环模式（DMA_CIRCULAR），uart_rx_start() 会检查；
- *          - 写位置直接读 DMA 剩余计数得到，中断里不保存位置，任务与中断之间没有需要加锁的共享数据；
+ *          - 中断里记下每次接收事件的累计字节数、位置和时刻（DmaRingWriter），任务关中断拷一份再读，
+ *            所以能发现“绕了整圈”的覆盖，也能给出数据实际收到的时刻；
  *          - 串口号到 CubeMX 句柄的对应关系目前写在本文件；以后有第二块 H7 板时移到 06_boards/<板子>/board.c。
  */
 #include "05_platform/uart/uart.h"
 
 #include "05_platform/stm32h7/dma_buf.h"
+#include "05_platform/time/time.h"
 
 #include <usart.h>
 
@@ -30,10 +32,9 @@ typedef struct
 {
     UartRxNotify notify;
     void *ctx;
-    bool started;                    /* uart_rx_start() 成功后置位 */
-    uint32_t read_pos;               /* 只由读取的任务改 */
-    uint32_t seen_restarts;          /* 只由读取的任务改 */
-    volatile uint32_t restart_count; /* 只由中断改：出错后重新启动接收的次数 */
+    bool started;         /* uart_rx_start() 成功后置位 */
+    DmaRingWriter writer; /* 只由中断改；任务关中断时整份拷贝 */
+    DmaRingReader reader; /* 只由读取的任务改 */
 } UartRx;
 
 static UartRx rx[UART_COUNT];
@@ -71,7 +72,7 @@ bool uart_rx_start(UartPort port, UartRxNotify notify, void *ctx)
     return rx[port].started;
 }
 
-uint32_t uart_read(UartPort port, uint8_t *out, uint32_t max_len)
+uint32_t uart_read(UartPort port, uint8_t *out, uint32_t max_len, uint64_t *rx_us)
 {
     UartRx *self = &rx[port];
     if (!self->started)
@@ -79,27 +80,30 @@ uint32_t uart_read(UartPort port, uint8_t *out, uint32_t max_len)
         return 0u; /* 没有打开（板上没有这个串口或 CubeMX 配置不对，打开时已报错）：句柄可能为空，不能读 */
     }
 
-    /* 中断里重新启动过接收：DMA 从缓冲区开头重新写，读位置跟着归零 */
-    const uint32_t restarts = self->restart_count;
-    if (restarts != self->seen_restarts)
+    /* 中断随时会更新记录：关中断拷一份，累计数、位置、时刻三者对得上 */
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    const DmaRingWriter w = self->writer;
+    __set_PRIMASK(primask);
+
+    const uint32_t n = dma_ring_read(&self->reader, &w, rx_buf[port], RX_BUF_SIZE, out, max_len);
+    if (n > 0u)
     {
-        self->seen_restarts = restarts;
-        self->read_pos = 0u;
+        *rx_us = w.stamp_us;
     }
-
-    /* DMA 剩余计数从 RX_BUF_SIZE 递减；循环模式下减到 0 的瞬间会被重装，取模把这一瞬间算作 0 */
-    const uint32_t remaining = __HAL_DMA_GET_COUNTER(handles[port]->hdmarx);
-    const uint32_t write_pos = (RX_BUF_SIZE - remaining) % RX_BUF_SIZE;
-
-    return dma_ring_take(rx_buf[port], RX_BUF_SIZE, &self->read_pos, write_pos, out, max_len);
+    return n;
 }
 
-/* HAL 回调（中断上下文）：空闲、DMA 半满、全满时调用。只通知任务 */
+/* HAL 回调（中断上下文）：空闲、DMA 半满、全满时调用，size 是 DMA 当前写到的位置。记账并通知任务 */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 {
-    (void)size;
     const int port = port_of(huart);
-    if (port >= 0 && rx[port].notify != NULL)
+    if (port < 0)
+    {
+        return;
+    }
+    dma_ring_on_event(&rx[port].writer, RX_BUF_SIZE, size, rm_time_now_us());
+    if (rx[port].notify != NULL)
     {
         rx[port].notify(rx[port].ctx);
     }
@@ -115,6 +119,6 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     const int port = port_of(huart);
     if (port >= 0 && rx[port].started && start_dma((UartPort)port))
     {
-        rx[port].restart_count++;
+        dma_ring_on_restart(&rx[port].writer);
     }
 }

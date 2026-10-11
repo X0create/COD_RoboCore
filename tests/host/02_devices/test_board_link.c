@@ -260,6 +260,9 @@ static void test_lost_frames_counted_with_wraparound(void)
     classic_frame(f, 2u, 0u, payload); /* 252–255、0、1 共 6 帧丢了 */
     TEST_ASSERT_TRUE(deliver(link, CAN_BUS_1, c->id, f, 8));
     TEST_ASSERT_EQUAL_UINT32(6u, link->lost);
+
+    TEST_ASSERT_TRUE(deliver(link, CAN_BUS_1, c->id, f, 8)); /* 同一序号再来一帧：重复，不算丢 */
+    TEST_ASSERT_EQUAL_UINT32(6u, link->lost);
 }
 
 static void test_fd_receive(void)

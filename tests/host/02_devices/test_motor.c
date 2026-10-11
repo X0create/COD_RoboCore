@@ -226,6 +226,25 @@ static void test_disable_sends_zero_once(void)
     TEST_ASSERT_EQUAL_HEX8(0x20, fake_can_sent(1)->data[0]);
 }
 
+/* 失能的 0 指令没发出去（队列满）：不算发过，下个周期重发 */
+static void test_disable_zero_retried_after_send_failure(void)
+{
+    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_DISABLE);
+    Motor *m = add(&c);
+    feed(m);
+    fake_can_set_send_fail(true);
+    motor_group_apply_stop_all(&group);
+    motor_group_send(&group);
+    TEST_ASSERT_EQUAL_UINT32(0, fake_can_sent_count());
+
+    fake_can_set_send_fail(false);
+    motor_group_apply_stop_all(&group);
+    motor_group_send(&group);
+    TEST_ASSERT_EQUAL_UINT32(1, fake_can_sent_count());
+    const uint8_t zeros[8] = { 0 };
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(zeros, fake_can_sent(0)->data, 8);
+}
+
 /* 同一帧里有一个是零力矩，就继续每周期发送 */
 static void test_mixed_disable_keeps_sending(void)
 {
@@ -387,6 +406,22 @@ static void test_dm_clear_error_once(void)
     TEST_ASSERT_TRUE(last_is_command(0xFC));
 }
 
+/* 清错命令没发出去：清错请求不算用掉，总线恢复后重发清错 */
+static void test_dm_clear_error_retried_after_send_failure(void)
+{
+    Motor *m = add(&dm_config);
+    feed_dm(0x8);
+    motor_request_enable(m);
+    fake_can_set_send_fail(true);
+    motor_group_send(&group);
+    TEST_ASSERT_EQUAL_UINT32(0, fake_can_sent_count());
+
+    fake_can_set_send_fail(false);
+    feed_dm(0x8);
+    motor_group_send(&group);
+    TEST_ASSERT_TRUE(last_is_command(0xFB));
+}
+
 /* 离线清除使能请求：重新上线后不自动使能 */
 static void test_dm_offline_cancels_enable(void)
 {
@@ -481,6 +516,7 @@ int main(void)
     RUN_TEST(test_unset_offline_and_cleared_slots_are_zero);
     RUN_TEST(test_stop_all_overrides_torque);
     RUN_TEST(test_disable_sends_zero_once);
+    RUN_TEST(test_disable_zero_retried_after_send_failure);
     RUN_TEST(test_mixed_disable_keeps_sending);
     RUN_TEST(test_frames_per_bus_and_frame_id);
     RUN_TEST(test_send_failure_counted);
@@ -489,6 +525,7 @@ int main(void)
     RUN_TEST(test_dm_classic_bus_sends_classic_frames);
     RUN_TEST(test_dm_enable_sequence);
     RUN_TEST(test_dm_clear_error_once);
+    RUN_TEST(test_dm_clear_error_retried_after_send_failure);
     RUN_TEST(test_dm_offline_cancels_enable);
     RUN_TEST(test_dm_stop_all_damp);
     RUN_TEST(test_dm_stop_all_disable);

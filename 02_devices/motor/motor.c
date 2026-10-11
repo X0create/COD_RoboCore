@@ -449,11 +449,12 @@ static void send_dji_frame(MotorGroup *group, CanBusId bus, uint8_t frame_index)
     {
         return;
     }
-    group->disabled_sent[bus][frame_index] = all_disabled;
     if (!can_send(bus, &frame))
     {
         group->tx_dropped++; /* 队列满：丢帧，下个周期重新生成（运行时契约第 6 节） */
+        return; /* 没发出去：“已发过 0”的记录不变，全部失能时下个周期重发 */
     }
+    group->disabled_sent[bus][frame_index] = all_disabled;
 }
 
 /* 浮点 → 整数：旧代码 float_to_uint 的换算（截尾取整），加了范围截断 */
@@ -512,8 +513,7 @@ static void send_dm_frame(MotorGroup *group, Motor *m, uint64_t now_us)
     uint8_t cmd = 0u; /* 0：这个周期不发命令 */
     if (cmd_ready && online && st->want_enabled && error != 0u && st->clear_requested)
     {
-        cmd = DM_CMD_CLEAR_ERROR; /* 这次使能请求只清一次错 */
-        st->clear_requested = false;
+        cmd = DM_CMD_CLEAR_ERROR; /* 这次使能请求只清一次错（发出去以后才算清过，见下面） */
     }
     else if (cmd_ready && online && st->want_enabled && !enabled && error == 0u)
     {
@@ -531,8 +531,6 @@ static void send_dm_frame(MotorGroup *group, Motor *m, uint64_t now_us)
             frame.data[i] = 0xFFu;
         }
         frame.data[7] = cmd;
-        st->cmd_sent = true;
-        st->last_cmd_us = now_us;
     }
     else if (m->out.kind == MOTOR_OUT_DAMP)
     {
@@ -550,6 +548,16 @@ static void send_dm_frame(MotorGroup *group, Motor *m, uint64_t now_us)
     if (!can_send(cfg->can_bus, &frame))
     {
         group->tx_dropped++;
+        return; /* 没发出去：命令状态不变，下个周期重新判断、重发（清错请求不会白白用掉） */
+    }
+    if (cmd != 0u)
+    {
+        st->cmd_sent = true;
+        st->last_cmd_us = now_us;
+        if (cmd == DM_CMD_CLEAR_ERROR)
+        {
+            st->clear_requested = false;
+        }
     }
 }
 
