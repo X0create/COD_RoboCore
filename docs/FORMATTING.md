@@ -25,14 +25,32 @@ Windows 上如果 `python3` 不可用，换成 `python` 或 `py -3`。
 
 ## 2. 安装 clang-format 18
 
-**版本要和 CI 一致（18）**。不同大版本对个别写法的排版不一样（例如注释对齐、长参数换行），
+**版本要和 CI 一致（18.1.3）**。不同大版本对个别写法的排版不一样（例如中文注释的对齐、长参数换行），
 用别的版本格式化后，CI 可能仍判为不合格。脚本发现版本不是 18 时会提示。
+
+### 推荐：用 pip 装（Windows、Linux、macOS 都一样）
+
+PyPI 上的 `clang-format` 包就是 LLVM 官方编好的 clang-format 程序，版本号与 LLVM 一致，各系统都有：
+
+```bash
+pip install clang-format==18.1.3          # 或 python3 -m pip install …；Windows 也可以 py -3 -m pip install …
+clang-format --version                    # 应显示 clang-format version 18.1.3
+```
+
+装好后 `clang-format` 在 Python 的脚本目录里（Linux / macOS 通常是 `~/.local/bin`，Windows 是 Python 安装目录下的 `Scripts`），
+这个目录在 PATH 里就能直接用；不在的话用环境变量 `CLANG_FORMAT` 指向它。
+不想装进系统的 Python，可以用 `pipx install clang-format==18.1.3`，或者先建一个虚拟环境（`python3 -m venv`）再装。
+
+2026-10-11 实测：PyPI 的 18.1.3 在 Ubuntu 22.04 和 Windows 11 上检查本仓库，结果与 CI（Ubuntu 24.04 的 18.1.3）完全一致。
+
+### 其他装法
 
 | 系统 | 安装 | 说明 |
 | --- | --- | --- |
-| Ubuntu 24.04 / WSL | `sudo apt install clang-format-18` | 与 CI 完全相同（18.1.3），**推荐**；Windows 用户可以在 WSL 里运行上面的命令 |
-| Windows | 从 [LLVM 的 GitHub Releases](https://github.com/llvm/llvm-project/releases) 下载 18.1.x 的 Windows 安装包，安装时选“加入 PATH” | 也可以不加 PATH，用环境变量 `CLANG_FORMAT` 指向 `clang-format.exe` |
-| macOS | `brew install llvm@18` | 程序在 `$(brew --prefix llvm@18)/bin/clang-format`，用 `CLANG_FORMAT` 指定 |
+| Ubuntu 24.04 / WSL 24.04 | `sudo apt install clang-format-18` | 与 CI 相同（CI 就是这么装的） |
+| Ubuntu 22.04 | 用上面的 pip | 22.04 自带的软件源里最高只有 clang-format 15，没有 18。22.04 没装 pip 时先 `sudo apt install python3-pip`（或 `python3-venv`） |
+| Windows | 用上面的 pip；或从 [LLVM 的 GitHub Releases](https://github.com/llvm/llvm-project/releases) 下载 18.1.x 的安装包 | 安装包要选“加入 PATH”，或用 `CLANG_FORMAT` 指定 |
+| macOS | 用上面的 pip；或 `brew install llvm@18` | brew 装的在 `$(brew --prefix llvm@18)/bin/clang-format` |
 
 脚本查找 clang-format 的顺序：环境变量 `CLANG_FORMAT` → `clang-format-18` → `clang-format`。例如：
 
@@ -41,7 +59,7 @@ CLANG_FORMAT=/path/to/clang-format python3 tools/format.py --changed      # Linu
 ```
 
 ```powershell
-$env:CLANG_FORMAT = "C:\Program Files\LLVM\bin\clang-format.exe"; python tools/format.py --changed   # PowerShell
+$env:CLANG_FORMAT = "C:\Tools\clang-format.exe"; python tools/format.py --changed   # PowerShell
 ```
 
 ## 3. 在编辑器里格式化
@@ -57,6 +75,8 @@ $env:CLANG_FORMAT = "C:\Program Files\LLVM\bin\clang-format.exe"; python tools/f
 
 CLion 自带的 clang-format 是较新的版本（例如 22），有二十多个文件的排版会和 18 版不同（2026-10-11 用 CLion 自带的 22 版实测）。
 用 CLion 格式化后，再运行一次 `python3 tools/format.py --changed` 让结果回到 18 版的样子。
+开着文件的 CLion 也可能按它自己的版本重排文件（2026-10-11 就发生过一次，`robot.c` 一行注释的对齐被改成 22 版的样子混进了提交），
+所以**提交前最后一步**跑 `python3 tools/format.py --check`。
 
 ### VS Code
 
