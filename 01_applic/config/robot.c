@@ -68,7 +68,7 @@ bool robot_init(void)
  * 优先级数字越大越高：ins 最高，IMU 采样时刻要准；comm_rx 高于 control，控制周期读到最新反馈。
  * 改优先级：改下面表里的数字；改栈大小：改紧挨着的栈数组。
  */
-static StackType_t ins_stack[1024];      /* 4 KB：EKF 的矩阵运算在栈上有临时变量（预算表） */
+static StackType_t ins_stack[1024]; /* 4 KB：EKF 的矩阵运算在栈上有临时变量（预算表） */
 static StackType_t comm_rx_stack[512];   /* 2 KB */
 static StackType_t control_stack[1024];  /* 4 KB */
 static StackType_t detect_stack[256];    /* 1 KB */
