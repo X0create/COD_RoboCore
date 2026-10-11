@@ -961,6 +961,16 @@
           </Files>
         </Group>
         <Group>
+          <GroupName>03_algorithm/shoot</GroupName>
+          <Files>
+            <File>
+              <FileName>shoot.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\03_algorithm\shoot\shoot.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
           <GroupName>04_core/log</GroupName>
           <Files>
             <File>

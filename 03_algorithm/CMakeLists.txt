@@ -6,6 +6,7 @@ add_library(rm_algorithm STATIC
     kinematics/kinematics.c
     math/rm_math.c
     power/power.c
+    shoot/shoot.c
 )
 # 以 "03_algorithm/control/control.h" 的形式 include
 target_include_directories(rm_algorithm PUBLIC ${PROJECT_SOURCE_DIR})
