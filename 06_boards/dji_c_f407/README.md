@@ -26,33 +26,52 @@
 ## 在 CubeMX 里要做的修改（按顺序）
 
 用 CubeMX 6.18.1 打开 `06_boards/dji_c_f407/dji_c.ioc`。提示升级工程或下载 FW_F4 固件包时，都选同意。
+每一步后面的“为什么”说明这样配置的原因，改别的板子时可以照着判断。
 
-1. **Project Manager → Project**
-   - Toolchain / IDE：**CMake**。
-   - 其余保持不变（Project Name 已是 `dji_c`）。
+1. **Project Manager → Project**：Toolchain / IDE 选 **CMake**，其余不变（Project Name 已是 `dji_c`）。
+   - 为什么：框架用 CMake 构建，CLion、命令行、CI 都靠它；Keil 工程以后由 `tools/keil_sync.py` 从同一组源文件生成，不需要 CubeMX 生成 MDK 工程。
 2. **Project Manager → Code Generator**：勾选 “Generate peripheral initialization as a pair of '.c/.h' files per peripheral”。
+   - 为什么：平台层要 `#include <can.h>`、`<usart.h>` 拿到 `hcan1`、`huart3` 这些句柄；不勾的话全部挤在 `main.c` 里，没有头文件可以引用。
 3. **Middleware → FREERTOS**
    - Interface：**CMSIS_V2**（6.18.1 已没有 CMSIS_V1，打开时可能已被清掉，重新选上）。
-   - Tasks and Queues：**删掉全部 5 个任务**（INS、Vision、Control、CAN、Detect），只新建一个：
-     名字 `startup`，优先级 `osPriorityRealtime7`，Stack Size `512`（字），Entry Function `startup_task`，
-     Code Generation Option **As weak**，Allocation **Static**，Buffer Name `startup_task_stack`，
-     Control Block Name `startup_task_tcb`。
-   - Config parameters：`TOTAL_HEAP_SIZE` = **1024**，`CHECK_FOR_STACK_OVERFLOW` = **Option2**，
-     `RECORD_STACK_HIGH_ADDRESS` = **Enabled**。
-4. **System Core → SYS**：Timebase Source 保持 **TIM2**（SysTick 留给 FreeRTOS）。
+     - 为什么：只是 CubeMX 生成 `freertos.c` 时用的外壳；框架里的任务都用 FreeRTOS 原生接口（`04_core/os/os.c`），选哪个都不影响框架。
+   - Tasks and Queues：**第一个任务（INS）删不掉，双击它改成启动任务**：名字 `startup`，优先级 `osPriorityRealtime7`，
+     Stack Size `512`（字），Entry Function `startup_task`，Code Generation Option **As weak**，Allocation **Static**，
+     Buffer Name `startup_task_stack`，Control Block Name `startup_task_tcb`。然后删掉其余 4 个任务（Vision、Control、CAN、Detect）。
+     - 为什么：CubeMX 规定至少留一个任务，所以只能改不能删。其余任务都在 `01_applic/config/robot.c` 的任务表里由框架创建，改任务不用打开 CubeMX、也不怕重新生成被覆盖；
+       `As weak` 让 CubeMX 只生成一个空的弱定义，框架在 `app_main.c` 里写真正的 `startup_task` 替换它；
+       最高优先级保证它在其他任务之前先跑完（允许解锁后删除自己）。
+   - Config parameters：`TOTAL_HEAP_SIZE` = **1024**，`CHECK_FOR_STACK_OVERFLOW` = **Option2**，`RECORD_STACK_HIGH_ADDRESS` = **Enabled**。
+     - 为什么：框架的任务栈、控制块全是静态数组，不从堆里分配，堆留 1 KB 就够（原工程的 24 KB 白占内存）；
+       Option2 让 FreeRTOS 在任务切换时检查栈有没有写穿，写穿了就进故障处理、整板复位；
+       记录栈的最高地址后，调试器的 FreeRTOS 窗口才能显示每个任务的栈用量。
+4. **System Core → SYS**：Timebase Source 保持 **TIM2**。
+   - 为什么：SysTick 给 FreeRTOS 做 1 ms 节拍，HAL 自己的计时（`HAL_Delay`、各种超时）要另用一个定时器，否则两者抢同一个中断。
 5. **Connectivity → USART3**（DBUS）：Mode **Asynchronous**；Baud Rate `100000`，Word Length **9 Bits（含校验位）**，
    Parity **Even**，Stop Bits 1，Data Direction **Receive Only**。DMA 里 USART3_RX 保持 **Circular**；NVIC 勾上 USART3 global interrupt。
-6. **Connectivity → SPI1**：Prescaler 改为 **16**（5.25 MBits/s；BMI088 最高 10 MHz，原来的 ÷8 是 10.5 MHz，略超）。
+   - 为什么：DR16 接收机发的是 DJI 规定的 DBUS 格式——100 kbit/s、8 个数据位、偶校验、1 个停止位（8E1），接收方必须一模一样；
+     STM32 的字长要把校验位算进去，所以是 9 Bits。遥控只发不收，所以只接收，空出 PC10。
+     循环 DMA + 空闲中断：字节由 DMA 自动收进缓冲区，一帧收完（线上空闲）时中断通知任务来取，CPU 不用逐字节处理。
+6. **Connectivity → SPI1**：Prescaler 改为 **16**（5.25 MBits/s）。
+   - 为什么：BMI088 的 SPI 最高 10 MHz，原来的 ÷8 是 10.5 MHz，略超规格，可能偶尔读错；一次只读十几个字节，降速后约 30 µs，不影响 1 kHz 的姿态解算。
 7. **Timers → TIM5**：Channel1、Channel2、Channel3 都选 **PWM Generation CHx**（引脚自动是 PH10、PH11、PH12）；
    Prescaler `84-1`，Counter Period `255`。
+   - 为什么：C 板的 RGB 灯接在这三路上，用 PWM 占空比调亮度，框架的状态灯接口每种颜色是 0–255，周期 255 正好一一对应；
+     TIM5 时钟 84 MHz，÷84 后每 1 µs 计一次，256 个计数一个周期，约 3.9 kHz，眼睛看不出闪烁。
 8. **Analog → ADC3**：勾选 **IN8**（PF10）；Continuous Conversion Mode **Enabled**；DMA Continuous Requests **Enabled**；
    Rank 1 的 Sampling Time 选 **480 Cycles**。DMA Settings 加 **ADC3**，Mode **Circular**，Data Width **Half Word**。
+   - 为什么：连续转换 + 循环 DMA 让 ADC 一直在后台采样、把最新结果写进内存，任务随时读、不用等转换完成（和 MC02 的做法一样）；
+     电池电压经过大电阻分压，信号源内阻高，采样时间要长才能把采样电容充满，读数才准；结果是 12 位，用半字（16 位）存放。
 9. **System Core → NVIC → Code generation**：所有用到的中断（CAN1 RX0、CAN2 RX0、USART3、DMA、TIM2、OTG_FS 等）
    **Call HAL handler** 都要勾上；优先级保持 5（TIM2 时基为 15）。
-10. **不要**在 CubeMX 里打开 IWDG：框架直接写寄存器启动看门狗。
+   - 为什么：不勾的话 CubeMX 生成的中断函数是空的，CAN、串口、DMA 都收不到数据，而且不报任何错；
+     优先级数字不小于 5 的中断才能调用 FreeRTOS 的 `FromISR` 函数唤醒任务（`FreeRTOSConfig.h` 的规定），框架的接收全靠这个唤醒。
+10. **不要**在 CubeMX 里打开 IWDG。
+    - 为什么：CubeMX 会在 `main()` 一开始就启动看门狗，这时还在初始化，可能初始化没做完就被复位；
+      框架在所有任务跑起来以后由 detect_task 直接写寄存器启动它，并按 control_task 的心跳来喂。
 11. **GENERATE CODE**。生成后告诉我，我来核对生成结果、写平台层并编译。
 
-USART1、USART6、TIM1、激光 PE11 等原工程里的配置暂时保留，不影响框架。
+USART1、USART6、TIM1、激光 PE11 等原工程里的配置暂时保留：框架不用它们，留着不影响；以后接裁判系统、图传时再按需要改。
 
 ## 重新生成后的检查
 
