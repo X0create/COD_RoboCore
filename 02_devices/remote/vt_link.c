@@ -34,7 +34,7 @@ bool vt_link_decode_vt13(const uint8_t frame[VT13_FRAME_LEN], VtRcState *out)
     {
         return false;
     }
-    /* 位布局照旧工程 VT13_Info_Update */
+    /* VT13 帧的位布局（DJI 图传协议）：摇杆每个 11 位，紧挨着跨字节排列 */
     const uint16_t ch[4] = {
         (uint16_t)((b[2] | (b[3] << 8)) & 0x07FF),
         (uint16_t)(((b[3] >> 3) | (b[4] << 5)) & 0x07FF),
@@ -98,7 +98,7 @@ static void handle_referee_frame(VtLink *self, const RefereeFrame *f)
         self->ignored_frames++;
         return;
     }
-    const uint8_t *d = f->data; /* 位布局照旧工程 remote_control_t */
+    const uint8_t *d = f->data; /* 0x0304 键鼠数据的布局（裁判系统串口协议附录） */
     const KbmState kbm = {
         .mouse_x = (int16_t)(d[0] | (d[1] << 8)),
         .mouse_y = (int16_t)(d[2] | (d[3] << 8)),

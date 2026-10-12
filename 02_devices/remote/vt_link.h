@@ -1,12 +1,12 @@
 /**
  * @file    vt_link.h
  * @brief   图传链路：VT13 图传遥控器帧与 0xA5 帧（键鼠 0x0304）的分帧、校验、解析
- * @note    移植自 COD-H7-Template `Components/Device/Src/Image_Transmission.c`，字段位布局不变。与旧工程的差异：
- *          - 在 comm_rx_task 里按字节流解析：帧头 + CRC 找帧，一次能解析多帧、拆段能拼、错位能恢复
- *            （旧代码只看缓冲区开头的一帧）；
- *          - VT13 摇杆超出 364–1684 的帧丢弃（范围沿用 DR16，待上板核对）；
- *          - 0x0302 自定义控制器数据、0x0309 发送暂不移植（没有使用者；旧代码发送时没加帧头和 CRC）；
- *          - 串口改为 USART10（921600，ADR 0036）；旧工程与裁判系统共用 USART1、编译开关二选一。
+ * @note    图传链路：操作手的遥控器（VT13）和电脑键鼠的数据经过图传模块送到机器人，从一个串口进来。
+ *          里面混着两种帧：VT13 遥控器帧（0xA9 0x53 开头），和裁判系统格式的 0xA5 帧（其中 0x0304 是键鼠）。
+ *          - 在 comm_rx_task 里按字节流解析：帧头 + CRC 找帧，一次能解析多帧、拆段能拼、错位能恢复；
+ *          - VT13 摇杆超出 364–1684 的帧丢弃（范围与 DR16 相同，上车时核对）；
+ *          - 0x0302 自定义控制器数据、0x0309 发送暂未实现（还没有使用者）；
+ *          - 串口用 USART10（921600），裁判系统单独用 USART1，两者互不影响。
  *          VT13 帧：0xA9 0x53 开头共 21 字节，末 2 字节是前 19 字节的 CRC16（小端）。
  */
 #pragma once
@@ -48,7 +48,7 @@ typedef struct
     uint16_t keys; /* 位定义同 RcState 的 RC_KEY_* */
 } VtRcState;
 
-_Static_assert(sizeof(VtRcState) <= 256, "消息不超过 256 字节（运行时契约第 2 节）");
+_Static_assert(sizeof(VtRcState) <= 256, "VtRcState 不超过 256 字节：读取时整块拷贝要关中断");
 
 typedef struct
 {
@@ -60,7 +60,7 @@ typedef struct
     uint16_t keys; /* 位定义同 RcState 的 RC_KEY_* */
 } KbmState;
 
-_Static_assert(sizeof(KbmState) <= 256, "消息不超过 256 字节（运行时契约第 2 节）");
+_Static_assert(sizeof(KbmState) <= 256, "KbmState 不超过 256 字节：读取时整块拷贝要关中断");
 
 #define VT13_FRAME_LEN     21u
 #define VT_LINK_BUF_LEN    64u /* 图传链路上最长的 0xA5 帧是 0x0302 的 39 字节 */

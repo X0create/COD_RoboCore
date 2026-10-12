@@ -1,17 +1,17 @@
 /**
  * @file    bmi088.h
  * @brief   BMI088 六轴 IMU（加速度计 + 陀螺仪两颗芯片共用 SPI2）与加热恒温
- * @note    移植自 COD-H7-Template `Components/Device/Src/Bmi088.c` 和 `INS_Task.c` 的加热部分：
- *          寄存器配置、量程（±6 g、±2000 °/s）、换算系数、初始化顺序不变。与旧工程的差异：
+ * @note    BMI088 其实是两颗芯片：加速度计和陀螺仪，各有一个片选脚，共用一路 SPI。
+ *          量程：加速度 ±6 g、角速度 ±2000 °/s。
  *          - 读写走 05_platform/spi 的 select / transfer / deselect，一个事务一次完成，驱动里没有引脚信息；
- *          - 加速度计读数在地址后多一个 dummy 字节、陀螺仪没有，写成显式参数（旧代码靠宏嵌套偶然对上，
- *            UniC `blocking-spi-is-deliberate`）；
- *          - 陀螺仪每次读从芯片 ID 寄存器开始，ID 不对就判这一帧无效（旧代码只是不更新）；
- *          - 初始化失败返回原因，不在驱动里无限重试；
- *          - 零偏由调用者设置（第 8 步上电标定，ADR 0033），默认 0；旧工程用写死的常数；
- *          - 加热输出为负时占空比为 0（旧代码负数直接转 uint16_t，变成满占空比加热）；
- *          - 加热参数改为 UniC 在同款 MC02 上实测的值（25% 上限、打开积分、每 100 ms 一次，见 bmi088.c）。
- *          恒温控制在设备内部完成（《架构设计》“其他设备”）。
+ *            SPI 用阻塞方式：一次只读十几个字节、约 10 us，用 DMA 反而更复杂、更慢；
+ *          - 加速度计读数时，芯片在地址后先回一个无用的 dummy 字节，陀螺仪没有，写成显式参数，不容易搞错；
+ *          - 陀螺仪每次读从芯片 ID 寄存器开始，ID 不对就判这一帧无效（能发现 SPI 线松了、读到乱码）；
+ *          - 初始化失败返回原因，不在驱动里无限重试，由调用者决定怎么办；
+ *          - 零偏由调用者设置（上电静止标定，见 01_applic/modules/ins），默认 0；
+ *          - 加热：陀螺零偏随温度变化，用板上的加热电阻把芯片恒温在 BMI088_HEATER_TARGET_C，
+ *            PID 输出为负时占空比取 0（不能“制冷”），参数见 bmi088.c 的 HEATER_*。
+ *          恒温控制在本驱动内部完成，使用者只需每次读到温度后调用 bmi088_heater_step()。
  */
 #pragma once
 
@@ -31,7 +31,7 @@ extern "C"
 typedef struct
 {
     float gyro_rad_s[3]; /* 芯片坐标系，已减零偏 */
-    float accel_m_s2[3]; /* 芯片坐标系（换算系数按 g = 9.8 m/s²，同旧工程） */
+    float accel_m_s2[3]; /* 芯片坐标系（换算系数按 g = 9.8 m/s²） */
     float temperature_c;
 } Bmi088Sample;
 
@@ -68,7 +68,7 @@ bool bmi088_read(Bmi088 *imu, Bmi088Sample *out);
 void bmi088_set_gyro_offset(Bmi088 *imu, const float offset_rad_s[3]);
 
 /**
- * @brief   加热恒温，每次读到新温度时调用（1 kHz）；内部每 HEATER_PERIOD_MS（1280）次算一次 PID（ADR 0042）
+ * @brief   加热恒温，每次读到新温度时调用（1 kHz）；内部每 HEATER_PERIOD_MS（1280）次算一次 PID
  */
 void bmi088_heater_step(Bmi088 *imu, float temperature_c);
 

@@ -10,7 +10,7 @@
 #include "05_platform/pwm/pwm.h"
 #include "05_platform/spi/spi.h"
 
-/* ---- 寄存器（BMI088 数据手册；取值同 COD-H7-Template Bmi088_Reg.h） ---- */
+/* ---- 寄存器地址和取值（来自 BMI088 数据手册） ---- */
 #define ACC_CHIP_ID         0x00u
 #define ACC_CHIP_ID_VALUE   0x1Eu
 #define ACC_XOUT_L          0x12u
@@ -37,23 +37,24 @@
 #define RESET_WAIT_MS 80u  /* 软复位后等待 */
 #define REG_WAIT_US   150u /* 相邻两次寄存器访问的间隔 */
 
-/* ---- 换算系数（同旧工程） ---- */
+/* ---- 换算系数：原始读数是 16 位有符号数，±32768 对应满量程 ---- */
 #define ACCEL_6G_M_S2_PER_LSB   (6.0f * 9.8f / 32768.0f)
 #define GYRO_2000_RAD_S_PER_LSB (2000.0f / 32768.0f * RM_PI / 180.0f)
 #define TEMP_C_PER_LSB          0.125f
 #define TEMP_OFFSET_C           23.0f
 
 /*
- * ---- 加热（2026-09-30 本板实测后重定，ADR 0042；此前照搬 UniC：上限 25%、kp 0.05/°C、每 100 ms 一次）----
+ * ---- 加热参数（在 DM-MC02 上实测整定）----
  * 实测（docs/data/heater_2026-09-30.csv，电池供电）：
  * - 稳态只要约 2% 占空比；25% 时加热片附近每秒升温约 24 °C，芯片读数跟随的时间常数约 3 s；
  * - BMI088 温度寄存器约 1.28 s 才更新一次，分辨率 0.125 °C。
- * 所以 UniC 的参数在这块板上太猛：冷启动冲到约 46 °C，稳定后在 38–41 °C 来回摆（上板与模型一致）。
+ * 所以加热上限给大了（如 25%）会很猛：冷启动冲到约 46 °C，稳定后在 38–41 °C 来回摆。
  * 按实测拟合的三节点热模型（tools/heater_model.py）选参：
  * - 每 1280 ms 算一次，和温度更新同步（更快只会对着旧读数反复积分）；
  * - 上限 8%：环境 25 °C 冷启动到 39.5 °C 约 10–20 s，峰值约 40.2 °C；
  * - kp 0.01 / °C，积分时间 10 s（ki = kp × 周期 / 10 s），加热功率 ±30% 时模型中过冲都不超过 1.4 °C。
- * 本模板 PID 不带 dt（ADR 0029），ki 已换成每次的增益；积分限幅取“积分项最多等于上限”；条件积分见 ADR 0040。
+ * PID 不带 dt，ki 已换成“每算一次”的增益；积分限幅取“积分项最多等于上限”；带抗积分饱和（见 pid.h）。
+ * 换别的板子（加热电阻、散热不同）时要重新整定：先看 docs/data 里的曲线怎么采，再用 tools/heater_model.py 拟合。
  */
 #define HEATER_PERIOD_MS 1280u
 #define HEATER_DUTY_CAP  0.08f
@@ -73,7 +74,7 @@ typedef struct
     uint8_t value;
 } RegValue;
 
-/* 配置顺序同旧工程；每项写入后读回核对 */
+/* 按数据手册推荐的顺序配置；每项写入后读回核对，写不进去说明 SPI 或芯片有问题 */
 static const RegValue accel_config[] = {
     { ACC_PWR_CTRL, 0x04u },     /* 打开加速度计 */
     { ACC_PWR_CONF, 0x00u },     /* 活动模式 */

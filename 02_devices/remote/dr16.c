@@ -6,7 +6,7 @@
 
 #include "04_core/os/critical.h"
 
-/* 摇杆原始值的合法范围和中位（DBUS 协议，附录 A.4）：减去中位后是 -660 ~ +660 */
+/* 摇杆原始值的合法范围和中位（DJI DBUS 协议）：减去中位后是 -660 ~ +660 */
 #define CH_MIN    364
 #define CH_MAX    1684
 #define CH_OFFSET 1024
@@ -14,7 +14,7 @@
 bool dr16_decode(const uint8_t frame[DR16_FRAME_LEN], RcState *out)
 {
     const uint8_t *b = frame;
-    /* 通道和拨杆的位布局照旧工程 SBUS_TO_RC */
+    /* 通道和拨杆的位布局（DJI DBUS 协议）：每个通道 11 位，紧挨着跨字节排列，所以要移位拼起来 */
     const uint16_t ch[5] = {
         (uint16_t)((b[0] | (b[1] << 8)) & 0x07FF),
         (uint16_t)(((b[1] >> 3) | (b[2] << 5)) & 0x07FF),

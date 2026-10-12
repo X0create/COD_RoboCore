@@ -1,17 +1,20 @@
 /**
  * @file    motor.h
- * @brief   电机：统一接口、DJI / 达妙的协议、电机组打包发送（《架构设计》“电机：统一接口 + 各品牌实现”）
- * @note    - 单位全部是输出轴上的国际单位：rad、rad/s、N·m（ADR 0031）；
- *          - 品牌分支只出现在 motor.c 里，子系统只调用 motor_*()；
- *          - 设备层不做任何闭环（ADR 0016）。
+ * @brief   电机：统一接口、DJI / 达妙的协议、电机组打包发送
+ * @note    - 单位全部是输出轴上的国际单位：rad、rad/s、N·m。减速比、方向、电流和力矩的换算都在这里做完，
+ *            上层写 PID 时不用关心是哪种电机、带不带减速箱；
+ *          - 品牌分支只出现在 motor.c 里，子系统只调用 motor_*()：换电机型号只改 robot.h 的电机表；
+ *          - 本层不做任何闭环（PID 在机构里）：电机驱动只管“收反馈、发指令”。
  *
- *          一个电机怎么用（和老模板 SendValue → CAN_Task 的顺序相同），全部代码在 motor.c，从上往下就是这个顺序：
+ *          一个电机怎么用，全部代码在 motor.c，从上往下就是这个顺序：
  *            收：comm_rx_task  can_read() 取一帧 → motor_group_receive()：总线和反馈 ID 对上的电机解码、存下、喂狗
  *            读：control_task  motor_read_feedback()：关中断拷贝一份完整反馈，当场判断在不在线
  *            写：control_task  motor_set_torque() / motor_apply_stop_action()  —— 只记下本周期的指令，还没有发送
  *            发：control_task  周期末尾 motor_group_send()：确定最终指令（停机动作 > 没写指令 > 离线 > 力矩）
  *                              → 编码 → 发送 → 清空本周期指令
- *          品牌：DJI（M3508 / M2006 / GM6020，附录 A.2）、达妙（MIT 模式，附录 A.3，ADR 0035）。
+ *          为什么“写”和“发”分开：DJI 四个电机共用一帧 CAN，必须等四个都写完才能打包；
+ *          另外全车停时可以在发送前统一改写，任何地方漏判也不会发出运动指令。
+ *          品牌：DJI（M3508 / M2006 / GM6020，协议见 DJI 电调手册）、达妙（MIT 模式，协议见达妙电机手册）。
  */
 #pragma once
 
@@ -29,7 +32,7 @@ extern "C"
 {
 #endif
 
-/** 反馈多久收不到就算离线（ADR 0031：每 1 ms 一帧，20 ms 即连续丢 20 帧；达妙每收到一帧指令回一帧反馈） */
+/** 反馈多久收不到就算离线（DJI 电调每 1 ms 发一帧，20 ms 即连续丢 20 帧；达妙每收到一帧指令回一帧反馈） */
 #define MOTOR_TIMEOUT_MS 20u
 
 /* 常用减速比（转子 : 输出轴），给 MotorConfig.gear_ratio 用；拆掉减速箱时填 1 */
@@ -37,7 +40,7 @@ extern "C"
 #define DJI_M2006_GEAR_RATIO 36.0f
 
 /*
- * M3508 + C620 的换算常数（附录 A.2），全仓库只在这里定义：motor.c 编解码、MuJoCo 虚拟电调都用这里
+ * M3508 + C620 的换算常数（来自 DJI 官方手册），全仓库只在这里定义：motor.c 编解码、MuJoCo 虚拟电调都用这里
  *（robot.h 的 PID 是按它换算好的数字）。C620 电流原始值 ±16384 对应 ±20 A；原装减速箱输出轴 0.3 N·m/A
  */
 #define DJI_C620_RAW_MAX   16384
@@ -54,13 +57,13 @@ extern "C"
 
 typedef enum
 {
-    MOTOR_M3508,  /* C620 电调 */
-    MOTOR_M2006,  /* C610 电调 */
-    MOTOR_GM6020, /* 只有反馈，没有指令（ADR 0031） */
-    MOTOR_DM, /* 达妙各型号（DM4310、DM8009…），差异在 DmConfig 里（ADR 0027） */
+    MOTOR_M3508, /* C620 电调 */
+    MOTOR_M2006, /* C610 电调 */
+    MOTOR_GM6020, /* 目前只解析反馈，还不能发指令（电压 / 电流两种控制模式尚未实现） */
+    MOTOR_DM, /* 达妙各型号（DM4310、DM8009…），差异在 DmConfig 里 */
 } MotorType;
 
-/** 停机动作（运行时契约第 5 节）。DJI 电机只支持零力矩和失能，配置成阻尼时 motor_init() 拒绝 */
+/** 停机动作：全车停或电机离线时发什么。DJI 电机只支持零力矩和失能，配置成阻尼时 motor_init() 拒绝 */
 typedef enum
 {
     STOP_ACTION_ZERO_TORQUE, /* 不出力：DJI 发 0 电流；达妙 MIT 的 Kp、Kd、力矩全为 0 */
@@ -70,7 +73,7 @@ typedef enum
 
 /**
  * 达妙电机的参数。P_MAX / V_MAX / T_MAX 必须与驱动器里用上位机配置的完全一致，
- * 否则 MIT 帧的换算整体错位且不报错（《架构设计》达妙三条硬性要求）
+ * 否则 MIT 帧的换算整体错位且不报错（达妙把浮点按这三个范围压成整数传输，两边范围不同就全乱了）
  */
 typedef struct
 {
@@ -197,7 +200,7 @@ RM_NODISCARD bool motor_init(Motor *m, const MotorConfig *cfg, MotorGroup *group
  */
 const Motor *motor_group_find_can_id(const MotorGroup *group, CanBusId bus, uint32_t id);
 
-/** 能否 motor_set_torque()（GM6020 目前只有反馈，ADR 0031）。子系统在 xxx_init() 里检查一次，运行时不再检查 */
+/** 能否 motor_set_torque()（GM6020 目前只有反馈）。子系统在 xxx_init() 里检查一次，运行时不再检查 */
 bool motor_supports_torque(const Motor *m);
 
 /**
@@ -232,7 +235,7 @@ void motor_request_enable(Motor *m);
 /** 请求失能（达妙；DJI 无操作） */
 void motor_request_disable(Motor *m);
 
-/** 全车停：每个电机本周期改写成它配置的 stop_action（运行时契约第 5 节）。只在 control_task 里调用 */
+/** 全车停：每个电机本周期改写成它配置的 stop_action。只在 control_task 里调用 */
 void motor_group_apply_stop_all(MotorGroup *group);
 
 /**

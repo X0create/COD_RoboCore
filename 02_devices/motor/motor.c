@@ -2,8 +2,9 @@
  * @file    motor.c
  * @brief   电机的全部代码，见 motor.h。从上往下：
  *          1. 型号常数 → 2. 初始化与 ID 查重 → 3. 接收：解码反馈 → 4. 读反馈、写指令 → 5. 发送：确定指令、编码、发出
- * @note    DJI 反馈字节布局照 COD-H7-Template `Motor.c` 的 DJI_Motor_Info_Update，单位换算为本模板新增（ADR 0031）；
- *          达妙字节布局照同一文件，浮点 → 整数加了截断（旧代码超出范围时会绕回，负力矩可能变成最大正力矩）。
+ * @note    DJI 反馈帧：角度、转速、电流、温度按大端排在 8 字节里，解码后换算成输出轴国际单位；
+ *          达妙 MIT 帧：浮点按 P/V/T_MAX 范围压成定长整数传输，压缩前先截到范围内
+ *          （不截的话超出范围会绕回，负的最大力矩可能变成正的最大力矩）。
  */
 #include "02_devices/motor/motor.h"
 
@@ -22,9 +23,9 @@
 
 /*
  * DJI 每种型号一行常数。力矩常数折算到转子（输出轴常数 ÷ 原装减速比），这样拆掉减速箱时只改 gear_ratio。
- * - M3508 / C620：电流 ±16384 对应 ±20 A；输出轴 0.3 N·m/A（原装 3591/187）。引用 basic_framework，附录 A.2
- * - M2006 / C610：电流 ±10000 对应 ±10 A；输出轴 0.18 N·m/A（原装 36:1）。待对照大疆手册核对
- * - GM6020：反馈电流 ±16384 对应 ±3 A、0.741 N·m/A 为待核对值；本步不发指令（ADR 0031）
+ * - M3508 / C620：电流 ±16384 对应 ±20 A；输出轴 0.3 N·m/A（原装减速比 3591/187）
+ * - M2006 / C610：电流 ±10000 对应 ±10 A；输出轴 0.18 N·m/A（原装 36:1）。用前对照大疆手册核对
+ * - GM6020：反馈电流 ±16384 对应 ±3 A、0.741 N·m/A，用前核对；目前只解析反馈、不发指令
  */
 typedef struct
 {
@@ -54,7 +55,7 @@ static const DjiTypeParams dji_params[] = {
 #define DM_STATE_ENABLED   0x1u
 #define DM_STATE_ERROR_MIN 0x8u
 
-/* 达妙两条命令之间至少间隔这么久：等反馈确认，没确认就在这之后重发（运行时契约第 6 节） */
+/* 达妙两条命令（使能、清错）之间至少间隔这么久：等反馈确认，没确认就在这之后重发（CAN 偶尔丢帧时能自己恢复） */
 #define DM_CMD_INTERVAL_US 20000u
 
 /*
@@ -451,13 +452,14 @@ static void send_dji_frame(MotorGroup *group, CanBusId bus, uint8_t frame_index)
     }
     if (!can_send(bus, &frame))
     {
-        group->tx_dropped++; /* 队列满：丢帧，下个周期重新生成（运行时契约第 6 节） */
+        /* 队列满：丢帧，下个周期重新生成（控制指令只要最新的，不排队补发旧的） */
+        group->tx_dropped++;
         return; /* 没发出去：“已发过 0”的记录不变，全部失能时下个周期重发 */
     }
     group->disabled_sent[bus][frame_index] = all_disabled;
 }
 
-/* 浮点 → 整数：旧代码 float_to_uint 的换算（截尾取整），加了范围截断 */
+/* 浮点 → 整数：把 [lo, hi] 线性映射到 [0, 2^bits − 1]（截尾取整），超出范围先截断（达妙官方例程同样的换算） */
 static uint32_t float_to_uint(float x, float lo, float hi, uint32_t bits)
 {
     x = (x < lo) ? lo : ((x > hi) ? hi : x);
@@ -466,7 +468,9 @@ static uint32_t float_to_uint(float x, float lo, float hi, uint32_t bits)
 
 /*
  * 达妙 MIT 帧：位置 16 位 | 速度 12 位 | Kp 12 位 | Kd 12 位 | 力矩 12 位，共 64 位按位紧挨着排；
- * 本模板只用阻尼（只给 Kd）和纯力矩，位置、速度、Kp 恒为 0（ADR 0035），所以只传 Kd 和力矩
+ * 驱动器按 力矩 = Kp·(位置目标 − 位置) + Kd·(速度目标 − 速度) + 力矩目标 在电机里闭环。
+ * 本框架只用阻尼（只给 Kd）和纯力矩，位置、速度、Kp 恒为 0（位置环、速度环都在主控里用 PID 做），
+ * 所以只传 Kd 和力矩
  */
 static void dm_encode_mit(const MotorConfig *cfg, float kd, float torque_nm, uint8_t out[8])
 {

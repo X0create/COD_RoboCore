@@ -1,9 +1,9 @@
 /**
  * @file    battery.h
- * @brief   电池电压与低电量提示（纯逻辑，电脑上可测；ADR 0027 第一版只提示，不限制动作）
+ * @brief   电池电压与低电量提示（纯逻辑，电脑上可测；只提示，不限制车的动作）
  * @note    电压 = ADC 引脚电压 × 分压比。连续 hold_ms 低于 low_v 才判为低电量（电机启动时的压降不误报），
  *          回到 recover_v 以上才解除（阈值附近不来回跳）。
- *          COD-H7-Template 的 bsp_adc.c 只换算电压（×11），没有使用者。
+ *          只提示、不限速：要不要回去换电由操作手决定。
  */
 #pragma once
 
@@ -17,8 +17,9 @@ extern "C"
 
 typedef struct
 {
-    float divider; /* 电池电压 / 引脚电压；MC02 为 11（旧工程，待万用表核对） */
-    float low_v;   /* 低于它开始计时 */
+    /* 电池电压 / 引脚电压；MC02 为 11（板上电阻分压，可用万用表量电池电压对照核对） */
+    float divider;
+    float low_v;     /* 低于它开始计时 */
     float recover_v; /* 高于它解除低电量 */
     uint32_t hold_ms;
 } BatteryConfig;

@@ -1,7 +1,9 @@
 /**
  * @file    vision.h
- * @brief   视觉通信：0x5A 帧层 + USB CDC 通道（ADR 0037）
- * @note    按节排列：帧层 vision_frame、通道 vision_link。
+ * @brief   视觉通信：0x5A 帧层 + USB CDC 通道
+ * @note    主控和视觉电脑（小电脑 / NUC）之间用 USB 虚拟串口（USB CDC）通信：插上 USB 线，电脑上就多一个串口。
+ *          按节排列：帧层 vision_frame（帧格式、校验、组帧）、通道 vision_link（从字节流里找帧）。
+ *          现在只做到“能收到合法的帧”，具体消息（目标角度、开火指令等）要和视觉组约定好协议后再加。
  */
 #pragma once
 
@@ -21,8 +23,8 @@ extern "C"
  *
  * 与上位机通信的帧格式（0x5A 帧）：检查与组帧（纯计算，电脑上可测）
  * 帧 = SOF 0x5A、数据长度 1 字节、ID 1 字节、帧头 CRC8（前 3 字节）+ 数据 + 整帧 CRC16 2 字节小端
- * （附录 A.6，参考 standard_robot_pp_ros2）。CRC8 / CRC16 用与裁判系统相同的算法（04_core/util/crc）。
- * 具体消息 ID 和字段等视觉组确定后再定（ADR 0037）；帧格式本身也要与视觉组核对。
+ * （帧格式参考开源项目 standard_robot_pp_ros2）。CRC8 / CRC16 用与裁判系统相同的算法（04_core/util/crc）。
+ * 具体消息 ID 和字段等视觉组确定后再定；帧格式本身也要与视觉组核对。
  */
 
 #define VISION_FRAME_SOF        0x5Au
@@ -60,9 +62,8 @@ size_t vision_frame_encode(uint8_t id, const uint8_t *data, uint8_t data_len, ui
 /* 通道 vision_link
  *
  * 与上位机（视觉）的通信链路：从字节流里找出 0x5A 帧
- * COD-H7-Template 的 MiniPC.c 是空壳（发送只发 1 字节、接收不处理），没有协议可移植。
- * 本版只做通道和帧层（ADR 0037）：找帧、校验、计数；消息 ID 和字段、下行姿态与时间戳对齐
- * （运行时契约第 2 节）等视觉组确定协议后再加，届时在 on_frame 里按 ID 解析，保存 VisionCmd 并提供读取函数（同 dr16_read）。
+ * 本版只做通道和帧层：找帧、校验、计数；消息 ID 和字段、发给视觉的姿态和时间戳（视觉要用它对齐图像时刻）
+ * 等视觉组确定协议后再加，届时在 on_frame 里按 ID 解析，保存 VisionCmd 并提供读取函数（同 dr16_read）。
  */
 
 #define VISION_LINK_BUF_LEN    (VISION_FRAME_MAX_DATA + VISION_FRAME_OVERHEAD)

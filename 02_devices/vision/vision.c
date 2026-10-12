@@ -76,7 +76,7 @@ void vision_link_init(VisionLink *self)
 
 /*
  * 收到的字节先攒进 buf，再从 buf 开头反复找帧：合法帧取走并喂狗，坏字节丢一个重新找，不够一帧就等下一段。
- * 帧内容暂不处理（消息字段等视觉组协议，ADR 0037），只统计帧数和最后的 ID。
+ * 帧内容暂不处理（消息字段等视觉组协议），只统计帧数和最后的 ID。
  */
 void vision_link_on_bytes(VisionLink *self, const uint8_t *data, uint32_t len)
 {
