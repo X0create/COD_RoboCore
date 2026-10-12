@@ -19,6 +19,7 @@
 | `log_task` | 1 s | 通过 RTT 打印状态 |
 
 上电时先由 `01_applic/system/app_main.c` 初始化全部对象，再按任务表把这 6 个任务创建出来。
+没用过 FreeRTOS 的话，先看 `FREERTOS_GUIDE.md` 前三节（10 分钟）：任务是什么、怎么从 `main()` 进到任务、任务怎么轮流。
 
 先看 `LOGIC_PSEUDOCODE.md` 第 0 节“一张图”：它用中文把上面这些讲了一遍，不涉及 C 语法。
 

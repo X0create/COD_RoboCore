@@ -55,6 +55,7 @@
 | 1 | `README.md` | 模板能做什么、各功能验证到哪一步 |
 | 1.5 | `docs/READING_GUIDE.md` | 读源码的顺序和方法：先读哪几个文件、跟着一份数据走一遍 |
 | 2 | `docs/LOGIC_PSEUDOCODE.md` | 用中文伪代码看懂从上电到发电机指令的全过程，每段标了文件和函数 |
+| 2.5 | `docs/FREERTOS_GUIDE.md` | 没用过 FreeRTOS：任务怎么跑起来、怎么新增一个任务 |
 | 3 | `docs/CALL_FLOW.md` | 每个任务的函数调用树，和老模板 COD-H7-Template 的对照 |
 | 4 | `docs/CODING_STANDARD.md` | 动手写代码之前 |
 | 5 | `docs/ARCHITECTURE.md` | 想知道“为什么这样设计”时查 ADR 表 |
@@ -87,7 +88,7 @@
 | 改收到 CAN 帧后交给哪个电机 | `01_applic/tasks/comm_rx_task.c` |
 | 改 RTT 打印的内容 | `01_applic/tasks/log_task.c` |
 | 加一个车上对象（电机、机构） | `01_applic/config/robot.c`（定义 + 初始化）、`robot.h`（声明）；电机进了电机组就能收到反馈，不用改 comm_rx_task |
-| 加 / 改任务的优先级、栈 | `01_applic/config/robot.c` 的 `task_table[]`（新任务的入口声明在 `tasks/tasks.h`） |
+| 加 / 改任务的优先级、栈 | `01_applic/config/robot.c` 的 `task_table[]`（新任务的入口声明在 `tasks/tasks.h`）；新增任务的完整步骤见 `docs/FREERTOS_GUIDE.md` 第 4 节 |
 | 改引脚、外设、时钟 | CubeMX 打开 `06_boards/dm_mc02_h723/dm_mc02.ioc`，然后核对 `REGEN_CHECKLIST.md` |
 
 ## 3. 常见任务的做法
