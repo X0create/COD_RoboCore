@@ -279,11 +279,13 @@ void chassis_output_update(Chassis *chassis, float output_scale)
         }
         return;
     }
-    const float drive_limit_nm = cfg->drive_speed_pid.output_limit * output_scale;
-    const float steer_limit_nm = cfg->steer.speed_pid.output_limit * output_scale;
-
     for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
     {
+        /* 限幅取每个 PID 自己内存里的那份参数（pid_init 时从 robot.h 拷过来），
+         * 这样在调试器里改 drive_pid[i].param 的任何一项都立刻生效 */
+        const float drive_limit_nm = chassis->drive_pid[i].param.output_limit * output_scale;
+        const float steer_limit_nm = chassis->steer_speed_pid[i].param.output_limit * output_scale;
+
         /* 驱动轮：速度环（转向电机离线的舵轮也不驱动：朝向不受控） */
         if (m->wheel_ok[i])
         {

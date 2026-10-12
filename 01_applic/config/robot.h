@@ -91,9 +91,11 @@ static const MotorConfig wheel_config[CHASSIS_WHEELS] = {
  *   换算：输出轴 1 rad/s = 转子 183.38 rpm，1 N·m = 2730.7 电流原始值（M3508 + C620，见 02_devices/motor/motor.h），
  *   例如 kp = 13 × 183.38 ÷ 2730.7 ≈ 0.8730。
  * 手里有别的参数时照这个方法换算，就能直接填进来。
+ * 在线调参：这里是 Flash 里的常量，调试器改不了；上电时每个轮子的 PID 会拷一份到内存，
+ * 在 Ozone / Keil 里改 chassis.drive_pid[0..3].param 的 kp、ki、kd、output_limit 等立刻生效，调好后抄回这里。
  */
 static const ChassisConfig chassis_config = {
-    .type = CHASSIS_OMNI,
+    .type = CHASSIS_MECANUM,
     .omni = { .wheel_radius_m = 0.076f, .center_dist_m = 0.25f, .first_wheel_rad = RM_PI / 4.0f },
     .max_accel_m_s2 = 2.0f,
     .max_alpha_rad_s2 = 4.0f,
