@@ -36,7 +36,7 @@ void quat_ekf_init(QuatEkf *ekf, float q_quat, float q_bias, float r_accel)
     KalmanFilter *kf = &ekf->kf;
     kf->x.data[0] = 1.0f;
 
-    /* 旧工程 INS_Task.c 的 QuaternionEKF_P_Data：对角 1e5（四元数）/ 100（零偏），其余 0.1 */
+    /* 协方差 P 的初值：对角 1e5（四元数）/ 100（零偏），其余 0.1。对角大 = 开始时很不确定，前几次更新会大幅修正 */
     for (uint32_t r = 0u; r < N; r++)
     {
         for (uint32_t c = 0u; c < N; c++)
