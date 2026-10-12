@@ -149,12 +149,10 @@ typedef struct
 /**
  * @param   steer  各轮转向电机：舵轮 4 个都填；半舵半全向只填舵轮那两个、全向轮位置填 NULL；
  *                 其余轮组整个传 NULL
- * @return  false：有电机不支持力矩指令（这种配置不能用在底盘上）
  * @pre     各电机已 motor_init()；cfg 在整个运行期间有效
  */
-RM_NODISCARD bool chassis_init(Chassis *chassis, const ChassisConfig *cfg,
-                               Motor *const drive[CHASSIS_WHEELS],
-                               Motor *const steer[CHASSIS_WHEELS]);
+void chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive[CHASSIS_WHEELS],
+                  Motor *const steer[CHASSIS_WHEELS]);
 
 /** 降级时目标速度和加速度的比例：少了轮子车会跑偏，降速给操作手留出修正的余量；数值是经验值，可按实车调整 */
 #define CHASSIS_DEGRADED_SCALE 0.5f

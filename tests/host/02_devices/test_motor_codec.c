@@ -157,11 +157,32 @@ static void test_dji_ids_and_slots(void)
     TEST_ASSERT_NOT_EQUAL(0, fake_can_sent(0)->data[0] | fake_can_sent(0)->data[1]); /* 槽位 0 */
 }
 
-static void test_dji_supports_torque(void)
+/* GM6020 电流模式：1–4 号在 0x1FE、5–7 号在 0x2FE；1 A = 16384 / 3 ≈ 5461，0.741 N·m/A 直驱 */
+static void test_gm6020_current_frame(void)
 {
-    TEST_ASSERT_TRUE(motor_supports_torque(add(dji_cfg(MOTOR_M3508, 1, 1, 1.0f))));
-    TEST_ASSERT_TRUE(motor_supports_torque(add(dji_cfg(MOTOR_M2006, 2, 1, 1.0f))));
-    TEST_ASSERT_FALSE(motor_supports_torque(add(dji_cfg(MOTOR_GM6020, 5, 1, 1.0f))));
+    Motor *g2 = add(dji_cfg(MOTOR_GM6020, 2, 1, 1.0f));
+    Motor *g6 = add(dji_cfg(MOTOR_GM6020, 6, -1, 1.0f));
+    (void)dji_rx(g2, 0, 0, 0, 0);
+    (void)dji_rx(g6, 0, 0, 0, 0);
+    motor_set_torque(g2, 0.741f);  /* 1 A */
+    motor_set_torque(g6, -0.741f); /* 方向为 -1：发出 +1 A */
+    motor_group_send(&group);
+    TEST_ASSERT_EQUAL_UINT32(2, fake_can_sent_count());
+    TEST_ASSERT_EQUAL_HEX32(0x1FE, fake_can_sent(0)->id);
+    TEST_ASSERT_EQUAL_INT16(
+        5461, (int16_t)((fake_can_sent(0)->data[2] << 8) | fake_can_sent(0)->data[3])); /* 槽位 1 */
+    TEST_ASSERT_EQUAL_HEX32(0x2FE, fake_can_sent(1)->id);
+    TEST_ASSERT_EQUAL_INT16(
+        5461, (int16_t)((fake_can_sent(1)->data[2] << 8) | fake_can_sent(1)->data[3]));
+
+    group = (MotorGroup){ 0 };
+    fake_can_reset();
+    Motor *g1 = add(dji_cfg(MOTOR_GM6020, 1, 1, 1.0f));
+    (void)dji_rx(g1, 0, 0, 0, 0);
+    motor_set_torque(g1, 100.0f); /* 超量程：截到 16384（3 A） */
+    motor_group_send(&group);
+    TEST_ASSERT_EQUAL_INT16(
+        16384, (int16_t)((fake_can_sent(0)->data[0] << 8) | fake_can_sent(0)->data[1]));
 }
 
 /* M3508 原装减速箱：20 A = 6 N·m；1000 rpm 转子 = 5.4533 rad/s 输出轴 */
@@ -400,7 +421,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_dji_config_valid);
     RUN_TEST(test_dji_ids_and_slots);
-    RUN_TEST(test_dji_supports_torque);
+    RUN_TEST(test_gm6020_current_frame);
     RUN_TEST(test_m3508_feedback_units);
     RUN_TEST(test_dji_direction_flips_signs);
     RUN_TEST(test_dji_multi_turn);

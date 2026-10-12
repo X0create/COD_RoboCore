@@ -1,6 +1,6 @@
 /**
  * @file    test_chassis.c
- * @brief   底盘子系统的单元测试（全向轮为主）：不支持力矩的电机被拒、全车停不写指令并对齐实测速度、
+ * @brief   底盘子系统的单元测试（全向轮为主）：全车停不写指令并对齐实测速度、
  *          目标按斜坡变化、各轮力矩方向符合逆解、输出限幅比例、一个轮子离线时受控减速且不给它写指令；
  *          麦轮按麦轮逆解驱动；舵轮转向电机转向目标朝向、转向电机离线同样受控减速
  */
@@ -106,7 +106,7 @@ void setUp(void)
         const Motor *conflict;
         TEST_ASSERT_TRUE(motor_init(wheel[i], &wheel_cfg[i], &group, &conflict));
     }
-    TEST_ASSERT_TRUE(chassis_init(&chassis, &cfg, wheel, NULL));
+    chassis_init(&chassis, &cfg, wheel, NULL);
 }
 
 void tearDown(void)
@@ -161,17 +161,6 @@ static void feed_steer_all(void)
     }
 }
 
-static MotorConfig gm6020_cfg(void)
-{
-    return (MotorConfig){ .name = "gm6020",
-                          .type = MOTOR_GM6020,
-                          .can_bus = CAN_BUS_2,
-                          .id = 1u,
-                          .direction = 1,
-                          .gear_ratio = 1.0f,
-                          .stop_action = STOP_ACTION_ZERO_TORQUE };
-}
-
 /* control_task 一个周期的三步：能动时 */
 static void run_step(Chassis *c, const ChassisVel *cmd, float output_scale)
 {
@@ -186,18 +175,6 @@ static void run_stop(Chassis *c)
     chassis_measure_update(c);
     chassis_target_update(c, NULL, true);
     chassis_output_update(c, 1.0f);
-}
-
-static void test_rejects_motor_without_torque_command(void)
-{
-    static MotorConfig gm;
-    gm = gm6020_cfg();
-    Motor *m = &pool[pool_used++];
-    const Motor *conflict;
-    TEST_ASSERT_TRUE(motor_init(m, &gm, &group, &conflict));
-    Motor *const mixed[CHASSIS_WHEELS] = { wheel[0], wheel[1], m, wheel[3] };
-    Chassis c;
-    TEST_ASSERT_FALSE(chassis_init(&c, &cfg, mixed, NULL));
 }
 
 /* 全车停：不写任何指令（由发送出口改写成零力矩）；斜坡起点对齐实测速度（原地转） */
@@ -314,7 +291,7 @@ static void test_wheel_offline_degrades_to_half_speed(void)
 static void test_mecanum_drives_by_mecanum_inverse(void)
 {
     Chassis c;
-    TEST_ASSERT_TRUE(chassis_init(&c, &mecanum_cfg, wheel, NULL));
+    chassis_init(&c, &mecanum_cfg, wheel, NULL);
     feed_all(0.0f);
     run_stop(&c);
     const ChassisVel target = { .vy_m_s = 1.0f };
@@ -335,7 +312,7 @@ static void test_steer_turns_wheels_toward_target(void)
 {
     add_steer_motors();
     Chassis c;
-    TEST_ASSERT_TRUE(chassis_init(&c, &steer_cfg, wheel, steer));
+    chassis_init(&c, &steer_cfg, wheel, steer);
     feed_all(0.0f);
     feed_steer_all();
     run_stop(&c);
@@ -362,7 +339,7 @@ static void test_half_steer_turns_only_steer_wheels(void)
     add_steer_motors();
     Motor *const half[CHASSIS_WHEELS] = { steer[0], NULL, steer[2], NULL };
     Chassis c;
-    TEST_ASSERT_TRUE(chassis_init(&c, &half_steer_cfg, wheel, half));
+    chassis_init(&c, &half_steer_cfg, wheel, half);
     const ChassisVel target = { .vx_m_s = 0.5f, .vy_m_s = 1.0f };
     for (int k = 0; k < 50; k++)
     {
@@ -380,26 +357,12 @@ static void test_half_steer_turns_only_steer_wheels(void)
     TEST_ASSERT_FALSE(steer[3]->torque_set);
 }
 
-/* 舵轮：转向电机不支持力矩指令（GM6020 目前只有反馈）时拒绝 */
-static void test_steer_rejects_motor_without_torque_command(void)
-{
-    static MotorConfig gm;
-    gm = gm6020_cfg();
-    add_steer_motors();
-    Motor *m = &pool[pool_used++];
-    const Motor *conflict;
-    TEST_ASSERT_TRUE(motor_init(m, &gm, &group, &conflict));
-    Motor *const mixed[CHASSIS_WHEELS] = { steer[0], m, steer[2], steer[3] };
-    Chassis c;
-    TEST_ASSERT_FALSE(chassis_init(&c, &steer_cfg, wheel, mixed));
-}
-
 /* 舵轮：转向电机离线 → 这个轮子朝向不受控，驱动和转向都不写指令；其余轮子降级继续 */
 static void test_steer_motor_offline_drops_that_wheel(void)
 {
     add_steer_motors();
     Chassis c;
-    TEST_ASSERT_TRUE(chassis_init(&c, &steer_cfg, wheel, steer));
+    chassis_init(&c, &steer_cfg, wheel, steer);
     feed_all(0.0f);
     feed_steer_all();
     run_stop(&c);
@@ -499,7 +462,7 @@ static void test_steer_zero_finds_switch_center(void)
 {
     add_steer_motors();
     Chassis c;
-    TEST_ASSERT_TRUE(chassis_init(&c, &steer_zero_cfg, wheel, steer));
+    chassis_init(&c, &steer_zero_cfg, wheel, steer);
     TEST_ASSERT_EQUAL_INT(STEER_ZERO_FORWARD, c.zero[0].state);
     TEST_ASSERT_EQUAL_INT(STEER_ZERO_DONE, c.zero[1].state); /* 没接开关：零点上电即确定 */
 
@@ -525,7 +488,7 @@ static void test_steer_zero_timeout_fails(void)
 {
     add_steer_motors();
     Chassis c;
-    TEST_ASSERT_TRUE(chassis_init(&c, &steer_zero_cfg, wheel, steer));
+    chassis_init(&c, &steer_zero_cfg, wheel, steer);
     float angle = 0.0f;
     for (int k = 0; k < 3100; k++)
     {
@@ -544,7 +507,7 @@ static void test_steer_zero_pauses_and_restarts_after_offline(void)
 {
     add_steer_motors();
     Chassis c;
-    TEST_ASSERT_TRUE(chassis_init(&c, &steer_zero_cfg, wheel, steer));
+    chassis_init(&c, &steer_zero_cfg, wheel, steer);
     for (int k = 0; k < 100; k++)
     {
         feed_all(0.0f);
@@ -573,14 +536,12 @@ static void test_steer_zero_pauses_and_restarts_after_offline(void)
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_rejects_motor_without_torque_command);
     RUN_TEST(test_stop_all_writes_nothing_and_aligns_to_measured);
     RUN_TEST(test_ramps_and_drives_wheels_by_inverse_kinematics);
     RUN_TEST(test_output_scale_limits_torque);
     RUN_TEST(test_wheel_offline_degrades_to_half_speed);
     RUN_TEST(test_mecanum_drives_by_mecanum_inverse);
     RUN_TEST(test_steer_turns_wheels_toward_target);
-    RUN_TEST(test_steer_rejects_motor_without_torque_command);
     RUN_TEST(test_steer_motor_offline_drops_that_wheel);
     RUN_TEST(test_half_steer_turns_only_steer_wheels);
     RUN_TEST(test_steer_zero_finds_switch_center);

@@ -84,10 +84,10 @@ static void test_id_conflicts_rejected(void)
     TEST_ASSERT_EQUAL_PTR(ma, conflict);
     add(&other_bus); /* 另一路总线不冲突 */
     Motor *m5 = add(&c5);
-    /* GM6020 1 号：反馈 0x205、控制 0x1FF 槽 0，都与 C620 5 号相同 */
+    /* GM6020 1 号：反馈 0x205 与 C620 5 号相同（控制帧 0x1FE 虽不同，GM6020 也认 C620 5 号的 0x1FF 电压帧） */
     TEST_ASSERT_FALSE(motor_init(&pool[pool_used++], &g1, &group, &conflict));
     TEST_ASSERT_EQUAL_PTR(m5, conflict);
-    add(&g5); /* GM6020 5 号：0x209 / 0x2FF，不冲突 */
+    add(&g5); /* GM6020 5 号：0x209 / 0x2FE，不冲突 */
     TEST_ASSERT_FALSE(motor_init(&pool[pool_used++], &bad, &group, &conflict));
     TEST_ASSERT_NULL(conflict);
 }
@@ -286,14 +286,6 @@ static void test_send_failure_counted(void)
     fake_can_set_send_fail(true);
     motor_group_send(&group);
     TEST_ASSERT_EQUAL_UINT32(1, group.tx_dropped);
-}
-
-static void test_caps_through_motor(void)
-{
-    const MotorConfig c = cfg_of(MOTOR_M3508, CAN_BUS_1, 1, STOP_ACTION_ZERO_TORQUE);
-    const MotorConfig g = cfg_of(MOTOR_GM6020, CAN_BUS_1, 5, STOP_ACTION_ZERO_TORQUE);
-    TEST_ASSERT_TRUE(motor_supports_torque(add(&c)));
-    TEST_ASSERT_FALSE(motor_supports_torque(add(&g)));
 }
 
 /* ---------------- 达妙 ---------------- */
@@ -520,7 +512,6 @@ int main(void)
     RUN_TEST(test_mixed_disable_keeps_sending);
     RUN_TEST(test_frames_per_bus_and_frame_id);
     RUN_TEST(test_send_failure_counted);
-    RUN_TEST(test_caps_through_motor);
     RUN_TEST(test_dm_sends_zero_mit_every_cycle);
     RUN_TEST(test_dm_classic_bus_sends_classic_frames);
     RUN_TEST(test_dm_enable_sequence);

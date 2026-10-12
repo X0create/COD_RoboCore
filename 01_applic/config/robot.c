@@ -54,11 +54,7 @@ bool robot_init(void)
         drive[i] = &wheel_motor[i];
     }
     /* 底盘：把四个驱动电机交给它；第 4 个参数是舵轮的转向电机，全向轮没有，传 NULL */
-    if (!chassis_init(&chassis, &chassis_config, drive, NULL))
-    {
-        RM_LOG_E("chassis init failed: motor without torque command");
-        return false;
-    }
+    chassis_init(&chassis, &chassis_config, drive, NULL);
 
     /* 超级电容：在电机之后初始化，才能查出 ID 有没有和电机撞 */
     const SupercapInitResult cap_result = supercap_init(&supercap, &supercap_config, &motors);

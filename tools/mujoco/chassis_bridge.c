@@ -87,8 +87,9 @@ bool chassis_bridge_init(float radius_m, float half_wheelbase_m, float half_trac
     }
     safety_gate_init(&safety_gate, arm_switch);
     safety_gate_set_system_ready(&safety_gate);
-    initialized = chassis_init(&sim_chassis, &sim_config, drive_ptr, steer_ptr);
-    return initialized;
+    chassis_init(&sim_chassis, &sim_config, drive_ptr, steer_ptr);
+    initialized = true;
+    return true;
 }
 
 static void put_be16(uint8_t *out, int16_t value)

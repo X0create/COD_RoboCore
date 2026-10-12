@@ -19,11 +19,8 @@ static bool has_steer_motor(const ChassisConfig *cfg, unsigned i)
            || (cfg->type == CHASSIS_HALF_STEER && half_steer_is_steer(&cfg->half_steer, i));
 }
 
-/*
- * 记下配置和电机，按轮组类型初始化运动学和 PID。
- * 底盘靠力矩控制：有电机不支持力矩指令（如 GM6020 电压模式）就在初始化时拒绝，不等解锁后才发现不动
- */
-bool chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive[CHASSIS_WHEELS],
+/* 记下配置和电机，按轮组类型初始化运动学和 PID */
+void chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive[CHASSIS_WHEELS],
                   Motor *const steer[CHASSIS_WHEELS])
 {
     *chassis = (Chassis){ .cfg = cfg };
@@ -33,19 +30,11 @@ bool chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive
     }
     for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
     {
-        if (!motor_supports_torque(drive[i]))
-        {
-            return false;
-        }
         chassis->drive[i] = drive[i];
         pid_init(&chassis->drive_pid[i], PID_POSITION, &cfg->drive_speed_pid);
 
         if (has_steer_motor(cfg, i))
         {
-            if (!motor_supports_torque(steer[i]))
-            {
-                return false;
-            }
             chassis->steer[i] = steer[i];
             pid_init(&chassis->steer_angle_pid[i], PID_POSITION, &cfg->steer.angle_pid);
             pid_init(&chassis->steer_speed_pid[i], PID_POSITION, &cfg->steer.speed_pid);
@@ -53,7 +42,6 @@ bool chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive
                 cfg->steer.zero_switch[i] != GPIO_IN_NONE ? STEER_ZERO_FORWARD : STEER_ZERO_DONE;
         }
     }
-    return true;
 }
 
 /* ------------------------------------------------------------------ */

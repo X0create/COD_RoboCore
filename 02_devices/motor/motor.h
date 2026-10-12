@@ -59,7 +59,7 @@ typedef enum
 {
     MOTOR_M3508, /* C620 电调 */
     MOTOR_M2006, /* C610 电调 */
-    MOTOR_GM6020, /* 目前只解析反馈，还不能发指令（电压 / 电流两种控制模式尚未实现） */
+    MOTOR_GM6020, /* 电流模式（控制帧 0x1FE / 0x2FE），需要支持电流模式的电调固件 */
     MOTOR_DM, /* 达妙各型号（DM4310、DM8009…），差异在 DmConfig 里 */
 } MotorType;
 
@@ -169,8 +169,8 @@ typedef struct Motor
     struct Motor *next; /* 所属电机组的链表 */
 } Motor;
 
-/* 每路 CAN 上 DJI 电调的控制帧：0x200（C6x0 1–4）、0x1FF（C6x0 5–8 / GM6020 1–4）、0x2FF（GM6020 5–7） */
-#define DJI_CTRL_FRAMES 3u
+/* 每路 CAN 上 DJI 电调的控制帧：0x200（C6x0 1–4）、0x1FF（C6x0 5–8）、0x1FE（GM6020 1–4）、0x2FE（GM6020 5–7） */
+#define DJI_CTRL_FRAMES 4u
 
 /**
  * 电机组：一辆车的全部电机。comm_rx_task 收反馈时逐个问组里的电机，control_task 周期末尾统一打包发送。
@@ -200,9 +200,6 @@ RM_NODISCARD bool motor_init(Motor *m, const MotorConfig *cfg, MotorGroup *group
  */
 const Motor *motor_group_find_can_id(const MotorGroup *group, CanBusId bus, uint32_t id);
 
-/** 能否 motor_set_torque()（GM6020 目前只有反馈）。子系统在 xxx_init() 里检查一次，运行时不再检查 */
-bool motor_supports_torque(const Motor *m);
-
 /**
  * @brief   收到的一帧交给电机组：总线和反馈 ID 对上的那个电机解码、存下、喂看门狗
  * @return  true：有电机认领了这一帧（长度不对的也算认领，丢弃不喂狗）
@@ -219,7 +216,7 @@ RM_NODISCARD bool motor_read_feedback(const Motor *m, MotorFeedback *out);
 /**
  * @brief   记下本周期的力矩指令（输出轴 N·m）——只记下，周期末尾 motor_group_send() 才编码发送；超出电调量程时截到量程
  * @note    本周期没调用的电机发零力矩；电机离线或有停机动作时，这个指令不会发出（motor_group_send() 第 1 步）
- * @pre     motor_supports_torque(m)；只在 control_task 里调用
+ * @pre     只在 control_task 里调用
  */
 void motor_set_torque(Motor *m, float torque_nm);
 

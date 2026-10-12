@@ -25,12 +25,12 @@
  * DJI 每种型号一行常数。力矩常数折算到转子（输出轴常数 ÷ 原装减速比），这样拆掉减速箱时只改 gear_ratio。
  * - M3508 / C620：电流 ±16384 对应 ±20 A；输出轴 0.3 N·m/A（原装减速比 3591/187）
  * - M2006 / C610：电流 ±10000 对应 ±10 A；输出轴 0.18 N·m/A（原装 36:1）。用前对照大疆手册核对
- * - GM6020：反馈电流 ±16384 对应 ±3 A、0.741 N·m/A，用前核对；目前只解析反馈、不发指令
+ * - GM6020：电流模式，指令和反馈都是 ±16384 对应 ±3 A；直驱，0.741 N·m/A（DJI 手册，用前核对）
  */
 typedef struct
 {
     float amps_per_raw;  /* 电流原始值 → A（反馈和指令共用） */
-    int16_t cmd_max_raw; /* 电流指令量程；0 表示不支持力矩指令 */
+    int16_t cmd_max_raw; /* 电流指令量程（原始值） */
     float kt_rotor;      /* 转子力矩常数 N·m/A */
     bool has_temperature;
 } DjiTypeParams;
@@ -39,7 +39,7 @@ static const DjiTypeParams dji_params[] = {
     [MOTOR_M3508] = { DJI_C620_MAX_A / (float)DJI_C620_RAW_MAX, DJI_C620_RAW_MAX,
                       DJI_M3508_NM_PER_A / DJI_M3508_GEAR_RATIO, true },
     [MOTOR_M2006] = { 10.0f / 10000.0f, 10000, 0.18f / DJI_M2006_GEAR_RATIO, false },
-    [MOTOR_GM6020] = { 3.0f / 16384.0f, 0, 0.741f, true },
+    [MOTOR_GM6020] = { 3.0f / 16384.0f, 16384, 0.741f, true },
 };
 
 /* 达妙 MIT 帧里 Kp、Kd 的范围（协议固定） */
@@ -59,19 +59,21 @@ static const DjiTypeParams dji_params[] = {
 #define DM_CMD_INTERVAL_US 20000u
 
 /*
- * DJI 电调在哪个控制帧的第几个槽位（frame 0–2 对应 0x200、0x1FF、0x2FF，slot 0–3）：
- * C6x0（M3508 / M2006）1–4 号在 0x200、5–8 号在 0x1FF；GM6020 电压帧 1–4 号在 0x1FF、5–7 号在 0x2FF。
- * GM6020 目前不发指令，但仍占它的槽位：给 C6x0 发 0x1FF 时会把 GM6020 的槽位写成 0，所以按冲突处理
+ * DJI 电调在哪个控制帧的第几个槽位（frame 0–3 对应下表的 4 个帧 ID，slot 0–3）：
+ * C6x0（M3508 / M2006）1–4 号在 0x200、5–8 号在 0x1FF；
+ * GM6020 用电流模式：1–4 号在 0x1FE、5–7 号在 0x2FE（电压模式的 0x1FF / 0x2FF 不用）。
+ * GM6020 n 号也认 0x1FF 的电压指令，而 0x1FF 是 C6x0 5–8 号的控制帧：两者正好也是同一个反馈 ID（0x204 + n），
+ * 反馈 ID 查重已经把这种组合拒掉，不会出现 C6x0 的指令被 GM6020 当成电压的情况
  */
 static void dji_ctrl_slot(const MotorConfig *cfg, uint8_t *frame, uint8_t *slot)
 {
     const uint8_t index = (uint8_t)(cfg->id - 1u); /* 0–7 */
-    const uint8_t first_frame = cfg->type == MOTOR_GM6020 ? 1u : 0u;
+    const uint8_t first_frame = cfg->type == MOTOR_GM6020 ? 2u : 0u;
     *frame = (uint8_t)(first_frame + index / 4u);
     *slot = (uint8_t)(index % 4u);
 }
 
-static const uint32_t dji_ctrl_frame_id[DJI_CTRL_FRAMES] = { 0x200u, 0x1FFu, 0x2FFu };
+static const uint32_t dji_ctrl_frame_id[DJI_CTRL_FRAMES] = { 0x200u, 0x1FFu, 0x1FEu, 0x2FEu };
 
 /* 反馈帧 ID：C6x0 为 0x200 + ID（0x201–0x208），GM6020 为 0x204 + ID（0x205–0x20B），达妙为配置的 Master ID */
 static uint32_t feedback_id(const MotorConfig *cfg)
@@ -187,11 +189,6 @@ const Motor *motor_group_find_can_id(const MotorGroup *group, CanBusId bus, uint
         }
     }
     return NULL;
-}
-
-bool motor_supports_torque(const Motor *m)
-{
-    return m->cfg->type == MOTOR_DM || dji_params[m->cfg->type].cmd_max_raw > 0;
 }
 
 /* ================================================================== */
@@ -403,7 +400,7 @@ static MotorOutput final_output(const Motor *m)
 
 /*
  * 第 2、3 步（DJI）：一条总线上同一控制帧（0x200 / 0x1FF …）的电调共用一帧，每台占 2 字节大端电流原始值。
- * 力矩 → 电流原始值是反馈换算的逆运算，超出量程就截断；力矩以外的输出和不支持力矩指令的 GM6020 都发 0。
+ * 力矩 → 电流原始值是反馈换算的逆运算，超出量程就截断；力矩以外的输出（零力矩、失能）都发 0。
  */
 static void send_dji_frame(MotorGroup *group, CanBusId bus, uint8_t frame_index)
 {
