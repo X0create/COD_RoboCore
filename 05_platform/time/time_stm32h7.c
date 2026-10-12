@@ -1,7 +1,7 @@
 /**
  * @file    time_stm32h7.c
  * @brief   STM32H7 的时间基准：DWT 周期计数器扩展成 64 位，再换算成微秒
- * @note    做法参考 COD_UniCFramework `impl_stm32_dwt.c`（Cortex-M7 的 DWT 解锁）
+ * @note    Cortex-M7 上 DWT 默认是锁着的，要先写解锁寄存器（LAR）再打开计数，否则 CYCCNT 一直是 0。
  */
 #include "05_platform/time/time.h"
 #include "05_platform/time/time_internal.h"

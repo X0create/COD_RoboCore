@@ -23,7 +23,7 @@ static UART_HandleTypeDef *const handles[UART_COUNT] = {
 
 /*
  * 接收 DMA 的循环缓冲区：H7 的 DMA1/DMA2 访问不到 DTCM，必须放在 AXI SRAM 的 .dma_buf 段
- * （该段已由 MPU 设为不可缓存，ADR 0021）。每个编号一块，没用到的编号也占 256 字节，
+ * （该段已由 MPU 设为不可缓存，DMA 写进去的数据 CPU 能直接读到，不用维护 Cache）。每个编号一块，没用到的编号也占 256 字节，
  * 共 2.5 KB，换来不用按板子改数组大小。
  */
 RM_DMA_BUF static uint8_t rx_buf[UART_COUNT][RX_BUF_SIZE];

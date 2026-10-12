@@ -1,7 +1,7 @@
 /**
  * @file    gpio_stm32h7.c
  * @brief   STM32H7 的 GPIO 输入（见 05_platform/gpio/gpio.h）
- * @note    用途到引脚的对应关系照 COD 26 赛季哨兵（rmcod2026_-sentry 底盘板，同为 DM-MC02）；
+ * @note    用途到引脚的对应关系是 DM-MC02 上一种实际用过的接法（PE13 / PE9 / PA2 / PA0），按自己的接线改这张表；
  *          以后有第二块 H7 板时移到 06_boards/<板子>/board.c。
  */
 #include "05_platform/gpio/gpio.h"

@@ -1,8 +1,11 @@
 /**
  * @file    can.h
- * @brief   CAN / CAN FD 收发（《架构设计》核心机制第 1 节、运行时契约第 6 节）
- * @note    - 只支持 11 位标准 ID（DJI、达妙都用标准 ID）；接收全部标准数据帧，扩展帧和远程帧拒收。
- *            每条总线上只挂本车的设备，不用硬件滤波；comm_rx_task.c 用 can_read() 取帧、交给电机组（ADR 0049、0066）；
+ * @brief   CAN / CAN FD 收发
+ * @note    CAN 是两根线（CAN_H、CAN_L）组成的总线，多个设备挂在同一对线上，每帧带一个 ID 表示“这是谁的数据”。
+ *          CAN FD 是升级版：一帧最多 64 字节、数据段可以更快；经典 CAN 一帧最多 8 字节。
+ *          - 只支持 11 位标准 ID（DJI、达妙都用标准 ID）；接收全部标准数据帧，扩展帧和远程帧拒收。
+ *            每条总线上只挂本车的设备，不用硬件滤波（ID 不认识的帧在软件里忽略即可）；
+ *            comm_rx_task.c 用 can_read() 取帧、交给电机组；
  *          - 中断里只把帧放进环形缓冲并调用通知回调，任务里用 can_read() 逐帧取出；
  *          - 使用顺序：调度器启动后 can_start() → 任务里 can_read()。
  */
@@ -33,7 +36,7 @@ typedef struct
 {
     uint32_t id; /* 11 位标准 ID */
     uint8_t len; /* 数据字节数：经典帧 0–8，FD 帧 0–8、12、16、20、24、32、48、64 */
-    bool is_fd; /* true：CAN FD 帧（只能发往全 FD 的总线，ADR 0023） */
+    bool is_fd; /* true：CAN FD 帧（只能发往全 FD 的总线：经典 CAN 设备会把 FD 帧当成错误帧） */
     uint8_t data[CAN_MAX_DATA_LEN];
     uint64_t stamp_us; /* 接收时刻（rm_time_now_us），发送时忽略 */
 } CanFrame;
@@ -65,7 +68,7 @@ RM_NODISCARD bool can_send(CanBusId bus, const CanFrame *frame);
 
 /**
  * @brief   这路总线是否配置成 CAN FD（CubeMX 的 FrameFormat）
- * @note    FD 帧只能发往全 FD 的总线（ADR 0023）；设备驱动据此决定发 FD 帧还是经典帧
+ * @note    FD 帧只能发往全 FD 的总线；设备驱动据此决定发 FD 帧还是经典帧
  */
 bool can_bus_is_fd(CanBusId bus);
 
@@ -78,7 +81,8 @@ bool can_is_bus_off(CanBusId bus);
 
 /**
  * @brief   从 bus-off 恢复：重新启动控制器，滤波器和接收中断的配置保留
- * @pre     can_start() 成功过；由 comm_rx_task 调用（01_applic/tasks/comm_rx_task.c 的 recover_bus_off），同一路两次调用至少间隔 100 ms（《架构设计》“发送队列满了怎么办”）
+ * @pre     can_start() 成功过；由 comm_rx_task 调用（01_applic/tasks/comm_rx_task.c 的 recover_bus_off），
+ *          同一路两次调用至少间隔 100 ms（总线真有硬件故障时，不停重启只会刷屏、占 CPU）
  * @note    恢复期间 can_send() 返回 false（丢帧），和发送队列满的处理相同
  */
 void can_recover(CanBusId bus);
@@ -106,7 +110,7 @@ bool can_len_to_dlc(uint8_t len, uint8_t *dlc);
 
 /*
  * 接收环形缓冲：单生产者、单消费者，中断写、任务读。
- * 生产者（中断）只改 head，消费者（任务）只改 tail，不需要关中断（《架构设计》运行时契约第 2 节）。
+ * 生产者（中断）只改 head，消费者（任务）只改 tail，两边不会同时改同一个变量，所以不需要关中断。
  * 容量为 CAN_RX_RING_SIZE - 1 帧（空一格区分空和满）。
  */
 

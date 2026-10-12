@@ -5,7 +5,7 @@
 | 目录 | 内容 |
 | --- | --- |
 | `os/` | 任务创建（静态分配）、任务通知、`rm_task_delay_until()`；`critical.h` 临界区、`delay.h` 忙等延时 |
-| `watchdog/` | 设备在线检测（`watchdog_feed` / `watchdog_is_online`；数据由各模块自己在临界区里存取，ADR 0069；在线状态只有这一个来源，ADR 0059）。硬件看门狗 IWDG 不在这里：在 `05_platform/iwdg/`，由 detect_task 喂 |
+| `watchdog/` | 设备在线检测（`watchdog_feed` / `watchdog_is_online`；数据由各模块自己在临界区里存取；在线状态只有这一个来源）。硬件看门狗 IWDG 不在这里：在 `05_platform/iwdg/`，由 detect_task 喂 |
 | `error/` | （规划）`RM_ASSERT`、`RM_CHECK`、错误码、HardFault 记录 |
 | `log/` | SEGGER RTT 日志 |
 | `param/` | （规划）Flash 双区参数存储 |

@@ -2,9 +2,9 @@
  * @file    adc_stm32h7.c
  * @brief   ADC 的 STM32H7 实现，见 05_platform/adc/adc.h
  * @note    CubeMX 配置：ADC1 16 位、连续转换、DMA 循环；两个转换序位都是通道 4（PC4，电池分压），
- *          读数取两者平均（同 COD-H7-Template bsp_adc.c 的配置，旧代码只用第一个）。
+ *          读数取两者平均（采两次取平均，噪声小一点）。
  *          读数直接读 DMA 缓冲区，不用 DMA 的半满 / 满中断：HAL_ADC_Start_DMA 会打开它们，
- *          连续转换下每秒几万次中断却没人用，启动后关掉（2026-09-30）。
+ *          连续转换下每秒几万次中断却没人用，白白占 CPU，启动后关掉。
  */
 #include "05_platform/adc/adc.h"
 

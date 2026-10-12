@@ -13,7 +13,7 @@ extern "C"
 
 /**
  * @brief   设置状态灯颜色，立即生效
- * @pre     只由一个任务调用（阶段 0 为心跳任务）；不在中断里调用
+ * @pre     只由一个任务调用（本框架是 indicator_task）；不在中断里调用
  * @note    MC02 上是约 165 µs 的阻塞发送；发送失败时忽略，状态灯不影响控制
  */
 void status_led_set(uint8_t red, uint8_t green, uint8_t blue);
@@ -22,8 +22,9 @@ void status_led_set(uint8_t red, uint8_t green, uint8_t blue);
 /* 与芯片无关，电脑上测试；只给本目录的 *_<芯片>.c 用，上层不要调用 */
 
 /*
- * WS2812 的 SPI 编码：每个颜色位编成一个 SPI 字节（编码方式参考 COD_UniCFramework `dev_ws2812.c`）。
- * 要求 SPI 时钟 6 MHz、8 位数据、MSB 先发（《架构设计》附录 A.1，UniC 实测）：
+ * WS2812 是一种自带控制芯片的 RGB 灯，靠一根线上高电平脉冲的长短传 0 和 1，对时间要求很严。
+ * 这里借 SPI 来产生这些脉冲：每个颜色位编成一个 SPI 字节。
+ * 要求 SPI 时钟 6 MHz、8 位数据、MSB 先发（在 MC02 上实测可用）：
  * 一个 SPI 位约 167 ns，0x60 高电平 2 位 = 333 ns（0 码），0x78 高电平 4 位 = 667 ns（1 码）。
  * 两个码都以低电平开头和结尾，连续发送时相邻两位的脉冲不会连成一个。
  */

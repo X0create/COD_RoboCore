@@ -1,12 +1,12 @@
 /**
  * @file    iwdg.h
- * @brief   硬件看门狗 IWDG：程序卡死超过 IWDG_TIMEOUT_MS 没喂狗，芯片自己复位（ADR 0074）
+ * @brief   硬件看门狗 IWDG：程序卡死超过 IWDG_TIMEOUT_MS 没喂狗，芯片自己复位
  * @note    不是 04_core/watchdog（设备在线检测）。IWDG 有自己的时钟（LSI），CPU 卡死它也照样倒计时。
  *          - 谁喂：detect_task 每 10 ms 检查一次 control_task 的心跳，在涨才喂（只有 control_task 发电机指令；
- *            其他任务卡死不影响电机安全，ADR 0074）；
+ *            其他任务卡死不影响电机安全，没必要为它们整板复位）；
  *          - 调试器暂停（Halt）时 IWDG 一起暂停，打断点不会被复位；
  *          - 致命故障（栈溢出、断言、HardFault）也经 IWDG 立即复位，所以“上次是不是 IWDG 复位”
- *            就等于“上次是不是程序出了故障”，复位后据此自动恢复（ADR 0073 ④）。
+ *            就等于“上次是不是程序出了故障”，复位后据此自动恢复、不用操作手重新解锁（见 safety_gate.h）。
  *          直接写寄存器，不用 CubeMX 生成 IWDG 初始化。
  */
 #pragma once

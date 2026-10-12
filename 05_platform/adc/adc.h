@@ -1,6 +1,6 @@
 /**
  * @file    adc.h
- * @brief   模拟输入：按用途命名的通道，读引脚电压（ADR 0027、0033）
+ * @brief   模拟输入：按用途命名的通道（如 ADC_BATTERY），读引脚电压
  * @note    ADC 用 DMA 连续采样，adc_read_volts() 读最新结果，任务里随时可调用、不阻塞。
  */
 #pragma once

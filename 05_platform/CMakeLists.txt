@@ -12,7 +12,7 @@ add_library(rm_platform_common STATIC
 target_include_directories(rm_platform_common PUBLIC ${PROJECT_SOURCE_DIR})
 rm_target_warnings(rm_platform_common)
 
-# 当前主控的芯片实现：每个外设一份 <外设>_${RM_CHIP}.c，同名函数，CMake 只编译这一份（ADR 0017）
+# 当前主控的芯片实现：每个外设一份 <外设>_${RM_CHIP}.c，同名函数，CMake 只编译这一份（换芯片不改上层代码）
 if(RM_CHIP)
     add_library(rm_platform STATIC
         adc/adc_${RM_CHIP}.c

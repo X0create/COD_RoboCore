@@ -1,7 +1,8 @@
 /**
  * @file    crc.c
  * @brief   裁判系统协议用的 CRC8 / CRC16，见 crc.h
- * @note    两张查表数组取自 COD-H7-Template `Components/Algorithm/Src/CRC.c`：
+ * @note    两张查表数组是裁判系统协议规定的标准 CRC8 / CRC16 表，取自以 MIT 许可证开源的代码，
+ *          按许可证要求保留其版权声明：
  *
  *          MIT License
  *          Copyright (c) 2025 GrassFan_Wang

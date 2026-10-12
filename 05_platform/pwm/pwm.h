@@ -1,6 +1,7 @@
 /**
  * @file    pwm.h
- * @brief   PWM 输出：按用途命名的通道，设置占空比和频率（ADR 0033）
+ * @brief   PWM 输出：按用途命名的通道（如加热、蜂鸣器），设置占空比和频率
+ * @note    “按用途命名”：上层只写 PWM_IMU_HEATER，不关心它是哪个定时器的哪个通道；对应关系在 pwm_stm32h7.c 的表里。
  */
 #pragma once
 

@@ -1,13 +1,13 @@
 /**
  * @file    watchdog.h
- * @brief   设备在线检测（软件看门狗，《架构设计》核心机制第 3 节）——判断“这个设备最近有没有发来数据”
- * @warning 不是芯片的硬件看门狗 IWDG（防程序卡死、超时复位），那个在阶段 1 另做。
+ * @brief   设备在线检测（软件看门狗）——判断“这个设备最近有没有发来数据”
+ * @warning 不是芯片的硬件看门狗 IWDG（防程序卡死、超时复位），那个在 05_platform/iwdg。
  * @note    - 设备每收到一帧**合法**数据就喂狗 watchdog_feed()。有数据给别的任务读的设备，在同一个临界区里
  *            先存数据再喂狗，读的一方也在临界区里拷数据、查 watchdog_is_online()，拿到的数据和在线状态一定对得上：
  *              写：rm_critical_enter(); self->rc = rc; watchdog_feed(&self->wd, rx_us); rm_critical_exit();
  *              读：rm_critical_enter(); *out = self->rc; online = watchdog_is_online(&self->wd); rm_critical_exit();
  *          - 在不在线由读取方当场计算（现在 − 最后喂狗时刻 ≤ 超时），不等 detect_task 来标记，检测延迟就是超时本身；
- *          - 一个设备的在线状态只有这一个来源（ADR 0059）：控制用的 dr16_read() 等和 detect_task 的上线 / 离线日志
+ *          - 一个设备的在线状态只有这一个来源：控制用的 dr16_read() 等和 detect_task 的上线 / 离线日志
  *            读的是同一个时间戳、同一个超时，不会出现“日志说离线、控制仍认为在线”；
  *          - detect_task 定期调用 watchdog_poll() 只做**报告**，不参与安全判定。
  *          喂狗和查询自己也进临界区（可以嵌套），任务之间可以并发调用；中断里不能调用。

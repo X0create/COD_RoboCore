@@ -1,9 +1,10 @@
 /**
  * @file    can_stm32h7.c
  * @brief   STM32H7 FDCAN 收发，见 05_platform/can/can.h
- * @note    - 接收全部标准数据帧，不用硬件滤波（同 COD-H7-Template `bsp_can.c` 的全放行，ADR 0049）；
- *          - 接收用哪个 FIFO 按 CubeMX 配置自动选：FDCAN1/3 用 FIFO0，FDCAN2 用 FIFO1（COD-H7-Template 的配置）；
- *          - 总线分配（ADR 0067）：FDCAN1、FDCAN2 经典 CAN 1 Mbit/s 接电机，FDCAN3 CAN FD + BRS（1 / 5 Mbit/s）只给板间通信；
+ * @note    - 接收全部标准数据帧，不用硬件滤波（滤波器配成全部放行）；
+ *          - 接收用哪个 FIFO 按 CubeMX 配置自动选：FDCAN1/3 用 FIFO0，FDCAN2 用 FIFO1；
+ *          - 总线分配：FDCAN1、FDCAN2 经典 CAN 1 Mbit/s 接电机（电机只认经典 CAN），
+ *            FDCAN3 CAN FD + BRS（仲裁段 1 Mbit/s、数据段 5 Mbit/s）只给板间通信；
  *          - 中断把帧放进软件环形缓冲，comm_rx_task 用 can_read() 取出后按 ID 交给对应设备。
  */
 #include "05_platform/can/can.h"
@@ -41,7 +42,7 @@ static bool uses_fifo0(const FDCAN_HandleTypeDef *h)
  * 1. 消息 RAM 每格必须是 64 字节：CubeMX 默认 8 字节，FD 帧超过 8 字节的部分会被硬件悄悄截掉，所以在这里拒绝启动；
  * 2. 带速率切换（BRS）时打开发送延时补偿：数据段 5 Mbit/s 一位只有 200 ns，收发器的回环延迟占了一大截，
  *    不补偿时控制器在错误的时刻采样自己发出的位，报位错误。偏移取数据段采样点位置（预分频 × TSeg1，ST 例程的算法），
- *    按当前 1 / 14 / 5 配置为 14，与 COD-H7-Template、rmcod2026 哨兵在实车上用的 (14, 14) 相同。
+ *    按当前 1 / 14 / 5 配置为 14，即 (偏移 14, 滤波窗口 14)，这组值在 MC02 实车上用过。
  */
 static bool configure_fd(FDCAN_HandleTypeDef *h, bool fifo0)
 {
@@ -139,7 +140,7 @@ bool can_is_bus_off(CanBusId bus)
     return buses[bus].started && (handles[bus]->Instance->PSR & FDCAN_PSR_BO) != 0u;
 }
 
-/* 先 Stop 再 Start（做法同 COD_UniCFramework `can_bus_off_recover`）：直接清 CCCR.INIT 会让 HAL 的
+/* 先 Stop 再 Start：直接清寄存器 CCCR.INIT 虽然也能让控制器回到总线，但会让 HAL 的
  * State 字段和硬件对不上，之后 HAL 拒绝发送。Stop / Start 不动消息 RAM 和中断使能，滤波器配置保留。 */
 void can_recover(CanBusId bus)
 {

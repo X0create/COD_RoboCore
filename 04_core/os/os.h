@@ -1,7 +1,9 @@
 /**
  * @file    os.h
- * @brief   FreeRTOS 原生接口的薄封装：静态创建任务、按绝对时刻延时（ADR 0025）
+ * @brief   FreeRTOS 原生接口的薄封装：静态创建任务、按绝对时刻延时
  * @note    框架代码只通过这里使用 RTOS；不调用 CMSIS-RTOS 接口，不做动态分配。
+ *          为什么要包一层：以后换芯片、换 RTOS，或在电脑上做测试时，只需要改这一个文件。
+ *          入门说明（任务、调度、怎么新增任务）见 docs/FREERTOS_GUIDE.md。
  */
 #pragma once
 
