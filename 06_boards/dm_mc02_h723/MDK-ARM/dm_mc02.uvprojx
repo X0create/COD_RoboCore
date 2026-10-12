@@ -891,6 +891,16 @@
           </Files>
         </Group>
         <Group>
+          <GroupName>02_devices/supercap</GroupName>
+          <Files>
+            <File>
+              <FileName>supercap.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\02_devices\supercap\supercap.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
           <GroupName>02_devices/vision</GroupName>
           <Files>
             <File>

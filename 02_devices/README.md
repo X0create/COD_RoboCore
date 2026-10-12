@@ -9,7 +9,7 @@
 | `remote/` | DR16、图传链路遥控 |
 | `referee/` | 裁判系统 |
 | `vision/` | 与上位机（自瞄）通信，默认走 USB 虚拟串口 |
-| `supercap/` | （规划）超级电容 |
+| `supercap/` | `supercap.c`：超级电容控制板的 CAN 通信（发指令、收反馈）；协议草案见其 `README.md` |
 | `battery/` | 电池电压（ADC），第一版只提示低电量 |
 | `actuator/` | （规划）PWM 执行器：舵机（弹舱盖、工程机构）、气泵、电磁阀 |
 | `buzzer/` | 蜂鸣器提示音，与状态灯闪烁码对应 |

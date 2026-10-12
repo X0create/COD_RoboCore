@@ -81,3 +81,4 @@
 | V53 | 任务卡死 → IWDG 复位 | 同上 | Ozone 里把 `DBGMCU->APB4FZ1` 的位 18（DBG_IWDG1）清零，然后 Halt 1 s 再 Go | Halt 期间 IWDG 照常倒计时，约 50 ms 后复位；RTT 出现 `restarted by watchdog` | 待验证 |
 | V54 | 控制实时性（满总线负载） | V45 状态（四台 M3508 在 FDCAN1）；可加 CAN 负载 | 运行 10 min，记 RTT 的 `control exec max … period max … late …` | 记下最大执行时间、最大周期间隔；`late` 应为 0，不为 0 时记下当时在做什么 | 待验证 |
 | V55 | 舵轮接近开关找零（ADR 0075） | 舵轮底盘、零点开关接 PE13/PE9/PA2/PA0 且 CubeMX 已配成输入；车架空 | 解锁；看 Ozone 的 `chassis.zero[i].state`、`center_rad` | 每个转向电机先正转、再反转各经过开关一次后 `state` 变为 DONE（0），轮子回到朝前；重复上电多次 `center_rad` 对应的物理朝向一致（记下最大偏差）；拔掉一个开关：超时后这个轮子不出力，其余继续；断开转向电调电源再接上：重新找零 | 待验证 |
+| V56 | 超级电容通信（协议草案版本 1） | 电容板固件已按 `02_devices/supercap/README.md` 实现；电容板接 FDCAN2（经典 CAN 1 Mbit/s），ID 0x061 / 0x062；电容板上电 | 看 RTT；然后拔掉电容板的 CAN 线 | 出现 `supercap online`，每秒一行 `supercap … mV, chassis … mW, energy …%`，电压与万用表一致；`bad frames` 不涨。拔线后主控约 50 ms 内 `supercap offline`，电容板 100 ms 内停止输出（电容组在电容板上确认） | 待验证（电容板固件未实现） |

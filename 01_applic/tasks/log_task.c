@@ -1,6 +1,6 @@
 /**
  * @file    log_task.c
- * @brief   这台车的 log_task（1 s）：通过 RTT 打印模式、遥控、四个轮子、底盘目标、IMU、电池、控制实时性
+ * @brief   这台车的 log_task（1 s）：通过 RTT 打印模式、遥控、四个轮子、底盘目标、IMU、超级电容、电池、控制实时性
  * @note    RTT（Real Time Transfer）：J-Link 通过调试口读写单片机内存来传文字，不占串口、几乎不耽误程序。
  *          在 Ozone 的 Terminal 窗口或 J-Link RTT Viewer 里就能看到打印。
  *          想多看一个量：照下面 log_xxx() 的写法加一个函数，在循环里调用。
@@ -67,6 +67,20 @@ static void log_imu(void)
              (int)(st.temperature_c * 1000.0f));
 }
 
+/* 超级电容：电压、底盘功率、剩余能量、是否在输出、错误标志；离线时打印收到的坏帧数（协议版本不一致时会涨） */
+static void log_supercap(void)
+{
+    SupercapFeedback fb;
+    if (!supercap_read(&supercap, &fb))
+    {
+        RM_LOG_I("supercap offline (bad frames %u)", (unsigned)supercap.bad_frames);
+        return;
+    }
+    RM_LOG_I("supercap %d mV, chassis %d mW, energy %d%%, output %d, error 0x%02x",
+             (int)(fb.cap_voltage_v * 1000.0f), (int)(fb.chassis_power_w * 1000.0f),
+             (int)(fb.energy_ratio * 100.0f), (int)fb.output_enabled, (unsigned)fb.error_flags);
+}
+
 void log_task_entry(void *arg)
 {
     (void)arg;
@@ -79,6 +93,7 @@ void log_task_entry(void *arg)
         log_rc();
         log_chassis();
         log_imu();
+        log_supercap();
         RM_LOG_I("battery %d mV%s", (int)(indicator_battery_v() * 1000.0f),
                  indicator_battery_low() ? " (low)" : "");
         /* control_task 实时性：最近 1 s 的最大执行时间、最大周期间隔（应约为 1000 us），超期次数自上电累计。

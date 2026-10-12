@@ -68,6 +68,8 @@ config/
 | 舵轮零点开关（引脚、有效电平） | `config/robot.h` 的 `chassis_config`（`.steer.zero_switch`） | 引脚要在 CubeMX 配成 GPIO 输入 |
 | 硬件看门狗超时 50 ms | `05_platform/iwdg/iwdg.h` 的 `IWDG_TIMEOUT_MS` | control_task 卡死超过这么久整板复位 |
 | 达妙命令间隔 | `02_devices/motor/motor.c` 的 `DM_CMD_INTERVAL_US` | |
+| 超级电容：总线、指令 / 反馈 ID、功率上限 | `config/robot.h` 的 `supercap_config`、`supercap_power_limit_w` | 功率上限是临时固定值，裁判系统做好后改用裁判数据 |
+| 超级电容：指令周期 10 ms、离线超时 50 ms | `02_devices/supercap/supercap.h` 的 `SUPERCAP_CMD_PERIOD_MS`、`SUPERCAP_TIMEOUT_MS` | 电容板 100 ms 收不到指令自己停 |
 
 ## 规则
 

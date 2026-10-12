@@ -102,6 +102,7 @@
 | 2026-09-27 | 编译警告 | —— | 手写代码开 `-Wall -Wextra … -Werror`，有警告即失败 | 0 警告要求由编译器保证 | 编译 |
 | 2026-09-27 | 单元测试 | 无 | Unity v2.7.0，电脑上运行 | 算法和协议解析能在电脑上测 | 主机测试 |
 | 2026-09-27 | 文件编码 | 源码注释为 GBK | **UTF-8 + LF** | GBK 在 gcc、Git、clang-format 下乱码（ADR 0002） | —— |
+| 2026-10-12 | 超级电容 | 没有超级电容通信代码 | 新增 `02_devices/supercap`：主控 → 电容（允许输出、功率上限、缓冲能量，10 ms 一帧），电容 → 主控（错误、输出状态、电压、底盘功率、剩余能量），协议是草案版本 1，帧尾带版本号；接在 FDCAN2，comm_rx_task 收、control_task 发、log_task 打印；功率上限暂用 robot.h 固定值 60 W | 用户要求接入战队电容板 cap-pcmc；电容板固件还没有协议，由主控侧先起草 | 编译 + 主机测试；电容板未实现，未上板 |
 | 2026-09-30 | 任务文件 | `Application/Task/` 一个任务一个文件，任务在 `freertos.c` 创建 | **同左的写法**：`01_applic/tasks/control_task.c`、`ins_task.c`、`heartbeat_task.c`，任务表在 `objects.c`；对象在 `objects.h` 共享（相当于全局变量，只限兵种目录内）。`CAN_Task` 并入 control_task 第 4 步，`Detect_Task` 对应 `01_applic/tasks/detect_task.c` | 队友反映新写法函数嵌套多、找不到循环体（ADR 0044）；对照表见 `docs/CALL_FLOW.md` | 编译 0 警告 + 主机测试 34/34；上板待做 |
 | 2026-10-10 | control_task 写法 | `Control_Info` + `Control_Measure_Update` / `Control_Target_Update` / `Control_Info_Update` 三个函数，计算直接写在里面 | **同左的写法**：`control_info` + `control_measure_update` / `control_target_update` / `control_output_update`；不同：全车停判断（安全门）在算目标里，发送（原 CAN_Task）在算输出里；底盘计算仍在通用的 `modules/chassis`，按 `.type` 换轮组，对外三个函数分别在三步里调用（ADR 0070） | 和老模板一样好读，同时保留改配置换轮组 | 主机测试 + 固件编译；未上板 |
 | 2026-10-10 | 算法文件划分（2026-10-11 撤销，ADR 0079） | 一个算法一对文件 | 曾按目录合并为 control / filter / attitude / kinematics / rm_math；2026-10-11 恢复为一个算法一对文件，**与旧工程同** | 用户：通用算法必须各自独立 | 主机测试 + 固件编译 |

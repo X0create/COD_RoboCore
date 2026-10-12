@@ -17,6 +17,7 @@
  *            ins（姿态）         ins_task 写；control、log 用 ins_read() 读
  *            电机反馈            comm_rx_task 经 motor_group_receive(&motors, …) 写；chassis、log 用 motor_read_feedback() 读
  *            chassis、电机指令   只在 control_task 里写；log 只读来打印
+ *            supercap（电容）    comm_rx_task 经 supercap_receive() 写反馈；control_task 发指令；log 用 supercap_read() 读
  */
 #pragma once
 
@@ -27,6 +28,7 @@
 #include "01_applic/system/safety_gate.h"
 #include "02_devices/motor/motor.h"
 #include "02_devices/remote/dr16.h"
+#include "02_devices/supercap/supercap.h"
 #include "03_algorithm/math/math_const.h"
 #include "05_platform/compiler.h"
 
@@ -101,6 +103,25 @@ static const ChassisConfig chassis_config = {
 };
 
 /* ------------------------------------------------------------------ */
+/* 超级电容                                                            */
+/* ------------------------------------------------------------------ */
+
+/*
+ * 电容控制板：经典 CAN，只能接 FDCAN1 或 FDCAN2（FDCAN3 是 CAN FD）。现在轮子在 FDCAN1，电容放 FDCAN2。
+ * 两个 ID 不能和同一路上的电机重复（robot_init 会检查）。协议见 02_devices/supercap/README.md。
+ * 没接电容板时也没关系：只是日志里一直显示 supercap offline，不影响车动。
+ */
+static const SupercapConfig supercap_config = {
+    .name = "supercap", .can_bus = CAN_BUS_2, .cmd_id = 0x061u, .feedback_id = 0x062u
+};
+
+/*
+ * 发给电容的底盘功率上限（W）。裁判系统解析还没做，先用固定值；
+ * 做好之后改成裁判系统给的底盘功率上限（0x0201），这个常数就删掉。按本车当前等级的规则值填
+ */
+static const float supercap_power_limit_w = 60.0f;
+
+/* ------------------------------------------------------------------ */
 /* 遥控                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -132,6 +153,8 @@ static const InsConfig ins_config = { .install_rotation = {
 extern Dr16 dr16;
 extern Motor wheel_motor[CHASSIS_WHEELS]; /* 轮 0–3：左前、左后、右后、右前 */
 extern MotorGroup motors; /* 全部电机：comm_rx_task 收反馈、control_task 最后统一发送 */
+
+extern Supercap supercap; /* comm_rx_task 收反馈、control_task 发指令、log_task 打印 */
 
 extern Chassis chassis;
 extern Ins ins;

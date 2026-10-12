@@ -157,7 +157,9 @@ static void control_target_update(ControlInfo *info)
  *   ① 底盘每个轮子的速度环算出电机力矩（全车停时不写指令、只清积分，防止解锁瞬间积分冲出去）；
  *   ② 全车停时，把每个电机的指令改写成它自己的停机动作（零力矩或失能）——
  *      这是最后一道关口：就算上面哪里漏判了，也不会发出运动指令；
- *   ③ 把所有电机的指令打包成 CAN 帧发出去（每个电机最终发什么，见 motor.c 的 motor_group_send()）。
+ *   ③ 把所有电机的指令打包成 CAN 帧发出去（每个电机最终发什么，见 motor.c 的 motor_group_send()）；
+ *   ④ 给超级电容发指令（内部限频，10 ms 才真的发一帧）。电容一直允许输出：全车停时电机本来就不出力，
+ *      电容输不输出都一样；功率上限先用 robot.h 的固定值，裁判系统做好后改成裁判系统给的值。
  */
 static void control_output_update(const ControlInfo *info)
 {
@@ -167,4 +169,9 @@ static void control_output_update(const ControlInfo *info)
         motor_group_apply_stop_all(&motors);
     }
     motor_group_send(&motors);
+
+    const SupercapCmd cap_cmd = { .enable_output = true,
+                                  .power_limit_w = supercap_power_limit_w,
+                                  .buffer_energy_j = 0.0f };
+    supercap_send(&supercap, &cap_cmd);
 }

@@ -24,6 +24,7 @@ Dr16 dr16;
 /* 电机、底盘、IMU 的参数都在 robot.h 的配置表里（wheel_config、chassis_config …） */
 Motor wheel_motor[CHASSIS_WHEELS];
 MotorGroup motors;
+Supercap supercap;
 
 /* 机构（安全门是全车唯一的，在 01_applic/system/safety_gate.c） */
 Chassis chassis;
@@ -56,6 +57,14 @@ bool robot_init(void)
     if (!chassis_init(&chassis, &chassis_config, drive, NULL))
     {
         RM_LOG_E("chassis init failed: motor without torque command");
+        return false;
+    }
+
+    /* 超级电容：在电机之后初始化，才能查出 ID 有没有和电机撞 */
+    const SupercapInitResult cap_result = supercap_init(&supercap, &supercap_config, &motors);
+    if (cap_result != SUPERCAP_INIT_OK)
+    {
+        RM_LOG_E("supercap init failed (%d)", (int)cap_result);
         return false;
     }
 

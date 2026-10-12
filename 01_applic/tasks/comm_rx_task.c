@@ -8,6 +8,7 @@
  *          再在循环里照 DR16 的写法读出字节、交给它的解析函数。
  *          接线一览：
  *            CAN       全部电机的反馈 → 电机组 motors（总线和 ID 在 robot.h 的电机表，如 wheel_config）
+ *                      超级电容的反馈 → supercap（总线和 ID 在 robot.h 的 supercap_config）
  *            UART5     DR16 遥控接收机 → dr16（保存最新一帧，dr16_read() 读）
  */
 #include "01_applic/tasks/tasks.h"
@@ -84,13 +85,17 @@ void comm_rx_task_entry(void *arg)
     {
         (void)rm_task_wait_notify(COMM_RX_IDLE_MS); /* 等中断通知“有新数据”，最多 10 ms */
 
-        /* CAN → 电机：每帧交给电机组，总线和反馈 ID 都对上的电机才收（motor_group_receive）。
-         * 加电机不用改这里：robot.c 里 motor_init(..., &motors, ...) 就进了组 */
+        /* CAN → 电机、电容：每帧先交给电机组，总线和反馈 ID 都对上的电机才收（motor_group_receive）；
+         * 不是电机的再交给电容。加电机不用改这里：robot.c 里 motor_init(..., &motors, ...) 就进了组；
+         * 加别的 CAN 设备时照电容的写法，在后面再接一个 */
         for (int bus = 0; bus < (int)CAN_BUS_COUNT; bus++)
         {
             while (can_read((CanBusId)bus, &frame))
             {
-                (void)motor_group_receive(&motors, (CanBusId)bus, &frame);
+                if (!motor_group_receive(&motors, (CanBusId)bus, &frame))
+                {
+                    (void)supercap_receive(&supercap, (CanBusId)bus, &frame);
+                }
             }
         }
         recover_bus_off(); /* bus-off 的总线每 100 ms 重启一次 */
