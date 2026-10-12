@@ -7,11 +7,12 @@
  *          换轮组：改 chassis_config 的 .type 并填对应的尺寸（全向轮 .omni、麦轮 .mecanum、
  *          舵轮 .steer，半舵半全向 .half_steer + .steer 的零点和 PID，含义见 03_algorithm/kinematics/ 下的头文件）；
  *          舵轮还要在 robot.c 里加 4 个转向电机，半舵半全向加 2 个（全向轮位置传 NULL）；
- *          转向电机用 M2006、M3508 这类上电位置为 0 的型号时，在 .steer.zero_switch 里配零点开关（ADR 0068、0075）。
- *          PID 不带 dt（ADR 0029），参数和 1 kHz 调用频率绑定。
+ *          转向电机用 M2006、M3508 这类没有绝对编码器、上电位置记为 0 的型号时，
+ *          要在 .steer.zero_switch 里配零点开关，上电先转一圈找到零点。
+ *          PID 不带 dt：参数是按 1 kHz 调用整定的，改了控制频率要重新整定。
  *          参数表是 static const：只给 robot.c 和 01_applic/tasks/ 里的任务用，没用到的不占空间。
- *          对象相当于老模板里各任务直接读的全局变量（remote_ctrl、Chassis_Motor[] 等），其他层不 include 本文件
- *          （CODING_STANDARD 第 8 节的例外）。谁写谁读：
+ *          下方的“对象”就是整车共用的全局变量（遥控、电机、底盘、IMU）。只有 01_applic/ 里的代码 include 本文件，
+ *          底层模块不知道“这台车”长什么样，所以换车只改这里。谁写谁读：
  *            dr16（遥控）        comm_rx_task 写；control、log 用 dr16_read() 读
  *            ins（姿态）         ins_task 写；control、log 用 ins_read() 读
  *            电机反馈            comm_rx_task 经 motor_group_receive(&motors, …) 写；chassis、log 用 motor_read_feedback() 读
@@ -40,8 +41,9 @@ extern "C"
 
 /*
  * 顺序 = 底盘的轮 0–3（左前、左后、右后、右前，omni.h），全部在 FDCAN1（经典 CAN）。
- * direction：使电机正转 = 这个轮子推动底盘逆时针转（omni.h）；四个电机轴都朝外对称安装时四个值相同，正负待核对（V46）。
- * 停机动作：零力矩（DJI 电调只支持零力矩 / 失能，ADR 0031）。
+ * direction：使电机正转 = 这个轮子推动底盘逆时针转（omni.h）；四个电机轴都朝外对称安装时四个值相同。
+ *            第一次上车要核对：架空车，给一个小的逆时针旋转指令，看四个轮子是否都朝同一个旋转方向转，转反的改成 -1。
+ * 停机动作：零力矩，即发 0 电流，轮子靠摩擦自己停下（DJI 电调只支持零力矩或失能两种停法）。
  */
 static const MotorConfig wheel_config[CHASSIS_WHEELS] = {
     { .name = "wheel_lf",
@@ -79,10 +81,13 @@ static const MotorConfig wheel_config[CHASSIS_WHEELS] = {
 /* ------------------------------------------------------------------ */
 
 /*
- * X 形四轮全向轮。轮半径、中心距待量；加速度先取保守值，台架整定。
- * 速度环沿用旧工程（COD-H7-Template Control_Task.c）的底盘参数，已换算成国际单位（输出轴 rad/s → N·m）：
- *   旧值 kp 13、ki 0.1（rpm → 电流原始值）、积分限幅 5000 rpm、输出限幅 12000 电流原始值；
- *   换算：输出轴 1 rad/s = 转子 183.38 rpm，1 N·m = 2730.7 电流原始值（M3508 + C620，02_devices/motor/motor.h）
+ * X 形四轮全向轮。轮半径、中心距要按实车量了再填；加速度先取保守值，上车再调。
+ * 速度环 PID 单位是国际单位：输入轮子输出轴转速误差（rad/s），输出电机力矩（N·m）。
+ * 下面的数字是从一组常用的“rpm 进、电流原始值出”的 M3508 底盘参数换算来的：
+ *   原值 kp 13、ki 0.1、积分限幅 5000 rpm、输出限幅 12000（C620 电流原始值，±16384 对应 ±20 A）；
+ *   换算：输出轴 1 rad/s = 转子 183.38 rpm，1 N·m = 2730.7 电流原始值（M3508 + C620，见 02_devices/motor/motor.h），
+ *   例如 kp = 13 × 183.38 ÷ 2730.7 ≈ 0.8730。
+ * 手里有别的参数时照这个方法换算，就能直接填进来。
  */
 static const ChassisConfig chassis_config = {
     .type = CHASSIS_OMNI,
@@ -101,7 +106,7 @@ static const ChassisConfig chassis_config = {
 
 /* 遥控满杆对应的底盘速度在 01_applic/tasks/control_task.c 顶部（只有那里用） */
 
-/* 解锁 / 急停拨杆：右拨杆 sw[1]（ADR 0032；左右以 V11 上板核对为准） */
+/* 解锁 / 急停拨杆：sw[1]，一般是右拨杆（上车拨一下，在 Ozone 里看 dr16 的 sw 哪个在变来确认） */
 static const uint8_t arm_switch = 1u;
 
 /* ------------------------------------------------------------------ */
@@ -109,8 +114,10 @@ static const uint8_t arm_switch = 1u;
 /* ------------------------------------------------------------------ */
 
 /*
- * IMU 安装旋转：机体系向量 = R × 芯片系向量（按行存储，ADR 0006）。
- * 默认芯片轴与机体轴同向（X 前、Y 左、Z 上）；实际朝向以 V7 上板结果为准
+ * IMU 安装旋转：机体系向量 = R × 芯片系向量（3×3 矩阵，按行存储）。
+ * 机体系：X 朝车头、Y 朝车左、Z 朝上。默认认为板子上的芯片轴与机体轴同向（单位矩阵）。
+ * 板子装歪了、倒装了就改这里。核对方法：车头抬起时 pitch 应变化、向左转时 yaw 应增大，
+ * 静止水平放置时加速度计 Z 轴应约为 +9.8 m/s²。
  */
 static const InsConfig ins_config = { .install_rotation = {
                                           1.0f, 0.0f, 0.0f, /* 机体 x */

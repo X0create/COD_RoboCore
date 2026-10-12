@@ -1,9 +1,12 @@
 /**
  * @file    comm_rx_task.c
  * @brief   comm_rx_task（收到数据就运行）：打开接收 → 等中断唤醒 → 把收到的数据交给对应的解析器
- * @note    相当于老模板 bsp_can.c / bsp_uart.c 里的接收回调，但解析放在任务里，中断只收数据并唤醒本任务。
+ * @note    为什么不在中断里直接解析：中断要尽量短，否则会耽误别的中断和任务。所以中断只做两件事——
+ *          把收到的字节 / 帧存进缓冲区、唤醒本任务；解析、校验、保存都在本任务里做。
  *          完整的接收流程都在这一个文件：中断回调、打开接收、读取与分派、CAN bus-off 恢复。
- *          接线一览（接线沿用 COD-H7-Template）：
+ *          加一个新的接收设备（比如裁判系统串口）：在 comm_rx_task_entry() 里打开它的接收，
+ *          再在循环里照 DR16 的写法读出字节、交给它的解析函数。
+ *          接线一览：
  *            CAN       全部电机的反馈 → 电机组 motors（总线和 ID 在 robot.h 的电机表，如 wheel_config）
  *            UART5     DR16 遥控接收机 → dr16（保存最新一帧，dr16_read() 读）
  */
@@ -19,7 +22,7 @@
 
 /* 没有通知时也每隔这么久检查一次，防止某次通知丢失后数据积压 */
 #define COMM_RX_IDLE_MS 10u
-/* 同一路 bus-off 恢复至少间隔 100 ms（《架构设计》“发送队列满了怎么办”） */
+/* 同一路 bus-off 恢复至少间隔 100 ms：总线真有故障（短路、没接终端电阻）时，避免不停重启刷屏 */
 #define CAN_RECOVER_PERIOD_US 100000u
 
 RmTask comm_rx_task;
@@ -43,7 +46,10 @@ static void start_can(void)
     }
 }
 
-/* bus-off 后 FDCAN 不会自己回到总线，这路上的电机全部离线（机构停）。这里负责把它拉回来 */
+/*
+ * bus-off：CAN 控制器连续发送出错太多次后，自己把自己从总线上断开（常见原因：线松了、接错、没终端电阻）。
+ * 断开后 FDCAN 不会自己回到总线，这路上的电机全部离线（用到它们的机构停）。这里负责把它拉回来。
+ */
 static void recover_bus_off(void)
 {
     const uint64_t now_us = rm_time_now_us();
@@ -90,7 +96,8 @@ void comm_rx_task_entry(void *arg)
         recover_bus_off(); /* bus-off 的总线每 100 ms 重启一次 */
 
         /* UART5 → DR16：凑满 18 字节一帧 → 校验 → 保存为最新一帧。
-         * 用串口中断记下的接收时刻喂狗（ADR 0060）：本任务被耽误时，积压的旧帧不会被当成刚收到的 */
+         * rx_us 是串口中断收到这批字节的时刻，不是现在：本任务被耽误时，积压的旧帧不会被当成刚收到的，
+         * 遥控掉线判断才准确 */
         while ((n = uart_read(DBUS_UART, buf, sizeof(buf), &rx_us)) > 0u)
         {
             dr16_on_bytes(&dr16, buf, n, rx_us);

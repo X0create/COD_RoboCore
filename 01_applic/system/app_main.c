@@ -12,8 +12,8 @@
 #include "05_platform/iwdg/iwdg.h"
 #include "05_platform/time/time.h"
 
-/* 阶段 0 还没有 RM_ASSERT 和故障记录（阶段 1），初始化失败时先停在这里，调试器能直接看到位置；
- * 停在这里时没有任何任务运行，不会给电机发指令 */
+/* 初始化失败时停在这里：调试器暂停后能直接看到停在哪一步（看 RTT 日志里最后一条错误）；
+ * 停在这里时调度器还没启动、没有任何任务运行，不会给电机发指令 */
 static void halt_on_init_failure(void)
 {
     for (;;)
@@ -50,14 +50,16 @@ void app_main(void)
     }
     RM_LOG_I("COD RoboCore booting");
 
-    /* 读故障记录、board_init、参数在阶段 1 加入 */
+    /* 以后要加的上电步骤（读故障记录、读掉电保存的参数等）放在这里，robot_init() 之前 */
 
     if (!robot_init()) /* 3. 这台车的全部对象（robot.c） */
     {
         RM_LOG_E("robot init failed");
         halt_on_init_failure();
     }
-    if (fault_reset) /* 程序故障复位（ADR 0073 ④）：遥控在线、拨杆不在下就直接恢复，不用重新拨杆 */
+    /* 上次是看门狗复位（程序卡死或致命故障后自动重启）：比赛中不能让车因为一次重启就要操作手重新解锁，
+     * 所以遥控在线、拨杆不在“下”就直接恢复。普通上电仍要按顺序解锁 */
+    if (fault_reset)
     {
         RM_LOG_W("restarted by watchdog: resume without re-arm");
         safety_gate_resume_after_fault(&safety_gate);
@@ -72,7 +74,7 @@ void app_main(void)
 void startup_task(void *argument)
 {
     (void)argument;
-    /* 设备自检、硬件看门狗在阶段 1 加入 */
+    /* 以后要加的启动后检查（设备自检等）放在这里，允许解锁之前 */
     safety_gate_set_system_ready(&safety_gate); /* 5. 允许解锁 */
     RM_LOG_I("startup done");
     rm_task_delete_self();

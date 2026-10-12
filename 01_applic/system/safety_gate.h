@@ -1,14 +1,16 @@
 /**
  * @file    safety_gate.h
- * @brief   安全门：决定整车能不能动（全车停），以及 Init → Safe → Manual 模式（运行时契约第 5 节、ADR 0026）
- * @note    纯逻辑，control_task 每个周期调用一次 safety_gate_update()，电脑上可测。
+ * @brief   安全门：决定整车能不能动（全车停），以及 Init → Safe → Manual 三种模式
+ * @note    纯逻辑，control_task 每个周期调用一次 safety_gate_update()，不碰硬件，电脑上可以单元测试。
+ *          三种模式：Init = 刚上电、还在启动；Safe = 已启动、等操作手解锁；Manual = 已解锁、可以动。
+ *          “全车停”的具体做法：发送前把每个电机的指令改成它的停机动作（零力矩或失能），见 motor.h 的 StopAction。
  *
- *          赛场上优先保证车能继续跑（ADR 0073）：全车停只有三种情况——尚未启动完成、尚未解锁、急停。
+ *          赛场上优先保证车能继续跑：全车停只有三种情况——尚未启动完成、尚未解锁、急停。
  *          - 急停：解锁拨杆在“下”（电平信号，每个周期重新判断），回到 Safe，之后要重新解锁；
  *          - 解锁：在 Safe 模式、遥控在线时先看到拨杆在“下”，再拨到“中”或“上”；上电时拨杆已在上方不会自己动起来；
  *          - 遥控丢失：Manual 下**不**全车停、不退出 Manual，由 control_task 把目标速度改为 0、底盘按斜坡减速；
  *            遥控恢复、拨杆不在“下”就直接继续（不用重新解锁）。Safe 下丢失期间的拨杆位置不作数。
- *          - 程序故障复位后（IWDG 复位，ADR 0073 ④）：遥控第一次在线时拨杆不在“下”就直接解锁，不用重新拨杆；
+ *          - 程序故障复位后（看门狗 IWDG 复位）：遥控第一次在线时拨杆不在“下”就直接解锁，不用重新拨杆；
  *            普通上电、调试器复位仍要按上面的顺序解锁。
  *          IMU 状态不在这里：只影响用到 IMU 的机构。机构降级（本机构设备离线）由子系统自己处理。
  */
@@ -36,7 +38,7 @@ typedef enum
 
 typedef struct
 {
-    uint8_t arm_switch; /* 解锁 / 急停用哪个拨杆：RcState.sw 的下标（robot.h 配置，ADR 0032） */
+    uint8_t arm_switch; /* 解锁 / 急停用哪个拨杆：RcState.sw 的下标（在 robot.h 配置） */
     volatile bool system_ready; /* startup_task 写、control_task 读；单字节读写是原子的 */
     SafetyMode mode;
     bool saw_stop_position; /* Safe 模式下、遥控在线时看到过拨杆在“下” */

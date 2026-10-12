@@ -17,14 +17,14 @@ endif()
 add_library(rm_app STATIC
     # 上电顺序
     system/app_main.c
-    # 全部任务（≈ 老模板 Application/Task）
+    # 全部任务（每个任务一个文件）
     tasks/ins_task.c
     tasks/control_task.c
     tasks/comm_rx_task.c
     tasks/detect_task.c
     tasks/indicator_task.c
     tasks/log_task.c
-    # 这台车的对象、初始化和任务表（≈ 老模板的全局变量 + freertos.c 的任务列表）
+    # 这台车的对象、初始化和任务表
     config/robot.c
 )
 target_link_libraries(rm_app PUBLIC rm_app_logic rm_core rm_devices rm_algorithm)

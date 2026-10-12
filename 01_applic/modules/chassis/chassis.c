@@ -1,6 +1,10 @@
 /**
  * @file    chassis.c
  * @brief   底盘子系统：读实测 → 算目标 → 算输出，三个函数按顺序排在下面（说明见 chassis.h）
+ * @note    两个常用词：
+ *            逆解（inverse）  已知底盘要怎么动（vx、vy、wz）→ 算出每个轮子该转多快（舵轮还有朝哪个方向）
+ *            正解（forward）  已知每个轮子实际转多快 → 反推底盘实际怎么动
+ *          具体公式在 03_algorithm/kinematics/ 下每种轮组各自的文件里，本文件只按 cfg->type 选一个来用。
  */
 #include "01_applic/modules/chassis/chassis.h"
 
@@ -65,6 +69,7 @@ void chassis_measure_update(Chassis *chassis)
     for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
     {
         MotorFeedback fb;
+        /* 读驱动电机：在线标志 + 转速（输出轴 rad/s，已乘方向和减速比） */
         m->drive_online[i] = motor_read_feedback(chassis->drive[i], &fb);
         m->drive_speed_rad_s[i] = fb.speed_rad_s;
         m->wheel_ok[i] = m->drive_online[i];
@@ -75,6 +80,7 @@ void chassis_measure_update(Chassis *chassis)
             const GpioInput sw = cfg->steer.zero_switch[i];
             m->steer_online[i] = motor_read_feedback(chassis->steer[i], &fb);
             m->steer_angle_rad[i] = fb.angle_rad;
+            /* 轮子朝向 = 转向电机角度 − 开关中心 − 安装偏移；结果为 0 表示轮子朝车头 */
             m->heading_rad[i] = fb.angle_rad - z->center_rad - cfg->steer.zero_rad[i];
             m->steer_speed_rad_s[i] = fb.speed_rad_s;
             m->zero_switch_active[i] =
@@ -165,13 +171,13 @@ void chassis_target_update(Chassis *chassis, const ChassisVel *cmd, bool stop_al
         return;
     }
 
-    /* 降级：有轮子不能用时其余轮子继续，目标速度和加速度都打折（ADR 0073） */
+    /* 降级：有轮子不能用时其余轮子继续，目标速度和加速度都打折（比赛中坏一个轮子也要能开回补给区） */
     const float scale = chassis->measure.all_online ? 1.0f : CHASSIS_DEGRADED_SCALE;
     const ChassisVel goal = { .vx_m_s = cmd->vx_m_s * scale,
                               .vy_m_s = cmd->vy_m_s * scale,
                               .wz_rad_s = cmd->wz_rad_s * scale };
 
-    /* 斜坡：限制加速度 */
+    /* 斜坡：每 1 ms 速度最多变化“加速度上限 × 1 ms”，摇杆猛推时车也平稳加速，不打滑、不翻车 */
     ramp_translation(&t->velocity, &goal, cfg->max_accel_m_s2 * scale * CHASSIS_PERIOD_S);
     t->velocity.wz_rad_s = ramp_step(t->velocity.wz_rad_s, goal.wz_rad_s,
                                      cfg->max_alpha_rad_s2 * scale * CHASSIS_PERIOD_S);
@@ -222,7 +228,7 @@ static float clamp(float x, float limit)
 }
 
 /*
- * 找零一拍（ADR 0068）：按开关电平的变化记边沿，返回转向电机的目标转速。
+ * 找零一拍：按开关电平的变化记边沿，返回转向电机的目标转速。
  * 一开始就在开关里时，先看到的“离开”不算，等下一次完整的进入、离开
  */
 static float steer_zero_step(SteerZero *z, const ChassisSteerConfig *sc, float angle_rad,
@@ -320,6 +326,7 @@ void chassis_output_update(Chassis *chassis, float output_scale)
         }
         else if (m->steer_online[i] && z->state == STEER_ZERO_DONE)
         {
+            /* 串级 PID：外环（角度环）把朝向误差变成目标转速，内环（速度环）把转速误差变成力矩 */
             const float rate_rad_s =
                 pid_step(&chassis->steer_angle_pid[i], t->heading_rad[i], m->heading_rad[i]);
             const float torque_nm =

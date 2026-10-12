@@ -1,8 +1,11 @@
 /**
  * @file    ins_task.c
- * @brief   ins_task（1 kHz）：BMI088 → 加热 → 零偏标定 → EKF → 保存最新姿态，通用
- * @note    相当于老模板的 INS_Task.c；一个周期的具体步骤在 ins.c 的 ins_step()。
- *          标定完成前 ins_read() 返回 false，安全门据此全车停。本任务把 ins_step() 返回的事件记进日志。
+ * @brief   ins_task（1 kHz）：读 IMU（BMI088）→ 恒温加热 → 陀螺零偏标定 → 姿态解算（EKF）→ 保存最新姿态
+ * @note    INS = Inertial Navigation System，惯性导航，这里指“用 IMU 算出车的姿态（欧拉角、角速度）”。
+ *          一个周期的具体步骤在 ins.c 的 ins_step()，本文件只负责：初始化 BMI088、每 1 ms 调用一次、把事件打进日志。
+ *          上电后要先静止约 1 s 标定陀螺零偏；标定完成前 ins_read() 返回 false，
+ *          用到姿态的机构（如云台）这时不应该动，底盘不用 IMU、不受影响。
+ *          优先级是全车最高：IMU 采样时刻越准，积分出的姿态越准。
  */
 #include "01_applic/tasks/tasks.h"
 
@@ -46,7 +49,7 @@ void ins_task_entry(void *arg)
 {
     Ins *ins = arg;
     Bmi088Status status;
-    /* BMI088 初始化失败（没接、片选错）就每秒重试；这期间 IMU 未就绪，用到 IMU 的机构自己处理（底盘不用，ADR 0073） */
+    /* BMI088 初始化失败（没接、片选错）就每秒重试；这期间 IMU 未就绪，用到 IMU 的机构自己处理（底盘不用 IMU） */
     while ((status = bmi088_init(&ins->imu))
            != BMI088_OK) /* 复位、查芯片 ID、配量程，阻塞约 170 ms */
     {

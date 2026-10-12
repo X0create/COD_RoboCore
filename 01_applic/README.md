@@ -1,47 +1,47 @@
 # 01_applic/
 
-业务层，相当于老模板的 `Application/`。分四类子目录（ADR 0054、0055）：
+业务层：这台车“要做什么”都在这里。分四类子目录：
 
 ```
 01_applic/
 ├── system/      通用框架：上电顺序、安全门
-├── tasks/       全部 6 个任务（≈ 老模板 Application/Task）
+├── tasks/       全部 6 个任务（每个任务一个文件）
 ├── modules/     机构，可复用（只放计算，不放任务）
 │   ├── chassis/  ins/
 │   └── gimbal/  shooter/  leg/  arm/          （规划）
-└── config/      这台车的参数、对象、任务表（≈ 老模板 Config.h + 全局变量 + freertos.c 任务列表）
+└── config/      这台车的参数、对象、任务表
 ```
 
 | 目录 | 内容 |
 | --- | --- |
 | `system/` | `app_main.c`（上电顺序，只有这一份）、`safety_gate.c`（全车唯一的安全门） |
 | `tasks/` | 全部任务，每个一个 `xxx_task.c`，入口都声明在 `tasks.h`：`ins_task.c`（1 kHz 姿态）、`control_task.c`（1 kHz 控制）、`comm_rx_task.c`（接收的完整流程：中断唤醒、打开接收、分派、bus-off 恢复）、`detect_task.c`（10 ms 上线 / 离线、喂硬件看门狗）、`indicator_task.c`（25 ms 灯、蜂鸣器、电池）、`log_task.c`（1 s 打印） |
-| `modules/chassis/` | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮 / 半舵半全向，读实测 → 算目标 → 算输出（ADR 0043） |
+| `modules/chassis/` | 底盘：按 `ChassisConfig.type` 选全向轮 / 麦轮 / 舵轮 / 半舵半全向，读实测 → 算目标 → 算输出 |
 | `modules/ins/` | 惯性导航：`ins.c`（BMI088 → 零偏标定 → EKF → 保存最新姿态，`ins_read()` 读） |
 | `modules/gimbal/`、`shooter/`、`leg/`、`arm/` | （规划）云台、发射、轮腿、机械臂（工程） |
 | `config/` | 这台车（预设 `h723-debug`）。目前：四轮全向轮底盘，遥控直接给底盘速度 |
 
-## config/：这台车的参数、对象、任务表（ADR 0066：两个文件）
+## config/：这台车的参数、对象、任务表（两个文件）
 
 ```
 config/
-├── robot.h   全部参数（电机表、底盘尺寸与 PID、解锁拨杆、IMU 安装方向）≈ Config.h
-│             + 全部对象的声明                                                ≈ 全局变量
-└── robot.c   对象定义 + robot_init()（设备 → 机构 → 安全门）+ 任务表 task_table[]（6 个任务的优先级、栈）≈ freertos.c 任务列表
+├── robot.h   全部参数（电机表、底盘尺寸与 PID、解锁拨杆、IMU 安装方向）
+│             + 全部对象的声明（整车共用的全局变量：遥控、电机、底盘、IMU）
+└── robot.c   对象定义 + robot_init()（设备 → 机构 → 安全门）+ 任务表 task_table[]（6 个任务的优先级、栈）
 ```
 
 - 上电顺序通用，在 `system/app_main.c`：`app_main()` 调用 `robot_init()`，再按 `task_table[]` 创建任务。
 - 读这台车：先看 `config/robot.h`（参数、对象）和 `config/robot.c`（初始化、任务表），再看 `tasks/` 里的各个任务。调用关系总图见 `docs/CALL_FLOW.md`，中文伪代码见 `docs/LOGIC_PSEUDOCODE.md`。
-- 对象定义在 `robot.c`、声明在 `robot.h`，只给 `config/`、`tasks/` 的文件用（相当于老模板的全局变量，ADR 0044）。
-- **做一台具体的车（英雄、工程、哨兵……）：复制整个仓库，改 `config/` 里的参数和对象、`tasks/control_task.c` 等任务里的控制逻辑**；需要新机构就在 `modules/` 里加（ADR 0056）。
+- 对象定义在 `robot.c`、声明在 `robot.h`，只给 `config/`、`tasks/` 的文件用；底层模块不 include `robot.h`，所以换车只改这里。
+- **做一台具体的车（英雄、工程、哨兵……）：复制整个仓库，改 `config/` 里的参数和对象、`tasks/control_task.c` 等任务里的控制逻辑**；需要新机构就在 `modules/` 里加。
   多板的车（如哨兵的云台板、底盘板）每块板一份仓库副本，用 `02_devices/board_link/` 交换数据。
 
 ## 一处定义
 
-- **一个参数，一个定义位置**：位置见下表。
-- **一个状态，一个权威来源**：安全门模式只在 `system/safety_gate.c` 的 `safety_gate`；电池状态只在 `tasks/indicator_task.c`（别处用 `indicator_battery_*()` 读）；
+- **一个参数，一个定义位置**：位置见下表。改参数只改一处，不会出现两处不一致。
+- **一个状态，一个来源**：安全门模式只在 `system/safety_gate.c` 的 `safety_gate`；电池状态只在 `tasks/indicator_task.c`（别处用 `indicator_battery_*()` 读）；
   遥控只在 dr16 对象（`dr16_read()`），姿态只在 ins 对象（`ins_read()`），电机反馈只在电机对象（`motor_read_feedback()`）。读的一方不另存副本。
-- **任务放哪里**：全部任务都在 `tasks/`，`*_task.c` 不出现在别处（ADR 0057）。任务只负责“什么时候跑、按什么顺序调用谁”，计算在 `modules/` 等其他文件里。
+- **任务放哪里**：全部任务都在 `tasks/`，`*_task.c` 不出现在别处。任务只负责“什么时候跑、按什么顺序调用谁”，计算在 `modules/` 等其他文件里。
 - **一项职责，一个负责模块**：状态灯和蜂鸣器只有 indicator_task 操作；CAN 接收和 bus-off 恢复都在 comm_rx_task；上线 / 离线报告和喂硬件看门狗只在 detect_task；上电顺序只在 `app_main.c`。
 
 ## 参数在哪里
@@ -49,24 +49,24 @@ config/
 | 参数 | 位置 | 说明 |
 | --- | --- | --- |
 | 电机 ID、方向、总线、停机动作 | `config/robot.h` 的电机表（如 `wheel_config`） | comm_rx_task 把每一帧交给电机组（`motor_group_receive`），总线不在别处重复 |
-| 底盘尺寸、加速度、速度环 PID | `config/robot.h` 的 `chassis_config` | PID 不带 dt，和 1 kHz 绑定（ADR 0029） |
-| 遥控满杆速度 | `tasks/control_task.c` 顶部 | 只在那里用，挨着摇杆换算（ADR 0070） |
+| 底盘尺寸、加速度、速度环 PID | `config/robot.h` 的 `chassis_config` | PID 不带 dt，参数按 1 kHz 调用整定 |
+| 遥控满杆速度 | `tasks/control_task.c` 顶部 | 只在那里用，挨着摇杆换算 |
 | 解锁拨杆、IMU 安装方向 | `config/robot.h` | |
 | 串口接线（哪个串口接什么） | `tasks/comm_rx_task.c` 开头 | |
 | 任务优先级、栈大小 | `config/robot.c` 的 `task_table[]` | |
-| 电池：分压比、低电量阈值 | `tasks/indicator_task.c` 的 `battery_config` | 板子和电池的属性，通用（ADR 0038） |
-| M3508 / C620 换算常数 | `02_devices/motor/motor.h` 的 `DJI_M3508_*`、`DJI_C620_*` | 附录 A.2 |
+| 电池：分压比、低电量阈值 | `tasks/indicator_task.c` 的 `battery_config` | 板子和电池的属性，所有车通用 |
+| M3508 / C620 换算常数 | `02_devices/motor/motor.h` 的 `DJI_M3508_*`、`DJI_C620_*` | 来自 DJI 官方手册 |
 | π | `03_algorithm/math/math_const.h` 的 `RM_PI` 等 | |
-| EKF 噪声（Q、R）、加速度低通系数 | `modules/ins/ins.c` 开头 | 沿用旧工程 INS_Task.c |
-| 陀螺零偏标定、静止时在线修正的阈值 | `modules/ins/ins.h` 的 `INS_CALIB_*`、`INS_STILL_*` | ADR 0033、0039 |
-| IMU 加热：目标温度、周期、PID、占空比上限 | `02_devices/imu/bmi088.h` 的 `BMI088_HEATER_TARGET_C`、`bmi088.c` 的 `HEATER_*` | 按本板实测（ADR 0042） |
-| 遥控丢失超时 200 ms | `02_devices/remote/dr16.h` 的 `DR16_TIMEOUT_MS` | 安全约定（ADR 0030） |
-| IMU 就绪判定 20 ms | `01_applic/modules/ins/ins.h` 的 `INS_TIMEOUT_MS` | 安全约定（ADR 0034） |
-| 电机离线超时 20 ms | `02_devices/motor/motor.h` 的 `MOTOR_TIMEOUT_MS` | 安全约定（ADR 0031） |
-| 解锁后输出斜坡 300 ms | `system/safety_gate.h` 的 `SAFETY_RAMP_MS` | |
-| 轮子离线时降级限速 50% | `modules/chassis/chassis.h` 的 `CHASSIS_DEGRADED_SCALE` | ADR 0073 |
-| 舵轮零点开关（引脚、有效电平） | `config/robot.h` 的 `chassis_config`（`.steer.zero_switch`） | 引脚要在 CubeMX 配成输入（ADR 0075） |
-| 硬件看门狗超时 50 ms | `05_platform/iwdg/iwdg.h` 的 `IWDG_TIMEOUT_MS` | ADR 0074 |
+| EKF 噪声（Q、R）、加速度低通系数 | `modules/ins/ins.c` 开头 | 经验值，含义见注释 |
+| 陀螺零偏标定、静止时在线修正的阈值 | `modules/ins/ins.h` 的 `INS_CALIB_*`、`INS_STILL_*` | 按 BMI088 静止噪声定 |
+| IMU 加热：目标温度、周期、PID、占空比上限 | `02_devices/imu/bmi088.h` 的 `BMI088_HEATER_TARGET_C`、`bmi088.c` 的 `HEATER_*` | 按 MC02 板实测整定 |
+| 遥控丢失超时 200 ms | `02_devices/remote/dr16.h` 的 `DR16_TIMEOUT_MS` | 超过这么久没新帧就当作遥控丢失 |
+| IMU 就绪判定 20 ms | `01_applic/modules/ins/ins.h` 的 `INS_TIMEOUT_MS` | 超过这么久没有新姿态就当作 IMU 未就绪 |
+| 电机离线超时 20 ms | `02_devices/motor/motor.h` 的 `MOTOR_TIMEOUT_MS` | 超过这么久没反馈就当作电机离线 |
+| 解锁后输出斜坡 300 ms | `system/safety_gate.h` 的 `SAFETY_RAMP_MS` | 解锁瞬间不猛冲 |
+| 轮子离线时降级限速 50% | `modules/chassis/chassis.h` 的 `CHASSIS_DEGRADED_SCALE` | 坏一个轮子仍能开，降速便于修正方向 |
+| 舵轮零点开关（引脚、有效电平） | `config/robot.h` 的 `chassis_config`（`.steer.zero_switch`） | 引脚要在 CubeMX 配成 GPIO 输入 |
+| 硬件看门狗超时 50 ms | `05_platform/iwdg/iwdg.h` 的 `IWDG_TIMEOUT_MS` | control_task 卡死超过这么久整板复位 |
 | 达妙命令间隔 | `02_devices/motor/motor.c` 的 `DM_CMD_INTERVAL_US` | |
 
 ## 规则

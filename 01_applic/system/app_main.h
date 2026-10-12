@@ -43,7 +43,11 @@ extern const uint32_t task_table_count;
 /** 调度器启动前：在 MX_FREERTOS_Init() 的 USER CODE 区里调用；返回后由生成的 main() 调用 osKernelStart() */
 void app_main(void);
 
-/** 启动任务：调度器启动后第一个运行。CubeMX 以最高优先级静态创建它（ADR 0025 修订），生成的是弱定义 */
+/**
+ * 启动任务：调度器启动后第一个运行。CubeMX 以最高优先级静态创建它，生成的是弱定义（__weak）；
+ * app_main.c 里写的同名函数是强定义，链接时会替换掉生成的空函数，所以不用改 CubeMX 生成的代码。
+ * 其余任务不放在 CubeMX 里，而是放在 robot.c 的任务表：改任务不用打开 CubeMX，也不怕重新生成时被覆盖。
+ */
 void startup_task(void *argument);
 
 #ifdef __cplusplus

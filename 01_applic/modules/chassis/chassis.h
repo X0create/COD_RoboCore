@@ -1,23 +1,23 @@
 /**
  * @file    chassis.h
  * @brief   底盘子系统：四轮全向轮 / 麦轮 / 舵轮 / 半舵半全向，由 ChassisConfig.type 选择
- * @note    control_task 每 1 ms 按顺序调用下面三个函数，各对应它自己的一步（与 COD-H7-Template Control_Task 的
- *          Measure / Target / Output 写法对应）：
+ * @note    control_task 每 1 ms 按顺序调用下面三个函数，和 control_task 的三步一一对应：
  *            1. chassis_measure_update()：各电机的转速（舵轮还有朝向）→ chassis.measure
  *            2. chassis_target_update()：目标底盘速度过斜坡 → 逆解出各轮目标 → chassis.target
  *            3. chassis_output_update()：各轮 PID → 电机力矩
  *          在 Ozone 里看 chassis.measure 和 chassis.target 就能对比实测与目标。
  *
- *          全车停与降级（ADR 0073：赛场上优先保证车能继续跑）：
+ *          全车停与降级（原则：赛场上优先保证车能继续跑，坏了一个轮子也不能整车趴窝）：
  *          - 全车停（安全门：急停、未解锁）：第 2 步传 stop_all = true，第 3 步就不写指令，
  *            发送出口统一改成零力矩；这时清积分、目标对齐实测速度，解锁时不会猛冲；
  *          - 降级（有轮子不能用）：不能用的轮子不写指令（发送时为零力矩，被动滚动）、清积分；
  *            其余轮子继续闭环，目标速度和加速度都乘 CHASSIS_DEGRADED_SCALE。
  *            “不能用”= 驱动电机离线，或这个轮子的转向电机离线 / 零点还没找到（朝向控制不了，驱动它会往错的方向推）。
- *          舵轮找零（接了零点开关时，ADR 0068）：能动以后在第 3 步里先让转向电机正转、反转各经过开关一次，
+ *          舵轮找零（接了零点开关时）：能动以后在第 3 步里先让转向电机正转、反转各经过开关一次，
  *          找到开关中心才开始正常控制；转向电机离线再上线后重找（上电位置为 0 的电机重连后零点不再可信）。
  *          轮号顺序见 03_algorithm/kinematics/ 下对应的头文件（都是左前起逆时针）。
- *          功率控制以后加在第 3 步“算出力矩之后、写给电机之前”（ADR 0022）。
+ *          功率控制（按裁判系统给的功率上限压低力矩）以后加在第 3 步“算出力矩之后、写给电机之前”，
+ *          算法在 03_algorithm/power/。
  */
 #pragma once
 
@@ -56,13 +56,13 @@ typedef enum
 typedef struct
 {
     SteerConfig kinematics;
-    /* 零点开关（接近开关，ADR 0068）。不接（GPIO_IN_NONE，默认）：转向电机零点必须上电即确定
+    /* 零点开关（接近开关）。不接（GPIO_IN_NONE，默认）：转向电机零点必须上电即确定
      * （如 GM6020 的绝对编码器），zero_rad = 轮子朝车头时的反馈角度（输出轴 rad）。
      * 接了：上电位置为 0 的型号（M2006、M3508）也能用——能动以后先找开关中心，
-     * zero_rad = 轮子朝车头时相对开关中心的偏移（机械安装决定，哨兵约 −3°） */
+     * zero_rad = 轮子朝车头时相对开关中心的偏移（由机械安装决定，通常只有几度，装好后实测） */
     GpioInput zero_switch[CHASSIS_WHEELS];
     float zero_rad[CHASSIS_WHEELS];
-    bool zero_switch_active_low; /* 开关触发时为低电平（NPN 接近开关常见，26 赛季哨兵即如此） */
+    bool zero_switch_active_low; /* 开关触发时为低电平（NPN 型接近开关一般是这样） */
     float zero_search_rad_s;     /* 找零时转向电机的转速（输出轴） */
     float zero_search_timeout_s; /* 超过这么久没找到就判失败，这个轮子不能用 */
     PidParam angle_pid;          /* 朝向误差 rad → 转向电机目标转速 rad/s */
@@ -77,8 +77,7 @@ typedef struct
     MecanumConfig mecanum;    /* 只有麦轮使用 */
     ChassisSteerConfig steer; /* 舵轮、半舵半全向使用（转向电机零点和 PID） */
     HalfSteerConfig half_steer; /* 只有半舵半全向使用（几何和哪条对角线是舵轮） */
-    PidParam
-        drive_speed_pid; /* 驱动轮速度环：rad/s → N·m；PID 不带 dt，按 1 kHz 整定（ADR 0029） */
+    PidParam drive_speed_pid; /* 驱动轮速度环：rad/s → N·m；PID 不带 dt，参数按 1 kHz 调用整定 */
     float max_accel_m_s2; /* 平移加速度上限（加速、减速都按它；降级时 × CHASSIS_DEGRADED_SCALE） */
     float max_alpha_rad_s2; /* 旋转角加速度上限 */
 } ChassisConfig;
@@ -110,7 +109,7 @@ typedef struct
 } ChassisTarget;
 
 /**
- * 舵轮找零的状态（ADR 0068）：正转、反转各记一次“进入开关 → 离开开关”的中点，两个中点平均即开关中心。
+ * 舵轮找零的状态：正转、反转各记一次“进入开关 → 离开开关”的中点，两个中点平均即开关中心。
  * 1 kHz 轮询开关，边沿记录的角度滞后电机 1 ms 转过的角度；正反两次的滞后方向相反，平均后抵消
  */
 typedef enum
@@ -157,10 +156,10 @@ RM_NODISCARD bool chassis_init(Chassis *chassis, const ChassisConfig *cfg,
                                Motor *const drive[CHASSIS_WHEELS],
                                Motor *const steer[CHASSIS_WHEELS]);
 
-/** 降级时目标速度和加速度的比例（ADR 0073）：少了轮子跑偏时给操作手留出修正的余量；数值未经台架验证 */
+/** 降级时目标速度和加速度的比例：少了轮子车会跑偏，降速给操作手留出修正的余量；数值是经验值，可按实车调整 */
 #define CHASSIS_DEGRADED_SCALE 0.5f
 
-/** 三个函数的调用周期：control_task 每 1 ms 调一次（斜坡按它算每步的速度变化；PID 参数也和它绑定，ADR 0029） */
+/** 三个函数的调用周期：control_task 每 1 ms 调一次（斜坡按它算每步的速度变化；PID 参数也和它绑定） */
 #define CHASSIS_PERIOD_S 0.001f
 
 /**

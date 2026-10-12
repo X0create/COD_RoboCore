@@ -8,7 +8,12 @@
 #include "04_core/os/critical.h"
 #include "05_platform/time/time.h"
 
-/* 旧工程 INS_Task.c 的参数 */
+/*
+ * EKF 噪声参数（经验值，在 MC02 + BMI088 上使用过）：
+ *   Q_QUAT  过程噪声（四元数）：越大越相信加速度计，姿态跟得快但抖；
+ *   Q_BIAS  过程噪声（陀螺零偏）：越大零偏估计变化越快；
+ *   R_ACCEL 量测噪声（加速度计）：越大越不相信加速度计，车加减速时姿态越不容易被带偏。
+ */
 #define EKF_Q_QUAT  10.0f
 #define EKF_Q_BIAS  0.001f
 #define EKF_R_ACCEL 1000000.0f
@@ -17,7 +22,7 @@
 /* 加速度模长小于这个值的读数当作坏帧（静止时约 9.8 m/s²） */
 #define ACCEL_MIN_M_S2 1.0f
 
-/* 加速度二阶低通系数（旧工程 INS_LPF2p_Alpha） */
+/* 加速度二阶低通系数（1 kHz 采样下的二阶 IIR 低通，滤掉电机振动带来的加速度噪声） */
 static const float accel_lpf_coef[3] = { 1.929454039488895f, -0.93178349823448126f,
                                          0.002329458745586203f };
 
@@ -48,7 +53,7 @@ bool ins_read(const Ins *ins, ImuState *out)
 static InsEvent calibrate_gyro(Ins *ins, const Bmi088Sample *s);
 static ImuState update_attitude(Ins *ins, const Bmi088Sample *s, uint64_t now_us);
 
-/* 每 1 ms 一次的完整流程（相当于老模板 INS_Task 的循环体），各步骤的细节在下面 */
+/* 每 1 ms 一次的完整流程，各步骤的细节在下面 */
 InsEvent ins_step(Ins *ins)
 {
     /* 1. 读 BMI088。读失败，或加速度模长接近 0（全零会让 EKF 除零后永久变成 NaN）都算坏帧：关加热、不更新姿态 */
@@ -67,7 +72,8 @@ InsEvent ins_step(Ins *ins)
         return INS_EVENT_READ_FAILED;
     }
 
-    /* 2. 恒温加热：芯片温度 → 加热 PID（每 1280 ms 算一次，ADR 0042，见 bmi088.c） */
+    /* 2. 恒温加热：芯片温度 → 加热 PID（每 1280 ms 算一次，见 bmi088.c）。
+     *    陀螺零偏随温度变化，把芯片恒温在 40 °C 左右，零偏就稳定 */
     bmi088_heater_step(&ins->imu, s.temperature_c);
 
     /* 3. 上电先标定陀螺零偏；标定完成前不保存姿态（ins_read 返回 false），安全门据此全车停 */
@@ -168,7 +174,7 @@ static ImuState update_attitude(Ins *ins, const Bmi088Sample *s, uint64_t now_us
         st.accel_m_s2[i] = lpf2_update(&ins->accel_lpf[i], accel_body[i]);
     }
 
-    /* 实测两次更新的间隔（旧工程固定 1 ms）：任务被耽误或中间有读失败时，积分时间照实计算 */
+    /* 实测两次更新的间隔（不假设固定 1 ms）：任务被耽误或中间有读失败时，积分时间照实计算 */
     const float dt_s =
         ins->have_last_update ? (float)(now_us - ins->last_update_us) * 1e-6f : EKF_DT_S;
     ins->have_last_update = true;
@@ -181,7 +187,7 @@ static ImuState update_attitude(Ins *ins, const Bmi088Sample *s, uint64_t now_us
     }
     quat_ekf_to_euler(st.q, &st.yaw_rad, &st.pitch_rad, &st.roll_rad);
 
-    /* 多圈航向：相邻两次跨过 ±π 就计一圈（旧工程同样做法，单位由度改为弧度） */
+    /* 多圈航向：yaw 只在 -π…π 之间，转过 π 会跳到 -π。相邻两次跨过 ±π 就计一圈，得到不回绕的总角度 */
     if (ins->have_yaw)
     {
         const float d = st.yaw_rad - ins->last_yaw_rad;

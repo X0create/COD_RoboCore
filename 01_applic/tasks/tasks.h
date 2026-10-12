@@ -1,8 +1,10 @@
 /**
  * @file    tasks.h
- * @brief   全部任务的入口（相当于老模板 Application/Task 下各任务的声明），每个任务的实现在同目录的 xxx_task.c
+ * @brief   全部任务的入口声明，每个任务的实现在同目录的 xxx_task.c
  * @note    任务的名字、优先级、栈都在 01_applic/config/robot.c 的任务表 task_table[]，由 app_main() 逐个创建。
  *          优先级从高到低：ins 6 → comm_rx 5 → control 4 → detect 3 → indicator 2 → log 1。
+ *          新增一个任务的步骤见 docs/FREERTOS_GUIDE.md 第 4 节。
+ *          任务之间共享的少量数据（心跳、实时性统计、电池电压）也声明在这里，由产生它的任务提供读取函数。
  */
 #pragma once
 
@@ -30,10 +32,10 @@ extern RmTask comm_rx_task;
 /** control_task（1 kHz）：读实测 → 算目标 → 算输出并发送 */
 void control_task_entry(void *arg);
 
-/** control_task 每个周期加 1：detect_task 看到它在涨才喂 IWDG（ADR 0074） */
+/** control_task 每个周期加 1：detect_task 看到它在涨才喂硬件看门狗 IWDG，control 卡死时整板复位 */
 extern volatile uint32_t control_heartbeat;
 
-/** control_task 的实时性统计（ADR 0074，只取证、不影响控制） */
+/** control_task 的实时性统计（只记录、不影响控制；log_task 每秒打印一次） */
 typedef struct
 {
     uint32_t exec_max_us;   /* 一个周期三步的执行时间最大值 */

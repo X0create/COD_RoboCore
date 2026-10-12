@@ -1,9 +1,10 @@
 /**
  * @file    robot.c
  * @brief   这台车的全部对象、它们的初始化和任务表（目前：四轮全向轮底盘，遥控直接给底盘速度）
- * @note    1. 对象定义（相当于老模板的全局变量），声明和参数都在 robot.h
- *          2. robot_init()：设备 → 机构 → 安全门
- *          3. 任务表 task_table[]（相当于老模板 Core/Src/freertos.c 里的任务列表）
+ * @note    本文件分三节：
+ *          1. 对象定义：整车共用的全局变量，声明和参数都在 robot.h
+ *          2. robot_init()：按 设备 → 机构 → 安全门 的顺序初始化（机构要用到设备，所以设备先初始化）
+ *          3. 任务表 task_table[]：每个任务的名字、入口函数、优先级、栈，一行一个
  *          上电顺序（通用）在 01_applic/system/app_main.c：app_main() 调用 robot_init()，再按 task_table[] 创建任务。
  *          6 个任务都在 01_applic/tasks/，调用关系总图见 docs/CALL_FLOW.md。
  */
@@ -36,6 +37,8 @@ bool robot_init(void)
 {
     dr16_init(&dr16);
 
+    /* 电机：按 robot.h 的电机表逐个初始化，并加入电机组 motors（之后收反馈、发指令都按组统一处理）。
+     * 两个电机的 CAN 总线和 ID 撞了（会互相收到对方的反馈）时初始化失败，日志里写明和谁冲突 */
     Motor *drive[CHASSIS_WHEELS];
     for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
     {
@@ -49,6 +52,7 @@ bool robot_init(void)
         }
         drive[i] = &wheel_motor[i];
     }
+    /* 底盘：把四个驱动电机交给它；第 4 个参数是舵轮的转向电机，全向轮没有，传 NULL */
     if (!chassis_init(&chassis, &chassis_config, drive, NULL))
     {
         RM_LOG_E("chassis init failed: motor without torque command");

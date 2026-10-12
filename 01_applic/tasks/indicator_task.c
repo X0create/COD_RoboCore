@@ -1,9 +1,12 @@
 /**
  * @file    indicator_task.c
- * @brief   indicator_task（25 ms）：状态灯、蜂鸣器、低电量检查，通用（照 COD_UniCFramework 的 app_indicator）
- * @note    状态灯、蜂鸣器、电池的对象和参数只在本文件；ADC、蜂鸣器 PWM 也在本任务开头打开。
- *          提示依据的状态直接读权威来源，不另存副本：模式读 safety_gate.mode，电量由本任务读 ADC 判断。
- *          提示：绿灯每秒闪两下（一长一短）= 正常；启动音；解锁音 / 上锁音；低电量每 2 s 响一次。
+ * @brief   indicator_task（25 ms）：状态灯、蜂鸣器、低电量检查，所有车通用
+ * @note    给操作手的提示都在这里：
+ *            状态灯   绿灯每秒闪两下（一长一短）= 程序在正常运行；不闪 = 程序卡住或没跑起来
+ *            蜂鸣器   上电响启动音；解锁、上锁各有提示音；低电量每 2 s 响一次
+ *          状态灯、蜂鸣器、电池的对象和参数只在本文件；ADC、蜂鸣器 PWM 也在本任务开头打开。
+ *          提示依据的状态直接读它的唯一来源，不另存副本：模式读 safety_gate.mode，电量由本任务读 ADC 判断。
+ *          这些提示只给人看，不参与控制：本任务出问题不影响车动。
  */
 #include "01_applic/tasks/tasks.h"
 
@@ -22,8 +25,9 @@
 #define LOW_BATTERY_BEEP_STEPS 80u   /* 80 × 25 ms = 2 s 响一次 */
 
 /*
- * 电池（6S）：连续 1 s 低于 21.0 V 提示低电量，回到 21.5 V 以上解除（ADR 0038）。
- * 分压比 11 是 DM-MC02 板上的电阻分压，取自 COD-H7-Template bsp_adc.c，待万用表核对（V16）
+ * 电池（6S 锂电，满电约 25.2 V）：连续 1 s 低于 21.0 V 提示低电量，回到 21.5 V 以上才解除。
+ * “连续 1 s”是为了不被电机加速时的瞬间压降误触发；解除阈值高一点，避免在阈值附近反复提示。
+ * 分压比 11：DM-MC02 板上把电池电压按 1/11 分压后送进 ADC。换板子或量出读数不准时，用万用表对照着改
  */
 static const BatteryConfig battery_config = {
     .divider = 11.0f, .low_v = 21.0f, .recover_v = 21.5f, .hold_ms = 1000u
@@ -97,7 +101,7 @@ void indicator_task_entry(void *arg)
     {
         /* 每 25 ms：状态灯 → 电池 → 模式提示音 → 推进蜂鸣器的音符 */
         /* 状态灯：绿色每拍闪两下表示正常——第 0–1 步（0–50 ms）亮一次，第 8 步（200–225 ms）再亮一次。
-         * 两次亮的时长不同（用户 2026-09-28 指定），一长一短容易和其他闪烁码区分 */
+         * 两次亮的时长不同，一长一短容易和以后加的其他闪烁码区分 */
         const bool led_on = step < 2u || step == 8u;
         status_led_set(0u, led_on ? LED_GREEN_LEVEL : 0u, 0u); /* R、G、B */
         check_battery(tick);
