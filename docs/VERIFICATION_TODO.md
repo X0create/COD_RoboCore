@@ -82,3 +82,8 @@
 | V54 | 控制实时性（满总线负载） | V45 状态（四台 M3508 在 FDCAN1）；可加 CAN 负载 | 运行 10 min，记 RTT 的 `control exec max … period max … late …` | 记下最大执行时间、最大周期间隔；`late` 应为 0，不为 0 时记下当时在做什么 | 待验证 |
 | V55 | 舵轮接近开关找零（ADR 0075） | 舵轮底盘、零点开关接 PE13/PE9/PA2/PA0 且 CubeMX 已配成输入；车架空 | 解锁；看 Ozone 的 `chassis.zero[i].state`、`center_rad` | 每个转向电机先正转、再反转各经过开关一次后 `state` 变为 DONE（0），轮子回到朝前；重复上电多次 `center_rad` 对应的物理朝向一致（记下最大偏差）；拔掉一个开关：超时后这个轮子不出力，其余继续；断开转向电调电源再接上：重新找零 | 待验证 |
 | V56 | 超级电容通信（协议草案版本 1） | 电容板固件已按 `02_devices/supercap/README.md` 实现；电容板接 FDCAN2（经典 CAN 1 Mbit/s），ID 0x061 / 0x062；电容板上电 | 看 RTT；然后拔掉电容板的 CAN 线 | 出现 `supercap online`，每秒一行 `supercap … mV, chassis … mW, energy …%`，电压与万用表一致；`bad frames` 不涨。拔线后主控约 50 ms 内 `supercap offline`，电容板 100 ms 内停止输出（电容组在电容板上确认） | 待验证（电容板固件未实现） |
+| V57 | C 板：启动、状态灯、RTT | 一块大疆 C 板，只接 J-Link 和电源；烧 `c-debug`（Ozone 设备选 STM32F407IG） | 上电看 RTT 和板上 RGB 灯 | RTT 依次出现 `COD RoboCore booting`、`starting scheduler`、`startup done`、设备清单；绿灯每秒闪两下（一长一短）；FreeRTOS 窗口里 6 个任务 | 待验证 |
+| V58 | C 板：IMU 与加热 | V57 通过，板子静止 | 看 RTT 约 30 s | `bmi088 ready` → `gyro calibrated, imu ready`；每秒的 `imu … mC` 温度升到约 40 °C 后稳定；静止时 yaw 基本不动 | 待验证 |
+| V59 | C 板：DR16（USART3 9 位偶校验） | V57 通过，接收机接板上 DBUS 口，遥控开机 | 推摇杆、拨拨杆 | 出现 `dr16 online`，`rc ch …` 随摇杆变化，`bad frames` 不涨；关遥控 200 ms 内 `dr16 offline`，再开恢复 | 待验证 |
+| V60 | C 板：电机反馈（bxCAN） | 一台 M3508 接 CAN1、ID 1，电调上电 | 手转输出轴 | `wheel_lf online`，速度随手转变化；拔掉 CAN 线 20 ms 内 offline，插回 online | 待验证 |
+| V61 | C 板：电池电压、蜂鸣器 | 电池供电 | 看 RTT 的 `battery … mV`，同时用万用表量电池 | 读数与万用表差 < 0.3 V（不准就改 `06_boards/dji_c_f407/board.h` 的 `BOARD_BATTERY_DIVIDER`）；上电有启动音 | 待验证 |

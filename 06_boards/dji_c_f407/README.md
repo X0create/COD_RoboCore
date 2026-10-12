@@ -1,6 +1,6 @@
 # dji_c_f407：大疆 RoboMaster 开发板 C 型（STM32F407IGH6）
 
-**状态：CubeMX 工程待生成（`dji_c.ioc` 已放好，按下面的步骤在 CubeMX 里改完再生成代码）；平台层 `*_stm32f4.c` 未写。**
+**状态：CubeMX 代码已生成（2026-10-12），平台层 `05_platform/*/*_stm32f4.c` 已写，`c-debug` 编译 0 警告；还没上板。**
 
 两块 C 板（云台板、底盘板）用同一个 CubeMX 工程：C 板的引脚是固定的，两块板的区别只在 `01_applic/` 的配置里。
 
@@ -58,12 +58,14 @@
    Prescaler `84-1`，Counter Period `255`。
    - 为什么：C 板的 RGB 灯接在这三路上，用 PWM 占空比调亮度，框架的状态灯接口每种颜色是 0–255，周期 255 正好一一对应；
      TIM5 时钟 84 MHz，÷84 后每 1 µs 计一次，256 个计数一个周期，约 3.9 kHz，眼睛看不出闪烁。
-8. **Analog → ADC3**：勾选 **IN8**（PF10）；Continuous Conversion Mode **Enabled**；DMA Continuous Requests **Enabled**；
-   Rank 1 的 Sampling Time 选 **480 Cycles**。DMA Settings 加 **ADC3**，Mode **Circular**，Data Width **Half Word**。
+8. **Analog → ADC3**：勾选 **IN8**（PF10）。**先**在 DMA Settings 标签页点 Add 加 **ADC3**，Mode **Circular**，Data Width **Half Word**；
+   **再**回到 Parameter Settings：Continuous Conversion Mode **Enabled**，DMA Continuous Requests **Enabled**（没加 DMA 时这一项只能选 Disable），
+   ADC_Regular_ConversionMode → Rank 1 的 Channel 为 **Channel 8**、Sampling Time 选 **480 Cycles**。
    - 为什么：连续转换 + 循环 DMA 让 ADC 一直在后台采样、把最新结果写进内存，任务随时读、不用等转换完成（和 MC02 的做法一样）；
      电池电压经过大电阻分压，信号源内阻高，采样时间要长才能把采样电容充满，读数才准；结果是 12 位，用半字（16 位）存放。
-9. **System Core → NVIC → Code generation**：所有用到的中断（CAN1 RX0、CAN2 RX0、USART3、DMA、TIM2、OTG_FS 等）
-   **Call HAL handler** 都要勾上；优先级保持 5（TIM2 时基为 15）。
+9. **System Core → NVIC → Code generation**：列表里能看到的中断（CAN1 RX0 interrupts、CAN2 RX0 interrupts、USART3 global interrupt、
+   各个 DMA stream global interrupt、USB On The Go FS global interrupt 等）**Call HAL handler** 都要勾上；优先级保持 5。
+   TIM2 作为时基由 CubeMX 自动处理，这张表里可能看不到，不用管。
    - 为什么：不勾的话 CubeMX 生成的中断函数是空的，CAN、串口、DMA 都收不到数据，而且不报任何错；
      优先级数字不小于 5 的中断才能调用 FreeRTOS 的 `FromISR` 函数唤醒任务（`FreeRTOSConfig.h` 的规定），框架的接收全靠这个唤醒。
 10. **不要**在 CubeMX 里打开 IWDG。
@@ -75,4 +77,19 @@ USART1、USART6、TIM1、激光 PE11 等原工程里的配置暂时保留：框�
 
 ## 重新生成后的检查
 
-和 MC02 一样要有一张检查清单（`REGEN_CHECKLIST.md`），第一次生成成功后再写。
+每次在 CubeMX 里生成代码后，逐条核对 `REGEN_CHECKLIST.md`。
+
+## 和上层代码的接口
+
+- `board.h`：上层要知道的板级接线——DR16 接哪个串口（USART3）、电池分压比（约 10.09，待核对）。MC02 目录里有同名文件。
+- 生成代码里改过的地方都在 USER CODE 区（重新生成不会丢）：`freertos.c` 调用 `app_main()`、栈溢出钩子；
+  `stm32f4xx_it.c` 四个 Fault 调用 `iwdg_fault()`；`FreeRTOSConfig.h` 的 `configASSERT`；`usbd_cdc_if.c` 的接收钩子。
+- 链接脚本直接用 CubeMX 生成的 `STM32F407xx_FLASH.ld`：F407 没有 Cache，DMA 能访问普通 SRAM，不需要专用段。
+- C 板的 FreeRTOS 是固件包自带的 V10.3.1（MC02 是 V10.6.2），`04_core/os/os.c` 按版本选用 `vTaskDelayUntil` / `xTaskDelayUntil`。
+
+## 构建与烧录
+
+- 构建：预设 **`c-debug`**（`cmake --preset c-debug && cmake --build --preset c-debug`），产物 `build/<系统>/c-debug/COD_RoboCore.elf`。
+- 烧录、调试：Ozone 新建工程时 Device 选 **STM32F407IG**，其余和 MC02 相同（`docs/DEV_ENVIRONMENT.md`）。
+- CubeMX 工程里勾了 CMSIS-DSP 库（原工程带来的），生成的 CMake 会链接 6 MB 的 `libarm_cortexM4lf_math.a`；
+  框架不用它，这个文件暂不提交，以后在 CubeMX 里去掉 DSP 库。

@@ -31,6 +31,12 @@ static FDCAN_HandleTypeDef *const handles[CAN_BUS_COUNT] = {
 
 static CanBus buses[CAN_BUS_COUNT];
 
+bool can_bus_exists(CanBusId bus)
+{
+    (void)bus;
+    return true; /* H723 三路 FDCAN 都有 */
+}
+
 /* CubeMX 给这路总线分配了 RX FIFO0 就用 FIFO0，否则用 FIFO1 */
 static bool uses_fifo0(const FDCAN_HandleTypeDef *h)
 {

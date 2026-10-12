@@ -12,8 +12,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(warnings)
 
-# 主控板由预设指定（如 dm_mc02）；留空时只构建电脑侧的库和测试
-set(RM_BOARD "" CACHE STRING "主控板：dm_mc02；留空表示只构建电脑侧")
+# 主控板由预设指定（dm_mc02、dji_c）；留空时只构建电脑侧的库和测试
+set(RM_BOARD "" CACHE STRING "主控板：dm_mc02（达妙 MC02）、dji_c（大疆 C 板）；留空表示只构建电脑侧")
 if(RM_BOARD)
     enable_language(ASM)           # 启动文件 startup_*.s
     include(board-${RM_BOARD})     # 芯片编译选项，必须在创建任何目标之前

@@ -19,6 +19,8 @@
 #include "05_platform/status_led/status_led.h"
 #include "05_platform/time/time.h"
 
+#include <board.h> /* 板级接线：BOARD_BATTERY_DIVIDER（每块主控板一份，见 06_boards/<板子>/board.h） */
+
 #define STEP_MS                25u
 #define STEPS_PER_BEAT         40u   /* 40 × 25 ms = 1 s 一拍 */
 #define LED_GREEN_LEVEL        0x20u /* WS2812 满亮度很刺眼，1/8 亮度足够看清 */
@@ -27,10 +29,10 @@
 /*
  * 电池（6S 锂电，满电约 25.2 V）：连续 1 s 低于 21.0 V 提示低电量，回到 21.5 V 以上才解除。
  * “连续 1 s”是为了不被电机加速时的瞬间压降误触发；解除阈值高一点，避免在阈值附近反复提示。
- * 分压比 11：DM-MC02 板上把电池电压按 1/11 分压后送进 ADC。换板子或量出读数不准时，用万用表对照着改
+ * 分压比随主控板不同（MC02 是 11，C 板约 10.09），写在 06_boards/<板子>/board.h 的 BOARD_BATTERY_DIVIDER
  */
 static const BatteryConfig battery_config = {
-    .divider = 11.0f, .low_v = 21.0f, .recover_v = 21.5f, .hold_ms = 1000u
+    .divider = BOARD_BATTERY_DIVIDER, .low_v = 21.0f, .recover_v = 21.5f, .hold_ms = 1000u
 };
 
 static Battery battery; /* 只在本任务里写；log_task 通过 indicator_battery_*() 读 */

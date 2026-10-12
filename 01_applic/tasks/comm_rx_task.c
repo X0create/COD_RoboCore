@@ -9,7 +9,7 @@
  *          接线一览：
  *            CAN       全部电机的反馈 → 电机组 motors（总线和 ID 在 robot.h 的电机表，如 wheel_config）
  *                      超级电容的反馈 → supercap（总线和 ID 在 robot.h 的 supercap_config）
- *            UART5     DR16 遥控接收机 → dr16（保存最新一帧，dr16_read() 读）
+ *            DBUS 串口 DR16 遥控接收机 → dr16（保存最新一帧，dr16_read() 读）；哪个串口见 board.h（MC02 UART5、C 板 USART3）
  */
 #include "01_applic/tasks/tasks.h"
 
@@ -19,7 +19,9 @@
 #include "05_platform/time/time.h"
 #include "05_platform/uart/uart.h"
 
-#define DBUS_UART UART_5 /* DR16 接收机 */
+#include <board.h> /* 板级接线：BOARD_DBUS_UART（每块主控板一份，见 06_boards/<板子>/board.h） */
+
+#define DBUS_UART BOARD_DBUS_UART /* DR16 接收机：MC02 是 UART5，C 板是 USART3 */
 
 /* 没有通知时也每隔这么久检查一次，防止某次通知丢失后数据积压 */
 #define COMM_RX_IDLE_MS 10u
@@ -35,12 +37,12 @@ static void notify_from_isr(void *ctx)
     rm_task_notify_from_isr(&comm_rx_task);
 }
 
-/* 打开每一路 CAN 的接收（全部标准帧）；失败记日志 */
+/* 打开这块板上每一路 CAN 的接收（全部标准帧）；失败记日志。芯片上没有的总线（如 C 板的 CAN3）跳过 */
 static void start_can(void)
 {
     for (int bus = 0; bus < (int)CAN_BUS_COUNT; bus++)
     {
-        if (!can_start((CanBusId)bus, notify_from_isr, NULL))
+        if (can_bus_exists((CanBusId)bus) && !can_start((CanBusId)bus, notify_from_isr, NULL))
         {
             RM_LOG_E("can%d start failed", bus + 1);
         }
@@ -74,7 +76,7 @@ void comm_rx_task_entry(void *arg)
     if (!uart_rx_start(DBUS_UART, notify_from_isr,
                        NULL)) /* DMA 接收；失败时读这个串口始终得到 0 字节 */
     {
-        RM_LOG_E("uart5 (dr16) start failed");
+        RM_LOG_E("dbus uart (dr16) start failed");
     }
 
     CanFrame frame;
@@ -100,7 +102,7 @@ void comm_rx_task_entry(void *arg)
         }
         recover_bus_off(); /* bus-off 的总线每 100 ms 重启一次 */
 
-        /* UART5 → DR16：凑满 18 字节一帧 → 校验 → 保存为最新一帧。
+        /* DBUS 串口 → DR16：凑满 18 字节一帧 → 校验 → 保存为最新一帧。
          * rx_us 是串口中断收到这批字节的时刻，不是现在：本任务被耽误时，积压的旧帧不会被当成刚收到的，
          * 遥控掉线判断才准确 */
         while ((n = uart_read(DBUS_UART, buf, sizeof(buf), &rx_us)) > 0u)

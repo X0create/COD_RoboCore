@@ -45,6 +45,12 @@ typedef struct
 typedef void (*CanRxNotify)(void *ctx);
 
 /**
+ * @brief   这块芯片上有没有这路总线（H723 有 3 路，F407 只有 2 路）
+ * @note    comm_rx_task 据此只打开存在的总线，不会对不存在的总线报“启动失败”
+ */
+bool can_bus_exists(CanBusId bus);
+
+/**
  * @brief   设置为接收全部标准数据帧，打开接收中断并启动总线
  * @param   notify  收到新帧时在中断里调用，可以为 NULL（只靠任务轮询 can_read()）
  * @return  false：这块板没有这路总线、HAL 配置失败，或 FD 总线的消息 RAM 每格不是 64 字节（CubeMX 配置错）

@@ -36,6 +36,22 @@
           "toolchain": "MinGW"
         }
       }
+    },
+    {
+      "name": "c-debug",
+      "displayName": "大疆 C 板固件（arm-none-eabi-gcc，Debug）",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${hostSystemName}/c-debug",
+      "toolchainFile": "${sourceDir}/cmake/toolchain-arm-gcc.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "RM_BOARD": "dji_c"
+      },
+      "vendor": {
+        "jetbrains.com/clion": {
+          "toolchain": "MinGW"
+        }
+      }
     }
   ],
   "buildPresets": [
@@ -46,6 +62,10 @@
     {
       "name": "h723-debug",
       "configurePreset": "h723-debug"
+    },
+    {
+      "name": "c-debug",
+      "configurePreset": "c-debug"
     }
   ],
   "testPresets": [

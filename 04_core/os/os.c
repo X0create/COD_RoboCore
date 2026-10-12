@@ -30,7 +30,14 @@ RmTaskPeriod rm_task_period_start(void)
 
 void rm_task_delay_until(RmTaskPeriod *last_wake, uint32_t period_ms)
 {
+    /* FreeRTOS 10.4 起改名为 xTaskDelayUntil；C 板的 CubeMX 固件包带的还是 10.3.1，只有旧名字 vTaskDelayUntil，
+     * 两者行为相同 */
+#if (tskKERNEL_VERSION_MAJOR > 10)                                                                 \
+    || (tskKERNEL_VERSION_MAJOR == 10 && tskKERNEL_VERSION_MINOR >= 4)
     (void)xTaskDelayUntil(last_wake, pdMS_TO_TICKS(period_ms));
+#else
+    vTaskDelayUntil(last_wake, pdMS_TO_TICKS(period_ms));
+#endif
 }
 
 void rm_task_delete_self(void)

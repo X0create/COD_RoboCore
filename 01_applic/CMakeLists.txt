@@ -28,4 +28,6 @@ add_library(rm_app STATIC
     config/robot.c
 )
 target_link_libraries(rm_app PUBLIC rm_app_logic rm_core rm_devices rm_algorithm)
+# 所选主控板的目录：<board.h>（DBUS 串口、电池分压比这类板级接线）
+target_include_directories(rm_app PRIVATE ${RM_BOARD_DIR})
 rm_target_warnings(rm_app)

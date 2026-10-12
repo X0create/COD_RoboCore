@@ -29,6 +29,12 @@ void fake_can_set_bus_fd(CanBusId bus, bool fd)
     bus_fd[bus] = fd;
 }
 
+bool can_bus_exists(CanBusId bus)
+{
+    (void)bus;
+    return true;
+}
+
 bool can_bus_is_fd(CanBusId bus)
 {
     return bus_fd[bus];
