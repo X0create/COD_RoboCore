@@ -1,7 +1,7 @@
 /**
  * @file    test_pid.c
  * @brief   pid 的单元测试：各项计算、限幅、死区、微分滤波、增量式、复位、抗积分饱和；
- *          除抗积分饱和（ADR 0040）外，期望值按旧工程 PID.c 的公式手算
+ *          期望值按 pid.h 里写的公式手算
  */
 #include "03_algorithm/control/pid.h"
 
@@ -44,7 +44,7 @@ static void test_integral_accumulates_and_clamps(void)
     TEST_ASSERT_EQUAL_FLOAT(0.5f, pid_step(&pid, -3.0f, 0.0f)); /* 4 - 3 = 1 */
 }
 
-/* 旧工程加热环的参数 integral_limit = 0：积分项恒为 0，保留这个行为 */
+/* integral_limit = 0：积分项恒为 0（相当于只用 PD） */
 static void test_zero_integral_limit_disables_integral(void)
 {
     Pid pid;
@@ -86,7 +86,7 @@ static void test_output_clamped(void)
 }
 
 /* 误差进入死区后输出保持上一次的值，不归零 */
-/* 抗积分饱和：输出顶到限幅、误差同向时积分不再累加；误差一反向，输出立刻跟着反向（ADR 0040） */
+/* 抗积分饱和：输出顶到限幅、误差同向时积分不再累加；误差一反向，输出立刻跟着反向 */
 static void test_integral_frozen_while_saturated(void)
 {
     Pid pid;

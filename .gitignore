@@ -30,7 +30,7 @@ Thumbs.db
 desktop.ini
 
 
-# ---- Keil（只用来烧录调试，06_boards/<板>/mdk/，ADR 0052）----
+# ---- Keil（只用来烧录调试，06_boards/<板>/mdk/）----
 *.uvguix.*
 DebugConfig/
 RTE/

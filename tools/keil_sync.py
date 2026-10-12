@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""把 CubeMX 生成的 Keil 工程整理成可以编译本框架的工程（ADR 0053）。
+"""把 CubeMX 生成的 Keil 工程整理成可以编译本框架的工程。
 
 用法（Windows 或 Linux / WSL，仓库根目录；先在同一系统里让 CMake 生成编译清单）：
     cmake --preset h723-debug

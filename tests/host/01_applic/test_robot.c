@@ -1,6 +1,6 @@
 /**
  * @file    test_robot.c
- * @brief   驱动轮速度环参数换算的等价性：旧工程（COD-H7-Template Control_Task.c）原始单位的 PID 与
+ * @brief   驱动轮速度环参数换算的等价性：原始单位（rpm 进、电流原始值出）的 PID 与
  *          robot.h 里换算到国际单位的 PID，在同一个被控对象上闭环，每一步的输出（换回电流原始值）一致，
  *          包括积分限幅和输出限幅起作用的阶段
  */

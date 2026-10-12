@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""IMU 加热的热模型：用上板数据拟合，再在模型上比较加热参数（ADR 0042）。
+"""IMU 加热的热模型：用上板数据拟合，再在模型上比较加热参数。
 
     python tools/heater_model.py            # 拟合 docs/data/heater_2026-09-30.csv，打印参数，并比较新旧加热参数
 
@@ -61,7 +61,7 @@ def fit(t, y, u, t0=36.0, t1=112.7, dt=0.02, iters=2500):
 
 
 def simulate(model, cap, period_s, kp, ti_s, gain=1.0, amb=None, t_end=300.0, off=None, dt=0.01):
-    """按 pid.c 的位置式 + 条件积分（ADR 0040）模拟加热闭环，返回 [(t, 芯片温度)]"""
+    """按 pid.c 的位置式 + 条件积分（抗积分饱和）模拟加热闭环，返回 [(t, 芯片温度)]"""
     a, k1, k2, k3, k4, k5, a0 = model[:7]
     amb = a0 if amb is None else amb
     h = l = b = amb
@@ -95,8 +95,8 @@ def simulate(model, cap, period_s, kp, ti_s, gain=1.0, amb=None, t_end=300.0, of
 def main():
     model, rmse = fit(*load())
     print("模型参数 a,k1,k2,k3,k4,k5,环境,上电时刻,板温初值:", [round(v, 4) for v in model], f"拟合误差 {rmse:.2f} °C")
-    for name, c in [("UniC 参数（25%、100 ms、kp 0.05）", (0.25, 0.1, 0.05, 20.0)),
-                    ("ADR 0042（8%、1280 ms、kp 0.01、Ti 10 s）", (0.08, 1.28, 0.01, 10.0))]:
+    for name, c in [("较猛的参数（25%、100 ms、kp 0.05）", (0.25, 0.1, 0.05, 20.0)),
+                    ("当前参数（8%、1280 ms、kp 0.01、Ti 10 s）", (0.08, 1.28, 0.01, 10.0))]:
         for amb in (15.0, 25.0, 35.0):
             for gain in (0.7, 1.0, 1.3):
                 h = simulate(model, *c, gain=gain, amb=amb)

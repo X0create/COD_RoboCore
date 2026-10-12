@@ -36,7 +36,7 @@ D 隐藏静态物体。底盘窗口现在只安装自己的 GLFW 回调，避免
 
 ```powershell
 .\tools\mujoco\run.ps1
-# 无窗口检查：正常运动、轮子离线降级、遥控丢失减速与恢复、急停与重新解锁（ADR 0073）。
+# 无窗口检查：正常运动、轮子离线降级、遥控丢失减速与恢复、急停与重新解锁。
 .\tools\mujoco\run.ps1 -Check
 # 切换为左后 / 右前舵轮。
 .\tools\mujoco\run.ps1 -Diagonal lb_rf

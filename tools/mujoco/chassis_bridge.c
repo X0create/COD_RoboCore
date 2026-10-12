@@ -98,7 +98,7 @@ static void put_be16(uint8_t *out, int16_t value)
 }
 
 /* 与电调反馈一样，从虚拟输出轴换成转子编码器 / rpm，再走原来的 motor_group_receive。
- * 编码器计数复用 motor.h，反馈 ID 按附录 A.2（M3508 为 0x200 + ID），这里只做虚拟发送方的反向编码。
+ * 编码器计数复用 motor.h，反馈 ID 按 DJI 手册（M3508 为 0x200 + ID），这里只做虚拟发送方的反向编码。
  * 初始转向角为 0，所以第一次反馈的零位就是模型的向前方向；不是实车零点实现。 */
 static void feed_motor(Motor *motor, float angle_rad, float speed_rad_s, uint64_t now_us)
 {
@@ -137,7 +137,7 @@ void chassis_bridge_step(const ChassisBridgeInput *in, ChassisBridgeOutput *out)
     rc.sw[arm_switch] = in->armed != 0u ? RC_SW_MID : RC_SW_DOWN;
     const SafetyDecision decision =
         safety_gate_update(&safety_gate, in->rc_online != 0u ? &rc : NULL, in->now_us);
-    /* 与 control_task 相同：遥控丢失时目标速度为 0，底盘按斜坡减速（ADR 0073） */
+    /* 与 control_task 相同：遥控丢失时目标速度为 0，底盘按斜坡减速 */
     const ChassisVel cmd =
         in->rc_online != 0u
             ? (ChassisVel){ .vx_m_s = in->cmd[0], .vy_m_s = in->cmd[1], .wz_rad_s = in->cmd[2] }

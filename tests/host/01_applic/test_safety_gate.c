@@ -1,7 +1,7 @@
 /**
  * @file    test_safety_gate.c
  * @brief   安全门的单元测试：启动前不能解锁、必须先拨下再拨上、急停与重新解锁、
- *          遥控丢失不全车停且恢复后直接继续（ADR 0073）、输出斜坡
+ *          遥控丢失不全车停且恢复后直接继续、输出斜坡
  */
 #include "01_applic/system/safety_gate.h"
 
@@ -96,7 +96,7 @@ static void test_rc_restored_with_switch_down_is_estop(void)
     TEST_ASSERT_EQUAL_INT(SAFETY_MODE_SAFE, gate.mode);
 }
 
-/* 故障复位后（ADR 0073 ④）：遥控还没在线时等着；第一次在线、拨杆在上方就直接解锁 */
+/* 故障复位后：遥控还没在线时等着；第一次在线、拨杆在上方就直接解锁 */
 static void test_resume_after_fault_without_rearm(void)
 {
     safety_gate_resume_after_fault(&gate);

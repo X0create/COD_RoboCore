@@ -1,5 +1,5 @@
 # 本仓库自己写的代码统一用这组警告，并把警告当错误。
-# CMake 遇到警告仍会返回成功，所以只能靠 -Werror 让构建失败（UniC 的教训）。
+# CMake 遇到警告仍会返回成功，所以只能靠 -Werror 让构建失败，否则警告很容易被忽略。
 # CubeMX 生成代码和第三方库不调用这个函数：它们的警告我们改不了。
 function(rm_target_warnings target)
     target_compile_options(${target} PRIVATE

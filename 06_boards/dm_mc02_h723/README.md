@@ -13,49 +13,28 @@ Copyright (c) 2025 GrassFan_Wang
 
 完整条款见 <https://github.com/GrassFanWang/COD-H7-Template/blob/main/LICENSE>。
 
-## 相对原工程要做的修改（逐项在 CubeMX 中完成，完成后在此打勾）
+## CubeMX 配置要点
 
-完成的修改同时记入 `docs/CHANGES_FROM_COD_H7_TEMPLATE.md`（新旧对照、原因和验证层级）。
+改 CubeMX 配置、重新生成代码之后，逐条核对 `REGEN_CHECKLIST.md`。下面是这块板当前的关键配置和原因：
 
-- [x] 工具链：MDK-ARM → CMake（ADR 0019）。CubeMX 中已确认（`d1c2b45`）。Keil 工程见下面“Keil”一节（ADR 0053）
-- [x] FreeRTOS：原 4 个任务已随迁移删除；CubeMX 只保留一个启动任务 `startup`（静态、512 字、`osPriorityRealtime7`、
-  入口 `startup_task` 选 As weak，由框架实现）。不定义队列（ADR 0025 修订）。CubeMX 中已确认（`d1c2b45`）
-- [x] CubeMX 6.12.1 → 6.18.1 迁移（FW_H7 V1.13.0）。**迁移时 FreeRTOS 被移除**：6.18.1 不再提供 CMSIS_V1，
-  重新启用时选 CMSIS_V2（`defaultTask` 删不掉，改作启动任务，见上）
-- [x] 系统时钟：原工程 640 MHz 超出 H723 手册最高 550 MHz，改为 **550 MHz**（ADR 0028）：
-  PLL1 与 AHB 分频照搬 UniC 实测（CubeMX 时钟树已确认无报错，`c3994d1`）；
-  PLL2 保持 100 MHz，FDCAN 分频保持 5 / 14 / 5（CAN FD 数据段 5 Mbit/s 需要 100 MHz）
-- [ ] 核对 HAL 时基为 TIM2、FDCAN1/2 为 1 Mbit/s 经典帧、FDCAN3 为 FD+BRS 且每格 64 字节（ADR 0067）、SPI2 数据位 8 bit
-- [x] 按 UniC 实测补上 SPI6（WS2812 状态灯：Transmit Only Master，内核时钟 HSE 24 MHz，÷4 = 6 MHz，8 bit，CPHA 2 Edge，
-  MOSI = PA7 Very High；CubeMX 同时占用 PA5 作 SCK，WS2812 不用）和 TIM12 CH2（PB15，蜂鸣器）。
-  PA7 的速度在界面里改不了，直接写进 `.ioc`（2026-09-28）
-
-每次 Generate Code 后按 `REGEN_CHECKLIST.md` 核对。
-
-## 构建
-
-固件由仓库根目录的 CMake 构建（WSL，仓库根目录）：
-
-```bash
-cmake --preset h723-debug && cmake --build --preset h723-debug
-```
-
-根目录的 `CMakeLists.txt` 通过 `add_subdirectory` 复用 CubeMX 生成的 `cmake/stm32cubemx/CMakeLists.txt`（源文件清单随重新生成自动更新），
-芯片编译选项在 `cmake/board-dm_mc02.cmake`。
-
-**链接脚本用本目录的 `dm_mc02.ld`**，不用 CubeMX 生成的 `STM32H723xG_flash.ld`：前者由后者复制而来，只多了带
-“COD RoboCore” 注释的段（目前是 `.dma_buf`），CubeMX 重新生成时改不到它。本目录下 CubeMX 生成的 `CMakeLists.txt`、`CMakePresets.json`、
-`cmake/gcc-arm-none-eabi.cmake` 可以单独构建裸板工程，框架构建不使用它们。
-
+- **工具链选 CMake**：CMake 和 Keil 编的是同一组源文件，Keil 工程见下面“Keil”一节。
+- **FreeRTOS（CMSIS_V2）只建一个启动任务 `startup`**（静态、512 字、`osPriorityRealtime7`，入口 `startup_task` 选 As weak，
+  由框架实现）；其余任务在 `01_applic/config/robot.c` 的任务表里，不在 CubeMX 里定义任务和队列。
+- **系统时钟 550 MHz**（H723 手册规定的最高频率，不超频）；PLL2 保持 100 MHz，FDCAN 分频 5 / 14 / 5
+  （CAN FD 数据段 5 Mbit/s 需要 100 MHz 的内核时钟）。
+- **HAL 时基用 TIM2**（SysTick 留给 FreeRTOS）；FDCAN1/2 为 1 Mbit/s 经典帧（接电机），FDCAN3 为 FD+BRS 且每格 64 字节（板间通信）；
+  SPI2 数据位 8 bit（BMI088）。
+- **SPI6 驱动 WS2812 状态灯**：Transmit Only Master，内核时钟 HSE 24 MHz，÷4 = 6 MHz，8 bit，CPHA 2 Edge，
+  MOSI = PA7 Very High；CubeMX 同时占用 PA5 作 SCK，WS2812 不用。**TIM12 CH2**（PB15）驱动蜂鸣器。
 生成代码在工作区是 CRLF 换行，提交时由 `.gitattributes` 转成 LF，不影响编译。
 
-## Keil（ADR 0053）
+## Keil
 
 `MDK-ARM/dm_mc02.uvprojx` 是 Keil 工程，用 Keil 自己的编译器（AC6）编译，和 CMake 编的是同一组源文件。Target 只有一个 `dm_mc02`。
 
 **平时用：** 打开 `MDK-ARM/dm_mc02.uvprojx` → F7 编译 → F8 烧录（J-Link）→ Ctrl+F5 调试。不用跑任何脚本。
 
-**加新的 `.c` 文件：** 在 CMake（对应层的 `CMakeLists.txt`）里加，同时在 Keil 里把文件拖进对应分组（和老模板一样）。
+**加新的 `.c` 文件：** 在 CMake（对应层的 `CMakeLists.txt`）里加，同时在 Keil 里把文件拖进对应分组。
 忘了加 Keil 那边时，`build/check.sh` 和 CI 会提示“Keil 工程不是最新”；也可以运行 `python3 tools/keil_sync.py` 让脚本补齐。
 
 **CubeMX 的规则：**

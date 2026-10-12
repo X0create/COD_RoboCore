@@ -1,7 +1,7 @@
 /**
  * @file    test_quat_ekf.c
  * @brief   quat_ekf 的单元测试：静止水平、陀螺积分航向、倾斜收敛、卡方拒绝单个异常值、零偏估计、欧拉角
- * @note    没有旧工程的对照数据（Python 对照数据缺失，见 PROJECT_CONTEXT），期望值由几何关系得出：
+ * @note    期望值由几何关系得出（不依赖别的实现的输出）：
  *          横滚 φ 时重力在机体系中为 (0, g·sinφ, g·cosφ)，俯仰 θ 时为 (−g·sinθ, 0, g·cosθ)
  */
 #include "03_algorithm/attitude/quat_ekf.h"
@@ -17,7 +17,7 @@ static QuatEkf ekf;
 
 void setUp(void)
 {
-    quat_ekf_init(&ekf, 10.0f, 0.001f, 1000000.0f); /* 旧工程参数 */
+    quat_ekf_init(&ekf, 10.0f, 0.001f, 1000000.0f); /* 与 ins.c 相同的参数 */
 }
 
 void tearDown(void)

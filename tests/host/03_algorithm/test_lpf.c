@@ -1,6 +1,6 @@
 /**
  * @file    test_lpf.c
- * @brief   lpf 的单元测试：首次输入填充、一阶递推、二阶直流增益（用旧工程 IMU 加速度滤波的系数）
+ * @brief   lpf 的单元测试：首次输入填充、一阶递推、二阶直流增益（用 ins 加速度滤波的系数）
  */
 #include "03_algorithm/filter/lpf.h"
 
@@ -40,8 +40,8 @@ static void test_lpf1_init_restarts(void)
 }
 
 /*
- * 旧工程 INS_Task.c 的加速度二阶低通系数，三项之和为 1。
- * 单精度下三项相加并不严格等于 1，直流增益约 1.00001（旧工程同样如此），所以比较用相对误差 1e-4。
+ * ins.c 里的加速度二阶低通系数，三项之和为 1。
+ * 单精度下三项相加并不严格等于 1，直流增益约 1.00001，所以比较用相对误差 1e-4。
  */
 static const float imu_accel_a[3] = {
     1.929454039488895f,

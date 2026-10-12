@@ -65,7 +65,7 @@ bool can_send(CanBusId bus, const CanFrame *frame)
         return false;
     }
     unsigned offset;
-    if (frame->id == 0x200u) /* C620 1–4 号的控制帧（附录 A.2） */
+    if (frame->id == 0x200u) /* C620 1–4 号的控制帧（DJI 手册） */
     {
         offset = 0u;
     }

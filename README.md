@@ -3,8 +3,8 @@
 COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清楚，可以在电脑上测试，并内置失效安全机制。
 一套通用的电控框架，做哪台车就复制一份、改 `01_applic/config/`；支持两种主控：达妙 DM-MC02（STM32H723）和大疆 C 板（STM32F407）。
 
-> **当前状态（2026-10-11）：** COD-H7-Template 的功能已按新架构移植完（裁判系统解析等官方协议文档），并有四轮底盘、
-> 硬件看门狗与故障复位、功率 / 发射算法（未接线）；编译 0 警告、电脑侧单元测试 35 个全部通过。
+> **当前状态（2026-10-12）：** 电机、遥控、IMU、图传、视觉通信、电池、四轮底盘、硬件看门狗与故障复位已完成，
+> 功率 / 发射算法已写好（未接线），裁判系统解析等官方协议文档；编译 0 警告、电脑侧单元测试 35 个全部通过。
 > 正在 DM-MC02 上逐项验证（进度见 `docs/VERIFICATION_TODO.md`），底盘和看门狗还没上板。大疆 C 板（F407）后端尚未开始。
 
 ## 设计原则
@@ -23,7 +23,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 - 平台抽象就是“同名函数、链接时选实现”，没有函数指针表，调试时可以一路跳进具体实现。
 
 **只写必要、但一定写对的安全机制**
-- 赛场上优先保证车能继续跑：**全车停**只有急停和未解锁；遥控丢失 200 ms 时减速到 0，恢复后直接继续；底盘少一个轮子时降级限速继续（ADR 0073）。
+- 赛场上优先保证车能继续跑：**全车停**只有急停和未解锁；遥控丢失 200 ms 时减速到 0，恢复后直接继续；底盘少一个轮子时降级限速继续。
 - 停机不是简单地“输出 0”：每个电机在配置里规定自己的停机动作（DJI 零力矩 / 失能，达妙阻尼），在发送出口统一改写。
 - 上电默认安全状态，必须按规定的拨杆顺序才解锁；急停后要重新拨杆。
 - 设备“在线”只由**收到合法数据**决定（校验通过才喂狗），离线判断在读取时按时间戳当场计算。
@@ -46,7 +46,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 - CAN FD 只在“全 FD 总线”上使用；FreeRTOS 由 CubeMX 生成，其余任务由框架静态创建，重新生成 CubeMX 代码有核对清单。
 
 **可追溯**
-- 每个设计决定都记在 ADR 表里（`docs/ARCHITECTURE.md`），与旧模板的每处不同都写明原因和验证层级。
+- 每个设计决定和它的原因都记在 `docs/ARCHITECTURE.md` 的决策表里。
 - 严格区分“编译通过”“电脑测试通过”“上板验证”“台架实测”，未上板的结论不写成事实。
 
 ## 已支持的功能
@@ -59,7 +59,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 | | SPI（BMI088） | ✅ | |
 | | PWM：IMU 加热 · 蜂鸣器 | ✅ · 🧪 | 加热闭环已稳在约 40 °C；蜂鸣器待听 |
 | | ADC：电池电压 | ✅ | 读数正常；分压比 11 待万用表核对 |
-| | CAN bus-off 自动恢复 | 🧪 | detect 检测到后重启控制器，待 V44 |
+| | CAN bus-off 自动恢复 | 🧪 | comm_rx_task 检测到后重启控制器，待上板验证 |
 | | 串口（循环 DMA） | 🧪 | 等接 DR16 / 图传 |
 | | USB 虚拟串口 | 🧪 | |
 | | 64 位微秒时钟 · RTT 日志 · 状态灯 | ✅ | 时钟跨过多次 32 位回绕仍连续 |
@@ -70,7 +70,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 | 通信 | 视觉 USB 帧层（0x5A） | 🧪 | 消息内容等视觉组协议 |
 | | 裁判系统 | 🧪 帧检查 · 📝 解析 | 解析等官方 V2.0.0 文档 |
 | 安全 | 安全门（全车停）、每个电机的停机动作 | 🧪 | 上板只看过“一直安全停机”；急停、遥控丢失的停机时间要台架实测 |
-| | 硬件看门狗 IWDG（50 ms）· 致命故障复位 | 🧪 | control_task 卡死或 HardFault / 栈溢出时复位，复位后自动恢复（ADR 0074） |
+| | 硬件看门狗 IWDG（50 ms）· 致命故障复位 | 🧪 | control_task 卡死或 HardFault / 栈溢出时复位，复位后自动恢复 |
 | 算法 | PID · 斜坡 · 低通 · 卡尔曼 · 矩阵 | 🧪 | EKF 用到的部分已随 IMU 上板 |
 | | 底盘运动学：全向轮 · 麦轮 · 舵轮 · 半舵半全向 | 🧪 | 全向轮已接进底盘 |
 | | 功率模型 + RLS 辨识 · 功率分配 | 🧪 | 未接进底盘（等裁判系统） |
@@ -98,25 +98,24 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 
 ## 文件结构
 
-目录前的编号就是从上到下的层次（照 COD_UniCFramework 的写法），依赖只能从编号小的指向编号大的：
+目录前的编号就是从上到下的层次，依赖只能从编号小的指向编号大的：
 `01_applic` → `02_devices` → `05_platform`；`03_algorithm`、`04_core` 可被各层使用，`03_algorithm` 是纯计算。
-代码里 include 也带编号，如 `#include "05_platform/can/can.h"`。标“（规划）”的目录还没有代码。和老模板 COD-H7-Template 的对应：
-`Core/` → `06_boards/`，`BSP/` → `05_platform/`，`Components/Algorithm、Controller` → `03_algorithm/`，
-`Components/Device` → `02_devices/`，`Application/` → `01_applic/`（详见 `docs/CALL_FLOW.md`）。
+代码里 include 也带编号，如 `#include "05_platform/can/can.h"`。标“（规划）”的目录还没有代码。
+第一次读代码按 `docs/READING_GUIDE.md` 的顺序走。
 
 ![分层结构图](docs/images/architecture.svg)
 
 ```text
 COD_RoboCore/
-├── 01_applic/               业务（≈ 老模板 Application/）
+├── 01_applic/               业务：这台车要做什么
 │   ├── system/              通用框架：app_main.c（上电顺序）、安全门
-│   ├── tasks/               全部 6 个任务（≈ 老模板 Application/Task）：ins、control、comm_rx、detect、indicator、log
+│   ├── tasks/               全部 6 个任务：ins、control、comm_rx、detect、indicator、log
 │   ├── modules/             机构（可复用）
 │   │   ├── chassis/         底盘（全向轮 / 麦轮 / 舵轮 / 半舵半全向）
 │   │   ├── ins/             惯性导航（标定、零偏在线修正、EKF、发布姿态）
 │   │   └── gimbal/ shooter/ leg/ arm/   （规划）云台、发射、轮腿、机械臂
 │   └── config/              这台车：robot.h（参数 + 对象声明）、robot.c（对象 + robot_init + 任务表）；目前是四轮全向轮底盘
-├── 02_devices/              具体设备驱动（≈ 老模板 Components/Device）
+├── 02_devices/              具体设备驱动：把字节解析成有单位的数据，把指令编码成字节
 │   ├── motor/               统一电机接口、DJI、达妙、电机组发送
 │   ├── imu/                 BMI088（含恒温加热）
 │   ├── remote/              DR16 遥控器、VT13 图传链路
@@ -125,7 +124,7 @@ COD_RoboCore/
 │   ├── battery/  buzzer/    电池电压、蜂鸣器提示音
 │   ├── board_link/          板间 CAN 通信（已写好，未接线）
 │   └── supercap/ actuator/  （规划）超级电容、PWM 执行器
-├── 03_algorithm/            纯计算，电脑上可测（≈ 老模板 Components/Algorithm、Controller）
+├── 03_algorithm/            纯计算，电脑上可测
 │   ├── control/             PID、斜坡
 │   ├── filter/              低通、卡尔曼
 │   ├── attitude/            四元数 EKF、陀螺零偏估计
@@ -140,7 +139,7 @@ COD_RoboCore/
 │   ├── os/                  临界区、延时、静态任务创建
 │   ├── util/                CRC
 │   └── error/  param/       （规划）断言与故障记录、Flash 参数
-├── 05_platform/             外设接口（≈ 老模板 BSP/）：一个外设一个目录，接口 + 芯片实现 + 辅助代码
+├── 05_platform/             外设接口（唯一直接调用 HAL 的一层）：一个外设一个目录，接口 + 芯片实现 + 辅助代码
 │   ├── can/                 can.h、can.c（DLC、接收环形缓冲）、can_stm32h7.c（FDCAN）
 │   ├── uart/  usb_cdc/      串口（DMA 循环接收）、USB 虚拟串口
 │   ├── time/  status_led/   DWT 时钟、WS2812 状态灯
@@ -234,7 +233,7 @@ CMake 报“CMakeCache.txt directory is different”时，删掉对应的 `build
 
 1. 改 `config/robot.h`：电机表（CAN 总线、ID、方向、停机动作）、PID、尺寸、解锁拨杆、IMU 安装方向。
 2. 改 `config/robot.c`：定义对象、在 `robot_init()` 里初始化设备和机构，`robot.h` 同步声明；加任务时改同一文件的 `task_table[]`，入口声明在 `tasks/tasks.h`。电机 `motor_init()` 时就进了电机组，CAN 接收不用改。
-3. 改 `01_applic/tasks/control_task.c`：每个控制周期做什么（读实测 → 算目标 → 算输出，三步各一个函数，照老模板 Control_Task）、遥控满杆速度；
+3. 改 `01_applic/tasks/control_task.c`：每个控制周期做什么（读实测 → 算目标 → 算输出，三步各一个函数）、遥控满杆速度；
    `tasks/comm_rx_task.c` 改接线，`tasks/log_task.c` 改打印内容。各任务的调用关系见 `docs/CALL_FLOW.md`。
 4. 需要新机构（云台、发射……）时在 `01_applic/modules/` 里加，再在第 2、3 步里接上。
 5. 加了新的 `.c` 文件：在 CMake 里加，Keil 里拖进对应分组（或运行 `python3 tools/keil_sync.py`）。
@@ -254,7 +253,7 @@ CMake 报“CMakeCache.txt directory is different”时，删掉对应的 `build
 | 阶段 | 内容 | 状态 |
 | --- | --- | --- |
 | 0 骨架 | 目录、构建、CubeMX 工程、时钟、日志、单元测试 | ✅ 完成并上板 |
-| 旧模板移植 | COD-H7-Template 的电机、遥控、IMU、图传、视觉、电池等全部按新架构重写 | 🧪 代码完成（裁判系统等文档），上板验证进行中 |
+| 基础设备 | 电机、遥控、IMU、图传、视觉通信、电池等 | 🧪 代码完成（裁判系统等文档），上板验证进行中 |
 | 1 最小完整链路 | 一台电机 + 遥控 + 安全停机，停机时间台架实测；硬件看门狗（🧪 已写）、故障记录、指令层 | 进行中 |
 | 2 C 板移植 | 每个外设目录加 `*_stm32f4.c`，跑同一条最小链路 | 📝 |
 | 3 设备层补全 | 电机停发后的行为实测、分类发送队列 | 📝 |

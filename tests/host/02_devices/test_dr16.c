@@ -195,7 +195,7 @@ static void test_stale_frame_by_rx_time_is_offline(void)
     TEST_ASSERT_FALSE(dr16_read(dr16, &rc));
 }
 
-/* 超过 DR16_TIMEOUT_MS 没有合法帧：dr16_read 返回 false，即遥控丢失（ADR 0030） */
+/* 超过 DR16_TIMEOUT_MS 没有合法帧：dr16_read 返回 false，即遥控丢失 */
 static void test_lost_after_timeout(void)
 {
     uint8_t f[DR16_FRAME_LEN];

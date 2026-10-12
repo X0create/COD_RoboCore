@@ -23,15 +23,23 @@ SOFTWARE.
 --------------------------------------------------------------------------------
 Third-party notices
 
-Portions of this software (files marked "移植自 COD-H7-Template" or
-"取自 COD-H7-Template") are derived from COD-H7-Template
-(https://github.com/GrassFanWang/COD-H7-Template):
+Portions of this software are derived from COD-H7-Template
+(https://github.com/GrassFanWang/COD-H7-Template), including the CubeMX
+project 06_boards/dm_mc02_h723/dm_mc02.ioc, the CRC tables in
+04_core/util/crc.c, and the protocol layouts and algorithms in
+02_devices/imu/bmi088.c, 02_devices/remote/dr16.c, 02_devices/remote/vt_link.c,
+02_devices/motor/motor.c, 03_algorithm/control/pid.c, 03_algorithm/control/ramp.c,
+03_algorithm/filter/lpf.c, 03_algorithm/filter/kalman.c,
+03_algorithm/attitude/quat_ekf.c and 01_applic/modules/ins/ins.c:
 
     MIT License
     Copyright (c) 2025 GrassFan_Wang
 
-Portions of this software (files marked "照 COD_UniCFramework" or citing UniC)
-are derived from COD_UniCFramework (https://github.com/fakeSkyy/COD_UniCFramework):
+Portions of this software are derived from COD_UniCFramework
+(https://github.com/fakeSkyy/COD_UniCFramework), including
+05_platform/time/time_stm32h7.c, the WS2812 encoding in
+05_platform/status_led/, the CAN bus-off recovery in
+05_platform/can/can_stm32h7.c and 01_applic/tasks/indicator_task.c:
 
     MIT License
     Copyright (c) 2026 fakeSkyy

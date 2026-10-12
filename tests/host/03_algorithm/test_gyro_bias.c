@@ -72,7 +72,7 @@ static void test_rejections(void)
     TEST_ASSERT_EQUAL_INT(GYRO_BIAS_TOO_LARGE, gyro_bias_result(&gb, 100u, 0.05f, 0.15f, bias));
 }
 
-/* 同样的噪声，100 个和 20000 个样本都判为静止（峰峰值判据在样本多时会失败，UniC 踩过） */
+/* 同样的噪声，100 个和 20000 个样本都判为静止（峰峰值判据在样本多时会失败，这条测试防止改回去） */
 static void test_threshold_independent_of_sample_count(void)
 {
     const float truth[3] = { 0.001f, 0.001f, 0.001f };

@@ -3,7 +3,7 @@
  * @brief   motor 的编解码单元测试（只走公开接口：送反馈帧 → 读反馈；写力矩 → 看发出的 CAN 帧）：
  *          DJI：配置检查、反馈 ID 与控制帧槽位、反馈换算、多圈计数、力矩 → 电流原始值；
  *          达妙：配置检查、MIT 编码（含截断与方向）、反馈解析与状态码
- * @note    达妙期望字节按附录 A.3 的位布局手算，范围取旧工程 DM8009 的 ±π / 45 / 54
+ * @note    达妙期望字节按达妙手册 MIT 帧的位布局手算，范围取一台 DM8009 的配置 ±π / 45 / 54
  */
 #include "02_devices/motor/motor.h"
 
@@ -129,13 +129,13 @@ static void test_dji_config_valid(void)
     TEST_ASSERT_NULL(try_add(dji_cfg(MOTOR_M2006, 1, 0, DJI_M2006_GEAR_RATIO))); /* 方向必须是 ±1 */
     TEST_ASSERT_NULL(try_add(dji_cfg(MOTOR_M2006, 1, 1, 0.0f)));
     MotorConfig c = dji_cfg(MOTOR_M2006, 1, 1, DJI_M2006_GEAR_RATIO);
-    c.stop_action = STOP_ACTION_DAMP; /* DJI 不支持阻尼（ADR 0031） */
+    c.stop_action = STOP_ACTION_DAMP; /* DJI 不支持阻尼 */
     TEST_ASSERT_NULL(try_add(c));
     c.stop_action = STOP_ACTION_DISABLE;
     TEST_ASSERT_NOT_NULL(try_add(c));
 }
 
-/* 附录 A.2：反馈 ID C6x0 为 0x200 + ID、GM6020 为 0x204 + ID；控制帧 C6x0 1–4 号 0x200、5–8 号 0x1FF */
+/* DJI 手册：反馈 ID C6x0 为 0x200 + ID、GM6020 为 0x204 + ID；控制帧 C6x0 1–4 号 0x200、5–8 号 0x1FF */
 static void test_dji_ids_and_slots(void)
 {
     const uint8_t d[8] = { 0 };

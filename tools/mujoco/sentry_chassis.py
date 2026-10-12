@@ -233,7 +233,7 @@ def check_result(rows, sim):
             raise RuntimeError(f"Physical chassis tracking failed: {phase.name}")
     for phase in CHECK_PHASES:
         tail = data[(data[:, 0] >= phase.end_s - 0.2) & (data[:, 0] < phase.end_s)]
-        # ADR 0073：轮子离线 → 降级（其余轮子继续，目标打到 CHASSIS_DEGRADED_SCALE = 0.5）
+        # 轮子离线 → 降级（其余轮子继续，目标打到 CHASSIS_DEGRADED_SCALE = 0.5）
         if phase.name == "wheel_offline":
             if np.any(tail[:, 8] != 0) or np.any(tail[:, 14] != 0):
                 raise RuntimeError("Offline wheel did not receive zero torque")

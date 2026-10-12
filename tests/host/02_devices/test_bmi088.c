@@ -131,7 +131,7 @@ static void heat(int n, float temperature_c)
 }
 
 /*
- * 本板实测参数（ADR 0042）：每 1280 次算一次；kp 0.01 / °C，ki 每次 0.00128 / °C，上限 8%。
+ * 本板实测参数：每 1280 次算一次；kp 0.01 / °C，ki 每次 0.00128 / °C，上限 8%。
  * 低 1 °C：第一次 0.01 + 0.00128 = 0.01128，第二次 0.01 + 0.00256；低 20 °C 截到 0.08
  */
 static void test_heater_params(void)
@@ -149,7 +149,7 @@ static void test_heater_params(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.08f, fake_pwm_duty(PWM_IMU_HEATER));
 }
 
-/* 长时间低 0.1 °C：占空比不超过 8%；条件积分（ADR 0040）使积分只攒到“比例 + 积分 = 上限”，
+/* 长时间低 0.1 °C：占空比不超过 8%；条件积分使积分只攒到“比例 + 积分 = 上限”，
  * 即 (0.08 − 0.001) / 0.00128 ≈ 61.7，而不是积分限幅 62.5 */
 static void test_heater_integral_bounded(void)
 {

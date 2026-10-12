@@ -252,7 +252,7 @@ SECTIONS
 
 
 
-  /* COD RoboCore：DMA 缓冲区（ADR 0021）。
+  /* COD RoboCore：DMA 缓冲区。
    * - 放在 AXI SRAM（RAM_D1）：DMA1/DMA2 访问不到默认的 DTCM；
    * - main.c 的 MPU_Config() 把 0x24000000 起 512 KB 设为不可缓存，CPU 和 DMA 看到的数据一致，驱动里不用维护 Cache；
    * - 32 字节对齐（Cache 行大小），NOLOAD：上电不清零、不从 Flash 复制。

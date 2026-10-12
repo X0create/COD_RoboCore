@@ -260,7 +260,7 @@ static void test_output_scale_limits_torque(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 0.0f, wheel[0]->torque_cmd_nm);
 }
 
-/* 降级（ADR 0073）：轮 2 离线后其余轮子继续，目标朝一半速度、按一半的加速度走；轮 2 不写指令 */
+/* 降级：轮 2 离线后其余轮子继续，目标朝一半速度、按一半的加速度走；轮 2 不写指令 */
 static void test_wheel_offline_degrades_to_half_speed(void)
 {
     feed_all(0.0f);
@@ -394,7 +394,7 @@ static void test_steer_rejects_motor_without_torque_command(void)
     TEST_ASSERT_FALSE(chassis_init(&c, &steer_cfg, wheel, mixed));
 }
 
-/* 舵轮：转向电机离线 → 这个轮子朝向不受控，驱动和转向都不写指令；其余轮子降级继续（ADR 0073） */
+/* 舵轮：转向电机离线 → 这个轮子朝向不受控，驱动和转向都不写指令；其余轮子降级继续 */
 static void test_steer_motor_offline_drops_that_wheel(void)
 {
     add_steer_motors();
@@ -431,7 +431,7 @@ static void test_steer_motor_offline_drops_that_wheel(void)
     TEST_ASSERT_TRUE(wheel[0]->torque_set);
 }
 
-/* ---- 舵轮找零（ADR 0068） ---- */
+/* ---- 舵轮找零 ---- */
 
 /* 轮 0 的转向电机接零点开关 1（低电平有效），其余轮子不接开关 */
 static const ChassisConfig steer_zero_cfg = {
