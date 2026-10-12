@@ -1345,6 +1345,8 @@ CI 使用的工具版本固定下来（Ubuntu 24.04 下的 clang-format/clang-ti
 | 0079 | 用户 2026-10-11：“这种通用的算法不能这么干，都得拆出来”——**通用算法一个算法一对文件**（写进 CODING_STANDARD 第 3 节），选两项：control / filter / math / attitude（pid、ramp、lpf、kalman、matrix、math_const、gyro_bias、quat_ekf）和 kinematics（chassis_vel、omni、mecanum、steer、half_steer）恢复为 ADR 0072 之前的文件和测试（从 `c597211^` 原样恢复，合并后这些文件没再改过）；**取代 0072 中这两项**（vision 合并属于设备层，保留）。power（模型 + 分配）、shoot（五个发射算法）用户未选，暂保持各一对。舵轮与半舵半全向重新各有一份轮位符号表（固件多 32 字节）。主机测试 35/35，MuJoCo -Check 通过 |
 | 0080 | 用户 2026-10-11：**本项目头文件一律带目录路径**（从仓库根目录写起、带层编号），本模块自己的和同目录的也一样，取代 CODING_STANDARD 第 3 节原来“同目录只写文件名”；测试替身写 `tests/host/fakes/…`、MuJoCo 写 `tools/mujoco/…`。81 处 include 已统一改，只写文件名的只剩第三方（FreeRTOS、SEGGER RTT、Unity、芯片厂商头文件）。行为不变：固件 0 警告、35/35、Keil 一致、MuJoCo -Check 通过 |
 | 0081 | 用户 2026-10-11 要求把 clang-format 的用法写成通用文档：新增 `docs/FORMATTING.md` 和跨平台脚本 `tools/format.py`（格式化全部 / `--changed` / `--check` / 指定文件），“哪些文件归本项目格式化”只在脚本里定义，CI 和本地检查都调用它。**修正一个缺陷**：clang-format 18.1.3 的 `--dry-run --Werror` 报出格式错误后仍返回 0（2026-10-11 实测），CI 的格式检查此前不可能失败；`--check` 改为逐个比较格式化结果与原文。仓库现有 156 个文件在 18 版下全部合格；CLion 自带的 22 版有 22 个文件判为不合格（版本差异，以 18 为准） |
+| 0082 | 用户 2026-10-12：**步兵改用两块大疆 C 板（STM32F407）**，云台板 + 底盘板；先做 F407 平台层、让一块 C 板单板跑通现有功能（状态灯、RTT、IMU 加热、DR16、电机反馈、看门狗），上板通过后再做双板分工和板间通信。CubeMX 工程以 `reference/bases/COD_F4_Template/Gimbal/Gimbal.ioc` 为起点（同为 C 板、引脚一致），复制为 `06_boards/dji_c_f407/dji_c.ioc`，由用户在 CubeMX 里按该目录 README 改配置并生成。MC02 支持保留。F407 只有经典 CAN（bxCAN）：板间通信走经典帧，载荷 ≤ 6 字节 | 两块 C 板是实车硬件；单板先跑通，出问题时能分清是平台层还是双板逻辑 |
+| 0083 | 用户 2026-10-12：**同一仓库放两块板的配置**（云台板、底盘板各一份 config 和任务，两个构建预设），板间消息表只有一份；取代 ADR 0056 “一台车复制一份仓库”中多板车的做法（单板车仍是复制仓库改 config） | 两块板的消息表、协议版本不会对不上 |
 
 **0021 为什么把 DMA 缓冲区放在不走缓存的专用内存段。**
 
