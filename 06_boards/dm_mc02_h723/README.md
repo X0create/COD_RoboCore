@@ -32,6 +32,11 @@ Copyright (c) 2025 GrassFan_Wang
 
 `MDK-ARM/dm_mc02.uvprojx` 是 Keil 工程，用 Keil 自己的编译器（AC6）编译，和 CMake 编的是同一组源文件。Target 只有一个 `dm_mc02`。
 
+左侧按职责集中分组：`Task`（任务）、`Application`（配置、机构、启动与安全门）、`Device`（设备）、
+`BSP`（平台驱动）、`Algorithm`（算法）、`Core`（核心服务）、`Middlewares/SEGGER_RTT`（日志库）。
+常用代码在前，CubeMX 生成代码和其他库在后；这些只是 Keil 内的分类，磁盘目录不变。
+`tools/keil_sync.py` 会保持这个布局，`--check` 同时检查文件清单和分组；列表文件输出位置保留用户设置。
+
 **平时用：** 打开 `MDK-ARM/dm_mc02.uvprojx` → F7 编译 → F8 烧录（J-Link）→ Ctrl+F5 调试。不用跑任何脚本。
 
 **加新的 `.c` 文件：** 在 CMake（对应层的 `CMakeLists.txt`）里加，同时在 Keil 里把文件拖进对应分组。

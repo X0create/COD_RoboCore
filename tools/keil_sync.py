@@ -7,7 +7,7 @@
     python3 tools/keil_sync.py --check    # 只检查工程是否最新（不改文件），不是最新时返回 1
 
 CubeMX 每次按 MDK-ARM 重新生成都会把工程改回它自己的样子，重跑本脚本即可。脚本做的事：
-  1. 以 CubeMX 生成的 Target（dm_mc02）为模板整理这一个 Target，CubeMX 的源文件分组原样保留；
+  1. 常用代码按 Task / Application / Device / BSP / Algorithm / Core 集中分组并置顶，生成代码分组保留；
   2. 加入本框架 01–05 层的源文件：文件列表、宏定义、头文件路径都取自 CMake 的 compile_commands.json，两边编的是同一组文件；
   3. FreeRTOS 移植层由 RVDS 改为 GCC（AC6 应使用 GCC 移植层；RVDS 是给 AC5 的，CubeMX 按 CMake 生成时还会删掉它）；
   4. 编译器 AC6、C 语言 gnu11、-O0（与 CMake 的 Debug 一致）、每个函数单独一段；
@@ -36,6 +36,9 @@ GCC_ONLY = {"syscalls.c", "sysmem.c"}
 # Keil 额外的宏：RTT 不用 GNU 语法的汇编版（SEGGER_RTT_ASM_ARMv7M.S），改用等价的 C 版
 KEIL_DEFINES = ["RTT_USE_ASM=0"]
 
+# 这里只决定 Keil 左侧的分类和顺序，磁盘上的文件不移动。
+FRAMEWORK_GROUPS = ("Task", "Application", "Device", "BSP", "Algorithm", "Core", "Middlewares/SEGGER_RTT")
+
 AC6 = "6220000::V6.22::ARMCLANG"
 JLINK_ARGS = ('-U-O78 -O78 -S2 -ZTIFSpeedSel5000 -A0 -C0 -JU1 -JI127.0.0.1 -JP0 -RST0 -N00("ARM CoreSight SW-DP") '
               '-D00(6BA02477) -L00(0) -TO18 -TC10000000 -TP21 -TDS8007 -TDT0 -TDC1F -TIEFFFFFFFF -TIP8 -TB1 -TFE0 '
@@ -45,6 +48,27 @@ JLINK_ARGS = ('-U-O78 -O78 -S2 -ZTIFSpeedSel5000 -A0 -C0 -JU1 -JI127.0.0.1 -JP0 
 
 def keil_path(abs_path):
     return os.path.relpath(abs_path, MDK).replace("/", "\\")
+
+
+def framework_group(source):
+    if source.startswith("01_applic/tasks/"):
+        return "Task"
+    if source.startswith("01_applic/"):
+        return "Application"
+    if source.startswith("02_devices/"):
+        return "Device"
+    if source.startswith("03_algorithm/"):
+        return "Algorithm"
+    if source.startswith("05_platform/"):
+        return "BSP"
+    if source.startswith("04_core/log/segger_rtt/"):
+        return "Middlewares/SEGGER_RTT"
+    return "Core"
+
+
+def is_framework_group(name):
+    # 同时识别旧版按磁盘子目录命名的分组，支持第一次迁移。
+    return name in FRAMEWORK_GROUPS or re.match(r"0[1-5]_", name) is not None
 
 
 def load_robot(robot):
@@ -107,7 +131,7 @@ def find_targets(text, block):
 
 
 def check_projx(text, robots):
-    """只比较会影响编译的内容（与格式无关，Keil 重新保存工程不算变化）。返回不一致的说明列表"""
+    """比较编译内容和职责分组，忽略 XML 排版。返回不一致的说明列表。"""
     problems = []
     targets = {re.search(r"<TargetName>([^<]*)</TargetName>", t).group(1): t for t in find_targets(text, "Target")}
     for robot, (files, defines, includes) in robots.items():
@@ -115,16 +139,31 @@ def check_projx(text, robots):
         if t is None:
             problems.append(f"没有 Target {robot}")
             continue
-        have = set()
-        for g in re.findall(r"<Group>\s*<GroupName>(0[1-5]_[^<]*)</GroupName>(.*?)</Group>", t, flags=re.S):
-            if "<IncludeInBuild>0</IncludeInBuild>" in g[1].split("<Files>")[0]:
+        have = []
+        layout = []
+        for name, body in re.findall(r"<Group>\s*<GroupName>([^<]*)</GroupName>(.*?)</Group>", t, flags=re.S):
+            paths = [p.replace("\\", "/") for p in re.findall(r"<FilePath>([^<]*)</FilePath>", body)]
+            if is_framework_group(name):
+                layout.append((name, paths))
+            if "<IncludeInBuild>0</IncludeInBuild>" in body.split("<Files>")[0]:
                 continue  # 这个分组在本 Target 不参与编译
-            have.update(p.replace("\\", "/") for p in re.findall(r"<FilePath>([^<]*)</FilePath>", g[1]))
+            for path in paths:
+                rel = os.path.relpath(os.path.normpath(os.path.join(MDK, path)), REPO).replace("\\", "/")
+                if re.match(r"0[1-5]_", rel):
+                    have.append(path)
         want = {os.path.relpath(os.path.join(REPO, f), MDK).replace("\\", "/") for f in files}
-        for f in sorted(want - have):
+        for f in sorted(want - set(have)):
             problems.append(f"{robot}：Keil 工程缺少 {f}")
-        for f in sorted(have - want):
+        for f in sorted(set(have) - want):
             problems.append(f"{robot}：Keil 工程多了 {f}（CMake 不编它）")
+        if len(have) != len(set(have)):
+            problems.append(f"{robot}：框架源文件重复加入工程")
+        expected = [(g, [keil_path(os.path.join(REPO, f)).replace("\\", "/")
+                         for f in files if framework_group(f) == g]) for g in FRAMEWORK_GROUPS]
+        expected = [(g, fs) for g, fs in expected if fs]
+        first_groups = re.findall(r"<GroupName>([^<]*)</GroupName>", t)[:len(expected)]
+        if layout != expected or first_groups != [g for g, _ in expected]:
+            problems.append(f"{robot}：常用代码分组应按职责集中并置顶")
         cads = re.search(r"<Cads>.*?</Cads>", t, flags=re.S).group(0)
         if re.search(r"<Define>([^<]*)</Define>", cads).group(1) != ",".join(defines + KEIL_DEFINES):
             problems.append(f"{robot}：宏定义与 CMake 不一致")
@@ -147,26 +186,30 @@ def pick_template(targets):
 def build_projx(text, robots):
     targets = find_targets(text, "Target")
     tmpl = pick_template(targets)
-    # 去掉上次加的本框架分组（组名以层的编号开头），只留 CubeMX 的分组
-    tmpl = re.sub(r"        <Group>\n          <GroupName>0[1-5]_[^<]*</GroupName>\n.*?\n        </Group>\n", "", tmpl, flags=re.S)
+    # 兼容旧版逐目录分组；CubeMX 分组及其文件选项原样保留。
+    def keep_generated(match):
+        name = re.search(r"<GroupName>([^<]*)</GroupName>", match.group(0)).group(1)
+        return "" if is_framework_group(name) else match.group(0)
+
+    tmpl = re.sub(r"^[ \t]*<Group>\n.*?^[ \t]*</Group>\n", keep_generated, tmpl, flags=re.S | re.M)
     tmpl = tmpl.replace("portable/RVDS/ARM_CM4F", "portable/GCC/ARM_CM4F").replace("portable\\RVDS\\ARM_CM4F", "portable\\GCC\\ARM_CM4F")
     if "<uAC6>" not in tmpl:
         tmpl = tmpl.replace("<ToolsetName>ARM-ADS</ToolsetName>\n",
                             f"<ToolsetName>ARM-ADS</ToolsetName>\n      <pArmCC>{AC6}</pArmCC>\n      <pCCUsed>{AC6}</pCCUsed>\n      <uAC6>1</uAC6>\n", 1)
 
-    # 本框架的文件按目录分组
+    # Keil 分组按职责集中，显示顺序由 FRAMEWORK_GROUPS 决定。
     per_robot = {r: robots[r][0] for r in robots}
     all_files = sorted(set(f for fs in per_robot.values() for f in fs))
-    groups = {}
+    groups = {g: [] for g in FRAMEWORK_GROUPS}
     for f in all_files:
-        groups.setdefault(os.path.dirname(f), []).append(f)
+        groups[framework_group(f)].append(f)
 
     out = []
     for robot, (files, defines, includes) in robots.items():
         t = set_tag(tmpl, "TargetName", robot, 1)
         t = set_tag(t, "OutputDirectory", keil_path(os.path.join(REPO, "build", "keil")) + "\\", 1)
         t = set_tag(t, "OutputName", "COD_RoboCore", 1)
-        t = set_tag(t, "ListingPath", keil_path(os.path.join(REPO, "build", "keil")) + "\\", 1)
+        # ListingPath 保留用户设置，整理目录不应改动列表文件输出位置。
         t = set_tag(t, "CreateHexFile", "0", 1)
         t = set_tag(t, "BrowseInformation", "1", 1)
         cads = re.search(r"<Cads>.*?</Cads>", t, flags=re.S).group(0)
@@ -179,8 +222,8 @@ def build_projx(text, robots):
         ld = re.search(r"<LDads>.*?</LDads>", t, flags=re.S).group(0)
         l2 = set_tag(set_tag(ld, "umfTarg", "0", 1), "ScatterFile", keil_path(os.path.join(BOARD, "dm_mc02.sct")), 1)
         t = t.replace(ld, l2)
-        mine = "".join(group_xml(g, fs, any(f in files for f in fs)) for g, fs in sorted(groups.items()))
-        t = t.replace("      </Groups>\n", mine + "      </Groups>\n", 1)
+        mine = "".join(group_xml(g, fs, any(f in files for f in fs)) for g, fs in groups.items() if fs)
+        t = re.sub(r"(<Groups>\n)", lambda m: m.group(1) + mine, t, count=1)
         out.append(t)
 
     start = text.index(targets[0]); end = text.index(targets[-1]) + len(targets[-1])

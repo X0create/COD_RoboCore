@@ -9,6 +9,13 @@
 
 ## 已完成
 
+### Keil 工程分组
+
+- 2026-10-16：参照 `rmcod2026_-sentry` 将常用代码集中为 Task、Application、Device、BSP、Algorithm、Core 等分组并置顶，
+  取代本模板按每个磁盘子目录分组的方式；CubeMX 生成分组保留。Keil 左侧分类由 `tools/keil_sync.py` 维护，
+  文件路径、文件编译选项和目标设置保持不变。原因：减少零散分组，让队员更容易找代码。
+  验证层级：配置；XML 核对源文件及编译/调试设置不变、同步重复运行稳定、清单检查通过；未上板。
+
 ### 板级配置（`06_boards/dm_mc02_h723/dm_mc02.ioc`）
 
 | 日期 | 项目 | COD-H7-Template | 本模板 | 原因 | 验证 |
