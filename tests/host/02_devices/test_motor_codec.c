@@ -416,9 +416,31 @@ static void test_dm_decode_direction(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-4f, -54.0f, fb.torque_nm);
 }
 
+/* C610/C620 的最后一字节是错码；GM6020 的保留字节不能误报故障 */
+static void test_dji_fault_byte_depends_on_model(void)
+{
+    const MotorType types[] = { MOTOR_M3508, MOTOR_M2006, MOTOR_GM6020 };
+    for (unsigned i = 0u; i < 3u; i++)
+    {
+        group = (MotorGroup){ 0 };
+        const Motor *m = add(dji_cfg(types[i], 1u, 1, 1.0f));
+        uint8_t data[8] = { 0, 0, 0, 0, 0, 0, 30, 8 };
+        const uint32_t id = types[i] == MOTOR_GM6020 ? 0x205u : 0x201u;
+        TEST_ASSERT_TRUE(deliver(CAN_BUS_1, id, data));
+        MotorFeedback fb;
+        TEST_ASSERT_TRUE(motor_read_feedback(m, &fb));
+        TEST_ASSERT_EQUAL_UINT8(types[i] == MOTOR_GM6020 ? 0u : 8u, fb.error_code);
+        data[7] = 0;
+        TEST_ASSERT_TRUE(deliver(CAN_BUS_1, id, data));
+        TEST_ASSERT_TRUE(motor_read_feedback(m, &fb));
+        TEST_ASSERT_EQUAL_UINT8(0, fb.error_code);
+    }
+}
+
 int main(void)
 {
     UNITY_BEGIN();
+    RUN_TEST(test_dji_fault_byte_depends_on_model);
     RUN_TEST(test_dji_config_valid);
     RUN_TEST(test_dji_ids_and_slots);
     RUN_TEST(test_gm6020_current_frame);

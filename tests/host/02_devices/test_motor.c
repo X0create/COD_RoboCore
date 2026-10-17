@@ -496,9 +496,36 @@ static void test_dm_conflicts(void)
     TEST_ASSERT_NOT_NULL(conflict);
 }
 
+/* 排队中的清错/使能不能覆盖本周期的零力矩或阻尼停机 */
+static void test_dm_stop_blocks_pending_enable_and_clear(void)
+{
+    Motor *m = add(&dm_config);
+    const StopAction actions[] = { STOP_ACTION_ZERO_TORQUE, STOP_ACTION_DAMP };
+    for (unsigned a = 0u; a < 2u; a++)
+    {
+        for (unsigned fault = 0u; fault < 2u; fault++)
+        {
+            fake_time_advance_ms(25u);
+            feed_dm(fault != 0u ? 8u : 0u);
+            motor_request_enable(m);
+            motor_apply_stop_action(m, actions[a]);
+            motor_group_send(&group);
+            TEST_ASSERT_FALSE(last_is_command(0xFC));
+            TEST_ASSERT_FALSE(last_is_command(0xFB));
+            TEST_ASSERT_EQUAL_HEX8(actions[a] == STOP_ACTION_DAMP ? 0x33 : 0x00,
+                                   last_sent()->data[5]);
+        }
+    }
+    /* 无停机动作后仍可按请求清错；停机不消耗一次清错额度 */
+    feed_dm(8u);
+    motor_group_send(&group);
+    TEST_ASSERT_TRUE(last_is_command(0xFB));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
+    RUN_TEST(test_dm_stop_blocks_pending_enable_and_clear);
     RUN_TEST(test_id_conflicts_rejected);
     RUN_TEST(test_feedback_online_and_timeout);
     RUN_TEST(test_stale_frame_stays_offline);

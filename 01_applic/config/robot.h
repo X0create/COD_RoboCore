@@ -1,6 +1,6 @@
 /**
  * @file    robot.h
- * @brief   这台车（目前：四轮全向轮底盘，遥控直接给底盘速度）：全部可调参数 + 全部对象的声明
+ * @brief   这台车（目前：四轮麦轮底盘，遥控直接给底盘速度）：全部可调参数 + 全部对象的声明
  * @note    改车只看两个文件：本文件（参数表、对象声明）和 robot.c（对象定义、robot_init()、任务表）。
  *          通用的参数（电池阈值、EKF、IMU 加热、各种超时）留在各自模块里，位置见 01_applic/README.md“参数在哪里”。
  *          标 “待量” 的尺寸按实车量好再改；标 “待核对” 的方向在台架上按 docs/VERIFICATION_TODO.md 核对。
@@ -42,9 +42,9 @@ extern "C"
 /* ------------------------------------------------------------------ */
 
 /*
- * 顺序 = 底盘的轮 0–3（左前、左后、右后、右前，omni.h），全部在 FDCAN1（经典 CAN）。
- * direction：使电机正转 = 这个轮子推动底盘逆时针转（omni.h）；四个电机轴都朝外对称安装时四个值相同。
- *            第一次上车要核对：架空车，给一个小的逆时针旋转指令，看四个轮子是否都朝同一个旋转方向转，转反的改成 -1。
+ * 顺序 = 底盘的轮 0–3（左前、左后、右后、右前，mecanum.h），全部在 CAN1（经典 CAN）。
+ * direction：麦轮正转 = 这个轮子推动底盘向前（mecanum.h）；当前 +1 都是待核对值。
+ *            第一次上车要核对：固定并架空车，逐轮给小指令，转反的改成 -1。
  * 停机动作：零力矩，即发 0 电流，轮子靠摩擦自己停下（DJI 电调只支持零力矩或失能两种停法）。
  */
 static const MotorConfig wheel_config[CHASSIS_WHEELS] = {
@@ -83,8 +83,9 @@ static const MotorConfig wheel_config[CHASSIS_WHEELS] = {
 /* ------------------------------------------------------------------ */
 
 /*
- * 四轮全向轮：每个轮子斜 45° 装在一个角上，俯视四个轮子围成一圈（O 形）。
- * 轮半径、中心距（轮子接地点到底盘中心）要按实车量了再填；加速度先取保守值，上车再调。
+ * 四麦轮：辊子安装方向见 mecanum.h。
+ * 2026-10-17 用户允许暂用占位尺寸：轮径 152 mm、轴距 400 mm、轮距 440 mm，尚未实测。
+ * 下方填半径、半轴距、半轮距（m）；实车调试前替换为测量值，加速度和 PID 也需台架整定。
  * 速度环 PID 单位是国际单位：输入轮子输出轴转速误差（rad/s），输出电机力矩（N·m）。
  * 下面的数字是从一组常用的“rpm 进、电流原始值出”的 M3508 底盘参数换算来的：
  *   原值 kp 13、ki 0.1、积分限幅 5000 rpm、输出限幅 12000（C620 电流原始值，±16384 对应 ±20 A）；
@@ -96,7 +97,9 @@ static const MotorConfig wheel_config[CHASSIS_WHEELS] = {
  */
 static const ChassisConfig chassis_config = {
     .type = CHASSIS_MECANUM,
-    .omni = { .wheel_radius_m = 0.076f, .center_dist_m = 0.25f, .first_wheel_rad = RM_PI / 4.0f },
+    .mecanum = { .wheel_radius_m = 0.076f,
+                 .half_wheelbase_m = 0.2f,
+                 .half_track_m = 0.22f }, /* 待量 */
     .max_accel_m_s2 = 2.0f,
     .max_alpha_rad_s2 = 4.0f,
     .drive_speed_pid = { .kp = 0.8730f,             /* N·m 每 rad/s */

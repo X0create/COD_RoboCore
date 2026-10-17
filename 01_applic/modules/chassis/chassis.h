@@ -12,7 +12,7 @@
  *            发送出口统一改成零力矩；这时清积分、目标对齐实测速度，解锁时不会猛冲；
  *          - 降级（有轮子不能用）：不能用的轮子不写指令（发送时为零力矩，被动滚动）、清积分；
  *            其余轮子继续闭环，目标速度和加速度都乘 CHASSIS_DEGRADED_SCALE。
- *            “不能用”= 驱动电机离线，或这个轮子的转向电机离线 / 零点还没找到（朝向控制不了，驱动它会往错的方向推）。
+ *            “不能用”= 驱动电机离线 / 报错 / 未使能，或转向电机不可用 / 零点还没找到（朝向控制不了，驱动它会往错的方向推）。
  *          舵轮找零（接了零点开关时）：能动以后在第 3 步里先让转向电机正转、反转各经过开关一次，
  *          找到开关中心才开始正常控制；转向电机离线再上线后重找（上电位置为 0 的电机重连后零点不再可信）。
  *          轮号顺序见 03_algorithm/kinematics/ 下对应的头文件（都是左前起逆时针）。
@@ -92,11 +92,12 @@ typedef struct
     float steer_speed_rad_s[CHASSIS_WHEELS]; /* 有转向电机的轮子：各转向电机转速 */
     bool drive_online[CHASSIS_WHEELS];
     bool steer_online[CHASSIS_WHEELS]; /* 没有转向电机的轮子恒为 false */
+    bool steer_ready[CHASSIS_WHEELS]; /* 在线、无故障且已使能，才允许转向闭环和找零 */
     bool zero_switch_active[CHASSIS_WHEELS]; /* 零点开关此刻是否触发（没接开关的恒为 false） */
     bool wheel_ok
-        [CHASSIS_WHEELS]; /* 轮子能用：驱动电机在线，有转向电机的还要转向电机在线且零点已知 */
-    bool all_online;     /* 全部轮子能用；有一个不能用就降级 */
-    ChassisVel velocity; /* 由各轮实测正解出的底盘速度（有电机离线时为 0） */
+        [CHASSIS_WHEELS]; /* 轮子能用：驱动电机在线、无故障且使能；转向电机也须可用且零点已知 */
+    bool all_online;      /* 全部轮子能用；有一个不能用就降级 */
+    ChassisVel velocity;  /* 由各轮实测正解出的底盘速度（有电机离线时为 0） */
 } ChassisMeasure;
 
 /** 目标（第 2 步写） */
@@ -141,7 +142,9 @@ typedef struct
     Pid drive_pid[CHASSIS_WHEELS];
     Pid steer_angle_pid[CHASSIS_WHEELS];
     Pid steer_speed_pid[CHASSIS_WHEELS];
-    SteerZero zero[CHASSIS_WHEELS]; /* 有转向电机的轮子：找零状态 */
+    SteerZero zero[CHASSIS_WHEELS];              /* 有转向电机的轮子：找零状态 */
+    bool drive_enable_requested[CHASSIS_WHEELS]; /* 本次解锁且在线期间是否请求过使能 */
+    bool steer_enable_requested[CHASSIS_WHEELS];
     ChassisMeasure measure;
     ChassisTarget target;
 } Chassis;
@@ -149,10 +152,12 @@ typedef struct
 /**
  * @param   steer  各轮转向电机：舵轮 4 个都填；半舵半全向只填舵轮那两个、全向轮位置填 NULL；
  *                 其余轮组整个传 NULL
+ * @return  false：所选轮组几何含非有限值或尺寸不大于 0；失败后不得调用三个更新函数
  * @pre     各电机已 motor_init()；cfg 在整个运行期间有效
  */
-void chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive[CHASSIS_WHEELS],
-                  Motor *const steer[CHASSIS_WHEELS]);
+RM_NODISCARD bool chassis_init(Chassis *chassis, const ChassisConfig *cfg,
+                               Motor *const drive[CHASSIS_WHEELS],
+                               Motor *const steer[CHASSIS_WHEELS]);
 
 /** 降级时目标速度和加速度的比例：少了轮子车会跑偏，降速给操作手留出修正的余量；数值是经验值，可按实车调整 */
 #define CHASSIS_DEGRADED_SCALE 0.5f

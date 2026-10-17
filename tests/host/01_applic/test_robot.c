@@ -6,6 +6,9 @@
  */
 #include "01_applic/config/robot.h"
 
+#include <math.h>
+
+#include "tests/host/fakes/fake_time.h"
 #include "unity.h"
 
 void setUp(void)
@@ -62,9 +65,45 @@ static void test_converted_values(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-2f, 27.27f, p.integral_limit);
 }
 
+/* 使用固件真正 include 的配置，覆盖停、前进、横移和旋转，防止 type 和几何表再次错配 */
+static void test_actual_chassis_config_produces_finite_outputs(void)
+{
+    static Motor motor[CHASSIS_WHEELS];
+    Motor *drive[CHASSIS_WHEELS];
+    MotorGroup group = { 0 };
+    fake_time_set_us(1000000u);
+    for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
+    {
+        const Motor *conflict;
+        drive[i] = &motor[i];
+        TEST_ASSERT_TRUE(motor_init(drive[i], &wheel_config[i], &group, &conflict));
+        const CanFrame frame = { .id = 0x201u + i, .len = 8u, .stamp_us = 1000000u };
+        TEST_ASSERT_TRUE(motor_group_receive(&group, wheel_config[i].can_bus, &frame));
+    }
+    Chassis c;
+    TEST_ASSERT_TRUE(chassis_init(&c, &chassis_config, drive, NULL));
+    const ChassisVel commands[] = {
+        { 0 }, { .vx_m_s = 0.1f }, { .vy_m_s = -0.1f }, { .wz_rad_s = 0.2f }
+    };
+    for (unsigned k = 0u; k < sizeof(commands) / sizeof(commands[0]); k++)
+    {
+        chassis_measure_update(&c);
+        chassis_target_update(&c, &commands[k], false);
+        chassis_output_update(&c, 1.0f);
+        for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
+        {
+            TEST_ASSERT_TRUE(isfinite(c.target.drive_speed_rad_s[i]));
+            TEST_ASSERT_TRUE(drive[i]->torque_set);
+            TEST_ASSERT_TRUE(isfinite(drive[i]->torque_cmd_nm));
+        }
+        motor_group_send(&group);
+    }
+}
+
 int main(void)
 {
     UNITY_BEGIN();
+    RUN_TEST(test_actual_chassis_config_produces_finite_outputs);
     RUN_TEST(test_si_pid_matches_old_raw_pid);
     RUN_TEST(test_converted_values);
     return UNITY_END();

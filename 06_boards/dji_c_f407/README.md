@@ -91,5 +91,5 @@ USART1、USART6、TIM1、激光 PE11 等原工程里的配置暂时保留：框�
 
 - 构建：预设 **`c-debug`**（`cmake --preset c-debug && cmake --build --preset c-debug`），产物 `build/<系统>/c-debug/COD_RoboCore.elf`。
 - 烧录、调试：Ozone 新建工程时 Device 选 **STM32F407IG**，其余和 MC02 相同（`docs/DEV_ENVIRONMENT.md`）。
-- CubeMX 工程里勾了 CMSIS-DSP 库（原工程带来的），生成的 CMake 会链接 6 MB 的 `libarm_cortexM4lf_math.a`；
-  框架不用它，这个文件暂不提交，以后在 CubeMX 里去掉 DSP 库。
+- 框架不用 CMSIS-DSP（矩阵算法自写）。2026-10-17 已从 `.ioc` 和生成的 CMake 中移除原工程遗留的 DSP 依赖，
+  干净克隆无需本地的 `libarm_cortexM4lf_math.a`。这次为文本修改，尚未在 CubeMX GUI 中打开并重新生成；再生成后核对清单第 15 项。

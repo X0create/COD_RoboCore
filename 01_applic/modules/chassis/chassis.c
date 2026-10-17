@@ -19,10 +19,45 @@ static bool has_steer_motor(const ChassisConfig *cfg, unsigned i)
            || (cfg->type == CHASSIS_HALF_STEER && half_steer_is_steer(&cfg->half_steer, i));
 }
 
+/* 几何只在初始化边界检查：零半径/零力臂会让运动学除零，NaN 会沿 PID 传到电流编码 */
+static bool positive_finite(float value)
+{
+    return isfinite(value) && value > 0.0f;
+}
+
+static bool geometry_valid(const ChassisConfig *cfg)
+{
+    switch (cfg->type)
+    {
+        case CHASSIS_OMNI:
+            return positive_finite(cfg->omni.wheel_radius_m)
+                   && positive_finite(cfg->omni.center_dist_m)
+                   && isfinite(cfg->omni.first_wheel_rad);
+        case CHASSIS_MECANUM:
+            return positive_finite(cfg->mecanum.wheel_radius_m)
+                   && positive_finite(cfg->mecanum.half_wheelbase_m)
+                   && positive_finite(cfg->mecanum.half_track_m);
+        case CHASSIS_STEER:
+            return positive_finite(cfg->steer.kinematics.wheel_radius_m)
+                   && positive_finite(cfg->steer.kinematics.half_wheelbase_m)
+                   && positive_finite(cfg->steer.kinematics.half_track_m);
+        case CHASSIS_HALF_STEER:
+            return positive_finite(cfg->half_steer.steer_radius_m)
+                   && positive_finite(cfg->half_steer.omni_radius_m)
+                   && positive_finite(cfg->half_steer.half_wheelbase_m)
+                   && positive_finite(cfg->half_steer.half_track_m);
+    }
+    return false;
+}
+
 /* 记下配置和电机，按轮组类型初始化运动学和 PID */
-void chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive[CHASSIS_WHEELS],
+bool chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive[CHASSIS_WHEELS],
                   Motor *const steer[CHASSIS_WHEELS])
 {
+    if (!geometry_valid(cfg))
+    {
+        return false;
+    }
     *chassis = (Chassis){ .cfg = cfg };
     if (cfg->type == CHASSIS_OMNI)
     {
@@ -42,6 +77,7 @@ void chassis_init(Chassis *chassis, const ChassisConfig *cfg, Motor *const drive
                 cfg->steer.zero_switch[i] != GPIO_IN_NONE ? STEER_ZERO_FORWARD : STEER_ZERO_DONE;
         }
     }
+    return true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -60,13 +96,14 @@ void chassis_measure_update(Chassis *chassis)
         /* 读驱动电机：在线标志 + 转速（输出轴 rad/s，已乘方向和减速比） */
         m->drive_online[i] = motor_read_feedback(chassis->drive[i], &fb);
         m->drive_speed_rad_s[i] = fb.speed_rad_s;
-        m->wheel_ok[i] = m->drive_online[i];
+        m->wheel_ok[i] = m->drive_online[i] && fb.error_code == 0u && fb.enabled;
 
         if (has_steer_motor(cfg, i))
         {
             SteerZero *z = &chassis->zero[i];
             const GpioInput sw = cfg->steer.zero_switch[i];
             m->steer_online[i] = motor_read_feedback(chassis->steer[i], &fb);
+            m->steer_ready[i] = m->steer_online[i] && fb.error_code == 0u && fb.enabled;
             m->steer_angle_rad[i] = fb.angle_rad;
             /* 轮子朝向 = 转向电机角度 − 开关中心 − 安装偏移；结果为 0 表示轮子朝车头 */
             m->heading_rad[i] = fb.angle_rad - z->center_rad - cfg->steer.zero_rad[i];
@@ -78,7 +115,7 @@ void chassis_measure_update(Chassis *chassis)
             {
                 *z = (SteerZero){ .state = STEER_ZERO_FORWARD };
             }
-            m->wheel_ok[i] = m->wheel_ok[i] && m->steer_online[i] && z->state == STEER_ZERO_DONE;
+            m->wheel_ok[i] = m->wheel_ok[i] && m->steer_ready[i] && z->state == STEER_ZERO_DONE;
         }
         m->all_online = m->all_online && m->wheel_ok[i];
     }
@@ -261,12 +298,37 @@ static float steer_zero_step(SteerZero *z, const ChassisSteerConfig *sc, float a
     return z->state == STEER_ZERO_REVERSE ? -sc->zero_search_rad_s : 0.0f;
 }
 
-/* 不能用的轮子、离线的转向电机不写指令（电机组会填零力矩），并清积分，恢复时不猛冲 */
+/* 每次解锁或在线恢复时请求一次；持续报错不会每拍重新清错。DJI 的请求是无操作 */
+static void request_enable(Motor *motor, bool online, bool stop_all, bool *requested)
+{
+    if (stop_all || !online)
+    {
+        *requested = false;
+    }
+    else if (!*requested)
+    {
+        motor_request_enable(motor);
+        *requested = true;
+    }
+}
+
+/* 不能用的轮子、故障或未使能的转向电机不写指令（电机组会填零力矩），并清积分，恢复时不猛冲 */
 void chassis_output_update(Chassis *chassis, float output_scale)
 {
     const ChassisConfig *cfg = chassis->cfg;
     const ChassisMeasure *m = &chassis->measure;
     const ChassisTarget *t = &chassis->target;
+
+    for (unsigned i = 0u; i < CHASSIS_WHEELS; i++)
+    {
+        request_enable(chassis->drive[i], m->drive_online[i], t->stop_all,
+                       &chassis->drive_enable_requested[i]);
+        if (has_steer_motor(cfg, i))
+        {
+            request_enable(chassis->steer[i], m->steer_online[i], t->stop_all,
+                           &chassis->steer_enable_requested[i]);
+        }
+    }
 
     /* 全车停：不写指令（发送出口统一改写成停机动作），清积分 */
     if (t->stop_all)
@@ -304,8 +366,7 @@ void chassis_output_update(Chassis *chassis, float output_scale)
             continue;
         }
         SteerZero *z = &chassis->zero[i];
-        if (m->steer_online[i]
-            && (z->state == STEER_ZERO_FORWARD || z->state == STEER_ZERO_REVERSE))
+        if (m->steer_ready[i] && (z->state == STEER_ZERO_FORWARD || z->state == STEER_ZERO_REVERSE))
         {
             /* 找零：转向电机按固定转速转过开关（速度环），驱动轮不出力（wheel_ok 为 false） */
             const float rate_rad_s =
@@ -314,7 +375,7 @@ void chassis_output_update(Chassis *chassis, float output_scale)
                 pid_step(&chassis->steer_speed_pid[i], rate_rad_s, m->steer_speed_rad_s[i]);
             motor_set_torque(chassis->steer[i], clamp(torque_nm, steer_limit_nm));
         }
-        else if (m->steer_online[i] && z->state == STEER_ZERO_DONE)
+        else if (m->steer_ready[i] && z->state == STEER_ZERO_DONE)
         {
             /* 串级 PID：外环（角度环）把朝向误差变成目标转速，内环（速度环）把转速误差变成力矩 */
             const float rate_rad_s =

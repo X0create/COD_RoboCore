@@ -106,7 +106,7 @@ void setUp(void)
         const Motor *conflict;
         TEST_ASSERT_TRUE(motor_init(wheel[i], &wheel_cfg[i], &group, &conflict));
     }
-    chassis_init(&chassis, &cfg, wheel, NULL);
+    TEST_ASSERT_TRUE(chassis_init(&chassis, &cfg, wheel, NULL));
 }
 
 void tearDown(void)
@@ -291,7 +291,7 @@ static void test_wheel_offline_degrades_to_half_speed(void)
 static void test_mecanum_drives_by_mecanum_inverse(void)
 {
     Chassis c;
-    chassis_init(&c, &mecanum_cfg, wheel, NULL);
+    TEST_ASSERT_TRUE(chassis_init(&c, &mecanum_cfg, wheel, NULL));
     feed_all(0.0f);
     run_stop(&c);
     const ChassisVel target = { .vy_m_s = 1.0f };
@@ -312,7 +312,7 @@ static void test_steer_turns_wheels_toward_target(void)
 {
     add_steer_motors();
     Chassis c;
-    chassis_init(&c, &steer_cfg, wheel, steer);
+    TEST_ASSERT_TRUE(chassis_init(&c, &steer_cfg, wheel, steer));
     feed_all(0.0f);
     feed_steer_all();
     run_stop(&c);
@@ -339,7 +339,7 @@ static void test_half_steer_turns_only_steer_wheels(void)
     add_steer_motors();
     Motor *const half[CHASSIS_WHEELS] = { steer[0], NULL, steer[2], NULL };
     Chassis c;
-    chassis_init(&c, &half_steer_cfg, wheel, half);
+    TEST_ASSERT_TRUE(chassis_init(&c, &half_steer_cfg, wheel, half));
     const ChassisVel target = { .vx_m_s = 0.5f, .vy_m_s = 1.0f };
     for (int k = 0; k < 50; k++)
     {
@@ -362,7 +362,7 @@ static void test_steer_motor_offline_drops_that_wheel(void)
 {
     add_steer_motors();
     Chassis c;
-    chassis_init(&c, &steer_cfg, wheel, steer);
+    TEST_ASSERT_TRUE(chassis_init(&c, &steer_cfg, wheel, steer));
     feed_all(0.0f);
     feed_steer_all();
     run_stop(&c);
@@ -462,7 +462,7 @@ static void test_steer_zero_finds_switch_center(void)
 {
     add_steer_motors();
     Chassis c;
-    chassis_init(&c, &steer_zero_cfg, wheel, steer);
+    TEST_ASSERT_TRUE(chassis_init(&c, &steer_zero_cfg, wheel, steer));
     TEST_ASSERT_EQUAL_INT(STEER_ZERO_FORWARD, c.zero[0].state);
     TEST_ASSERT_EQUAL_INT(STEER_ZERO_DONE, c.zero[1].state); /* 没接开关：零点上电即确定 */
 
@@ -488,7 +488,7 @@ static void test_steer_zero_timeout_fails(void)
 {
     add_steer_motors();
     Chassis c;
-    chassis_init(&c, &steer_zero_cfg, wheel, steer);
+    TEST_ASSERT_TRUE(chassis_init(&c, &steer_zero_cfg, wheel, steer));
     float angle = 0.0f;
     for (int k = 0; k < 3100; k++)
     {
@@ -507,7 +507,7 @@ static void test_steer_zero_pauses_and_restarts_after_offline(void)
 {
     add_steer_motors();
     Chassis c;
-    chassis_init(&c, &steer_zero_cfg, wheel, steer);
+    TEST_ASSERT_TRUE(chassis_init(&c, &steer_zero_cfg, wheel, steer));
     for (int k = 0; k < 100; k++)
     {
         feed_all(0.0f);
@@ -533,9 +533,190 @@ static void test_steer_zero_pauses_and_restarts_after_offline(void)
     TEST_ASSERT_EQUAL_INT(STEER_ZERO_FORWARD, c.zero[0].state);
 }
 
+/* 配错轮组时不能把零半径或非有限尺寸带进控制周期；只检查所选轮组 */
+static void test_init_rejects_invalid_geometry(void)
+{
+    Chassis c;
+    ChassisConfig bad = mecanum_cfg;
+    bad.mecanum.wheel_radius_m = 0.0f;
+    TEST_ASSERT_FALSE(chassis_init(&c, &bad, wheel, NULL));
+    bad = mecanum_cfg;
+    bad.mecanum.half_wheelbase_m = -0.2f;
+    TEST_ASSERT_FALSE(chassis_init(&c, &bad, wheel, NULL));
+    bad = mecanum_cfg;
+    bad.mecanum.half_track_m = NAN;
+    TEST_ASSERT_FALSE(chassis_init(&c, &bad, wheel, NULL));
+    bad = cfg;
+    bad.omni.center_dist_m = 0.0f;
+    TEST_ASSERT_FALSE(chassis_init(&c, &bad, wheel, NULL));
+    bad = steer_cfg;
+    bad.steer.kinematics.wheel_radius_m = INFINITY;
+    TEST_ASSERT_FALSE(chassis_init(&c, &bad, wheel, NULL));
+    bad = half_steer_cfg;
+    bad.half_steer.omni_radius_m = 0.0f;
+    TEST_ASSERT_FALSE(chassis_init(&c, &bad, wheel, NULL));
+}
+
+static void test_drive_fault_is_online_but_unavailable(void)
+{
+    feed_all(0.0f);
+    const uint8_t fault[8] = { 0, 0, 0, 0, 0, 0, 30, 8 };
+    TEST_ASSERT_TRUE(deliver(CAN_BUS_1, 0x201u, fault, 8));
+    chassis.drive_pid[0].integral = 10.0f;
+    const ChassisVel cmd = { .vx_m_s = 1.0f };
+    run_step(&chassis, &cmd, 1.0f);
+    TEST_ASSERT_TRUE(chassis.measure.drive_online[0]);
+    TEST_ASSERT_FALSE(chassis.measure.wheel_ok[0]);
+    TEST_ASSERT_FALSE(chassis.measure.all_online);
+    TEST_ASSERT_FALSE(wheel[0]->torque_set);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, chassis.drive_pid[0].integral);
+    TEST_ASSERT_TRUE(wheel[1]->torque_set);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, cfg.max_accel_m_s2 * DT_S * CHASSIS_DEGRADED_SCALE,
+                             chassis.target.velocity.vx_m_s);
+    motor_group_send(&group);
+    TEST_ASSERT_EQUAL_HEX8(0, fake_can_sent(0)->data[0]);
+    TEST_ASSERT_EQUAL_HEX8(0, fake_can_sent(0)->data[1]);
+}
+
+static void test_steer_fault_stops_steering_and_drive(void)
+{
+    add_steer_motors();
+    Chassis c;
+    TEST_ASSERT_TRUE(chassis_init(&c, &steer_cfg, wheel, steer));
+    feed_all(0.0f);
+    feed_steer_all();
+    const uint8_t fault[8] = { 0, 0, 0, 0, 0, 0, 0, 6 };
+    TEST_ASSERT_TRUE(deliver(CAN_BUS_1, 0x205u, fault, 8));
+    c.steer_angle_pid[0].integral = 1.0f;
+    c.steer_speed_pid[0].integral = 1.0f;
+    const ChassisVel cmd = { .vy_m_s = 1.0f };
+    run_step(&c, &cmd, 1.0f);
+    TEST_ASSERT_TRUE(c.measure.steer_online[0]);
+    TEST_ASSERT_FALSE(c.measure.steer_ready[0]);
+    TEST_ASSERT_FALSE(c.measure.wheel_ok[0]);
+    TEST_ASSERT_FALSE(wheel[0]->torque_set);
+    TEST_ASSERT_FALSE(steer[0]->torque_set);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, c.steer_angle_pid[0].integral);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, c.steer_speed_pid[0].integral);
+}
+
+/* 在 CAN2 增加一台达妙，替换某个轮子的驱动或转向电机 */
+static Motor *add_dm_motor(void)
+{
+    static const MotorConfig dm_cfg = {
+        .name = "dm",
+        .type = MOTOR_DM,
+        .can_bus = CAN_BUS_2,
+        .id = 1u,
+        .direction = 1,
+        .gear_ratio = 1.0f,
+        .stop_action = STOP_ACTION_ZERO_TORQUE,
+        .dm = { .master_id = 0x11u, .p_max = 12.5f, .v_max = 30.0f, .t_max = 10.0f }
+    };
+    Motor *m = &pool[pool_used++];
+    const Motor *conflict;
+    TEST_ASSERT_TRUE(motor_init(m, &dm_cfg, &group, &conflict));
+    return m;
+}
+
+static void feed_dm_state(uint8_t state)
+{
+    const uint8_t data[8] = { (uint8_t)((state << 4) | 1u), 0x80, 0, 0x80, 0, 0, 30, 30 };
+    TEST_ASSERT_TRUE(deliver(CAN_BUS_2, 0x11u, data, 8));
+}
+
+static void send_and_check_dm(bool stop_all, bool command, uint8_t code)
+{
+    fake_can_reset();
+    if (stop_all)
+    {
+        motor_group_apply_stop_all(&group);
+    }
+    motor_group_send(&group);
+    const CanFrame *frame = fake_can_sent(fake_can_sent_count() - 1u);
+    TEST_ASSERT_EQUAL_HEX32(1, frame->id);
+    if (command)
+    {
+        for (unsigned i = 0u; i < 7u; i++)
+        {
+            TEST_ASSERT_EQUAL_HEX8(0xFF, frame->data[i]);
+        }
+        TEST_ASSERT_EQUAL_HEX8(code, frame->data[7]);
+    }
+    else
+    {
+        TEST_ASSERT_FALSE(frame->data[0] == 0xFF && frame->data[1] == 0xFF
+                          && frame->data[4] == 0xFF); /* 非操作命令 */
+    }
+}
+
+static void test_dm_drive_enable_follows_gate_and_reconnect(void)
+{
+    wheel[0] = add_dm_motor();
+    TEST_ASSERT_TRUE(chassis_init(&chassis, &cfg, wheel, NULL));
+    feed_all(0.0f);
+    feed_dm_state(0);
+    run_stop(&chassis);
+    send_and_check_dm(true, false, 0);
+
+    const ChassisVel cmd = { .vx_m_s = 1.0f };
+    run_step(&chassis, &cmd, 1.0f);
+    TEST_ASSERT_FALSE(chassis.measure.wheel_ok[0]); /* 未使能时不积累 PID */
+    TEST_ASSERT_FALSE(wheel[0]->torque_set);
+    send_and_check_dm(false, true, 0xFC);
+
+    feed_dm_state(1);
+    run_step(&chassis, &cmd, 1.0f);
+    TEST_ASSERT_TRUE(chassis.measure.wheel_ok[0]);
+    TEST_ASSERT_TRUE(wheel[0]->torque_set);
+    send_and_check_dm(false, false, 0);
+
+    fake_time_advance_ms(MOTOR_TIMEOUT_MS + 1u);
+    feed_all(0.0f); /* 只有达妙离线 */
+    run_step(&chassis, &cmd, 1.0f);
+    send_and_check_dm(false, false, 0);
+    feed_dm_state(0);
+    run_step(&chassis, &cmd, 1.0f);
+    send_and_check_dm(false, true, 0xFC);
+}
+
+static void test_dm_steer_fault_cleared_once_per_unlock(void)
+{
+    add_steer_motors();
+    steer[0] = add_dm_motor();
+    Chassis c;
+    TEST_ASSERT_TRUE(chassis_init(&c, &steer_cfg, wheel, steer));
+    const ChassisVel cmd = { .vy_m_s = 1.0f };
+    for (unsigned k = 0u; k < 3u; k++)
+    {
+        fake_time_advance_ms(25u);
+        feed_all(0.0f);
+        feed_steer_all();
+        feed_dm_state(8);
+        run_step(&c, &cmd, 1.0f);
+        TEST_ASSERT_FALSE(c.measure.wheel_ok[0]);
+        TEST_ASSERT_FALSE(steer[0]->torque_set);
+        TEST_ASSERT_FALSE(wheel[0]->torque_set);
+        send_and_check_dm(false, k == 0u, 0xFB);
+    }
+    run_stop(&c);
+    send_and_check_dm(true, false, 0);
+    fake_time_advance_ms(25u);
+    feed_all(0.0f);
+    feed_steer_all();
+    feed_dm_state(8);
+    run_step(&c, &cmd, 1.0f);
+    send_and_check_dm(false, true, 0xFB);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
+    RUN_TEST(test_init_rejects_invalid_geometry);
+    RUN_TEST(test_drive_fault_is_online_but_unavailable);
+    RUN_TEST(test_steer_fault_stops_steering_and_drive);
+    RUN_TEST(test_dm_drive_enable_follows_gate_and_reconnect);
+    RUN_TEST(test_dm_steer_fault_cleared_once_per_unlock);
     RUN_TEST(test_stop_all_writes_nothing_and_aligns_to_measured);
     RUN_TEST(test_ramps_and_drives_wheels_by_inverse_kinematics);
     RUN_TEST(test_output_scale_limits_torque);

@@ -50,7 +50,7 @@ static void log_chassis(void)
     RM_LOG_I("chassis target vx %d vy %d mm/s, wz %d mrad/s%s",
              (int)(c->target.velocity.vx_m_s * 1000.0f), (int)(c->target.velocity.vy_m_s * 1000.0f),
              (int)(c->target.velocity.wz_rad_s * 1000.0f),
-             c->measure.all_online ? "" : " (wheel offline: degraded)");
+             c->measure.all_online ? "" : " (wheel unavailable: degraded)");
 }
 
 /* 姿态（欧拉角只用于显示）和 IMU 温度；标定完成前打印 not ready */

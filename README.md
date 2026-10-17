@@ -1,11 +1,11 @@
 # COD RoboCore
 
 COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清楚，可以在电脑上测试，并内置失效安全机制。
-一套通用的电控框架，做哪台车就复制一份、改 `01_applic/config/`；支持两种主控：达妙 DM-MC02（STM32H723）和大疆 C 板（STM32F407）。
+单板车复制一份仓库、改 `01_applic/config/`；支持两种主控：达妙 DM-MC02（STM32H723）和大疆 C 板（STM32F407）。
 
-> **当前状态（2026-10-12）：** 电机、遥控、IMU、图传、视觉通信、电池、四轮底盘、硬件看门狗与故障复位已完成，
-> 功率 / 发射算法已写好（未接线），裁判系统解析等官方协议文档；编译 0 警告、电脑侧单元测试 35 个全部通过。
-> 正在 DM-MC02 上逐项验证（进度见 `docs/VERIFICATION_TODO.md`），底盘和看门狗还没上板。大疆 C 板（F407）后端尚未开始。
+> **当前状态（2026-10-17）：** 电机、遥控、IMU、图传、视觉通信、电池、四轮底盘、硬件看门狗与故障复位已完成，
+> 功率 / 发射算法已写好（未接线），裁判系统解析等官方协议文档；电脑侧单元测试共 36 个测试程序。
+> 正在 DM-MC02 上逐项验证（进度见 `docs/VERIFICATION_TODO.md`），底盘和看门狗还没上板。大疆 C 板（F407）平台已接入 `c-debug`，尚未上板；当前选择四麦轮，尺寸为待实测的占位值。
 
 ## 设计原则
 
@@ -19,7 +19,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 
 **能在电脑上测试**
 - 硬件相关的代码只在 `05_platform/` 一层；其余各层是普通 C，电脑上用假 CAN / SPI / PWM / 时钟替换硬件，
-  电机协议、遥控解析、姿态解算、安全门等都有单元测试（Unity，35 个测试程序）。
+  电机协议、遥控解析、姿态解算、安全门等都有单元测试（Unity，36 个测试程序）。
 - 平台抽象就是“同名函数、链接时选实现”，没有函数指针表，调试时可以一路跳进具体实现。
 
 **只写必要、但一定写对的安全机制**
@@ -72,13 +72,13 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 | 安全 | 安全门（全车停）、每个电机的停机动作 | 🧪 | 上板只看过“一直安全停机”；急停、遥控丢失的停机时间要台架实测 |
 | | 硬件看门狗 IWDG（50 ms）· 致命故障复位 | 🧪 | control_task 卡死或 HardFault / 栈溢出时复位，复位后自动恢复 |
 | 算法 | PID · 斜坡 · 低通 · 卡尔曼 · 矩阵 | 🧪 | EKF 用到的部分已随 IMU 上板 |
-| | 底盘运动学：全向轮 · 麦轮 · 舵轮 · 半舵半全向 | 🧪 | 全向轮已接进底盘 |
+| | 底盘运动学：全向轮 · 麦轮 · 舵轮 · 半舵半全向 | 🧪 | 四种轮组均可由配置选择 |
 | | 功率模型 + RLS 辨识 · 功率分配 | 🧪 | 未接进底盘（等裁判系统） |
 | | 发射：热量限频 · 卡弹 · 弹速自适应 | 🧪 | 未接线（发射机构还没有） |
-| 子系统 | 底盘（四轮全向 / 麦轮 / 舵轮 / 半舵半全向，轮子离线降级） | 🧪 | 当前固件是四轮全向轮；舵轮接近开关找零未上板 |
+| 子系统 | 底盘（四轮全向 / 麦轮 / 舵轮 / 半舵半全向，轮子离线降级） | 🧪 | 当前选四麦轮，轮径 / 轴距 / 轮距暂用 152 / 400 / 440 mm；舵轮找零未上板 |
 | | 云台 · 发射 · 轮腿 | 📝 | 见下方路线图 |
 | 通信 | 板间通信 board_link（CAN FD） | 🧪 | 单板车用不到，未接线 |
-| 主控 | 大疆 C 板（STM32F407） | 📝 | |
+| 主控 | 大疆 C 板（STM32F407） | 🧪 编译 | 平台已接入，硬件未验证 |
 
 ## 文档
 
@@ -114,7 +114,7 @@ COD_RoboCore/
 │   │   ├── chassis/         底盘（全向轮 / 麦轮 / 舵轮 / 半舵半全向）
 │   │   ├── ins/             惯性导航（标定、零偏在线修正、EKF、发布姿态）
 │   │   └── gimbal/ shooter/ leg/ arm/   （规划）云台、发射、轮腿、机械臂
-│   └── config/              这台车：robot.h（参数 + 对象声明）、robot.c（对象 + robot_init + 任务表）；目前是四轮全向轮底盘
+│   └── config/              这台车：robot.h（参数 + 对象声明）、robot.c（对象 + robot_init + 任务表）；目前是四麦轮底盘（尺寸待实测）
 ├── 02_devices/              具体设备驱动：把字节解析成有单位的数据，把指令编码成字节
 │   ├── motor/               统一电机接口、DJI、达妙、电机组发送
 │   ├── imu/                 BMI088（含恒温加热）
@@ -123,7 +123,8 @@ COD_RoboCore/
 │   ├── vision/              视觉 USB 通信帧层
 │   ├── battery/  buzzer/    电池电压、蜂鸣器提示音
 │   ├── board_link/          板间 CAN 通信（已写好，未接线）
-│   └── supercap/ actuator/  （规划）超级电容、PWM 执行器
+│   ├── supercap/            超级电容通信（草案协议，未接板）
+│   └── actuator/            （规划）PWM 执行器
 ├── 03_algorithm/            纯计算，电脑上可测
 │   ├── control/             PID、斜坡
 │   ├── filter/              低通、卡尔曼
@@ -140,23 +141,23 @@ COD_RoboCore/
 │   ├── util/                CRC
 │   └── error/  param/       （规划）断言与故障记录、Flash 参数
 ├── 05_platform/             外设接口（唯一直接调用 HAL 的一层）：一个外设一个目录，接口 + 芯片实现 + 辅助代码
-│   ├── can/                 can.h、can.c（DLC、接收环形缓冲）、can_stm32h7.c（FDCAN）
+│   ├── can/                 can.h、can.c（DLC、接收环形缓冲）、can_stm32h7.c / can_stm32f4.c
 │   ├── uart/  usb_cdc/      串口（DMA 循环接收）、USB 虚拟串口
 │   ├── time/  status_led/   DWT 时钟、WS2812 状态灯
 │   ├── spi/  pwm/  adc/  gpio/
 │   ├── iwdg/                硬件看门狗、致命故障复位
 │   ├── flash/               （规划）片内 Flash
-│   └── stm32h7/             H7 各外设共用的 DMA 缓冲段（.dma_buf）；F407 以后在每个外设目录加 *_stm32f4.c
+│   └── stm32h7/             H7 各外设共用的 DMA 缓冲段（.dma_buf）；F407 实现在各外设目录的 *_stm32f4.c
 ├── 06_boards/               每块板一个目录（CubeMX 生成代码，只改 USER CODE 区）
 │   ├── dm_mc02_h723/        达妙 DM-MC02：.ioc、链接脚本 dm_mc02.ld / Keil 的 dm_mc02.sct、MDK-ARM/（Keil 工程）、REGEN_CHECKLIST.md
-│   └── dji_c_f407/          （规划）大疆 C 板
+│   └── dji_c_f407/          大疆 C 板：.ioc、生成代码、板级映射、重新生成核对清单
 ├── tests/
 │   ├── host/                电脑侧单元测试（Unity）；fakes/ 是假 CAN / SPI / PWM / GPIO / 时钟 / OS
 │   └── target/ hil/ data/   （规划）板上自测、硬件在环、录制数据
 ├── cmake/                   交叉编译工具链、板级编译选项、警告设置
 ├── tools/                   format.py（格式化）、keil_sync.py（整理 Keil 工程）、gen_readme_diagrams.py（生成本页的图）、mujoco/（底盘仿真）
 ├── docs/                    架构设计与实施计划、编码规范、开发环境、与旧模板的差异、待验证清单；images/ 放本页的图
-├── CMakePresets.json        两个预设：host-tests（电脑测试）、h723-debug；构建目录 build/<系统>/<预设>/
+├── CMakePresets.json        三个预设：host-tests（电脑测试）、h723-debug、c-debug；构建目录 build/<系统>/<预设>/
 └── LICENSE                  MIT
 ```
 
@@ -199,12 +200,13 @@ COD_RoboCore/
 | 烧录与调试 | SEGGER J-Link + Ozone（烧录、RTT 日志、实时看变量）；CLion（编辑、构建、断点） |
 | 板级配置 | STM32CubeMX 6.18（改完按 `06_boards/dm_mc02_h723/REGEN_CHECKLIST.md` 核对） |
 
-**CLion（推荐，Windows 原生）**：打开仓库根目录 → CLion 自动读取 `CMakePresets.json`，只有两个配置：
+**CLion（推荐，Windows 原生）**：打开仓库根目录 → CLion 自动读取 `CMakePresets.json`，包含三个配置：
 
 | 配置 | 用途 | 怎么用 |
 | --- | --- | --- |
 | `h723-debug` | DM-MC02 固件 | 运行配置选 `COD_RoboCore`，按 **Ctrl+F9** 构建（不要按 ▶，ELF 不能在电脑上运行） |
 | `host-tests` | 电脑侧单元测试 | 运行配置选 `All CTest`，按 ▶ |
+| `c-debug` | 大疆 C 板固件 | 构建 `COD_RoboCore`；不能用 H723 的 Keil 工程烧录 C 板 |
 
 工具链用 CLion 默认的 MinGW 即可；交叉编译器由 `cmake/toolchain-arm-gcc.cmake` 自动查找
 （环境变量 `ARM_TOOLCHAIN_BIN` → PATH → `C:/ST/STM32CubeCLT_*` 等默认安装位置），找不到时 CMake 会提示怎么做。
@@ -213,15 +215,16 @@ COD_RoboCore/
 
 ```bash
 cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset host-tests   # 单元测试
-cmake --preset h723-debug && cmake --build --preset h723-debug                               # 固件
+cmake --preset h723-debug && cmake --build --preset h723-debug                               # DM-MC02
+cmake --preset c-debug && cmake --build --preset c-debug                                     # 大疆 C 板
 ```
 
 构建目录按系统分开：`build/Windows/<预设>/`、`build/Linux/<预设>/`，同一份代码在 Windows 和 WSL 里轮流编译不会互相弄坏缓存。
-固件是 `build/<系统>/h723-debug/COD_RoboCore.elf`，编译必须 0 警告。
+固件是 `build/<系统>/<预设>/COD_RoboCore.elf`，编译必须 0 警告。
 CMake 报“CMakeCache.txt directory is different”时，删掉对应的 `build/` 子目录（或 CLion 里 **Reset Cache and Reload Project**）再来。
 
 **3. 烧录并看日志**：Ozone 打开这个 ELF → **Download & Reset** → F5 运行 → **View → Terminal** 看 RTT 日志。
-上电后约 2 s 内不要动板子（陀螺零偏标定）。看到 `startup done`、每秒一行 `alive N, mode safe` 就是跑起来了。
+上电后约 2 s 内不要动板子（陀螺零偏标定）。看到 `startup done`、每秒一行 `alive N, mode safe` 就是跑起来了。当前麦轮尺寸仍为占位值，电机方向也待核对。
 
 > 习惯 Keil 的可以直接用 Keil 编译、烧录、调试：打开 `06_boards/dm_mc02_h723/MDK-ARM/dm_mc02.uvprojx`（Keil 自己的编译器 AC6，和 CMake 编同一组文件，见 `06_boards/dm_mc02_h723/README.md`“Keil”）。
 
@@ -238,7 +241,8 @@ CMake 报“CMakeCache.txt directory is different”时，删掉对应的 `build
 4. 需要新机构（云台、发射……）时在 `01_applic/modules/` 里加，再在第 2、3 步里接上。
 5. 加了新的 `.c` 文件：在 CMake 里加，Keil 里拖进对应分组（或运行 `python3 tools/keil_sync.py`）。
 
-多板的车（如哨兵的云台板、底盘板）每块板一份仓库副本，用 `02_devices/board_link/` 交换数据（收发已写好；心跳和两块板的解锁互锁还没做）。
+多板车按 ADR 0083 在同一仓库放各板配置和任务、用不同预设构建，消息表共用；这部分尚未实现。
+`02_devices/board_link/` 收发已写好，双板心跳和解锁互锁尚未接入。
 
 分层规则、命名和安全相关代码的写法见 `docs/CODING_STANDARD.md`。
 

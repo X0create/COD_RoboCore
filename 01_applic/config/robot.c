@@ -1,6 +1,6 @@
 /**
  * @file    robot.c
- * @brief   这台车的全部对象、它们的初始化和任务表（目前：四轮全向轮底盘，遥控直接给底盘速度）
+ * @brief   这台车的全部对象、它们的初始化和任务表（目前：四轮麦轮底盘，遥控直接给底盘速度）
  * @note    本文件分三节：
  *          1. 对象定义：整车共用的全局变量，声明和参数都在 robot.h
  *          2. robot_init()：按 设备 → 机构 → 安全门 的顺序初始化（机构要用到设备，所以设备先初始化）
@@ -53,8 +53,12 @@ bool robot_init(void)
         }
         drive[i] = &wheel_motor[i];
     }
-    /* 底盘：把四个驱动电机交给它；第 4 个参数是舵轮的转向电机，全向轮没有，传 NULL */
-    chassis_init(&chassis, &chassis_config, drive, NULL);
+    /* 底盘：把四个驱动电机交给它；第 4 个参数是舵轮的转向电机，麦轮没有，传 NULL */
+    if (!chassis_init(&chassis, &chassis_config, drive, NULL))
+    {
+        RM_LOG_E("chassis init failed: invalid geometry");
+        return false;
+    }
 
     /* 超级电容：在电机之后初始化，才能查出 ID 有没有和电机撞 */
     const SupercapInitResult cap_result = supercap_init(&supercap, &supercap_config, &motors);

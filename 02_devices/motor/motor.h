@@ -108,7 +108,7 @@ typedef struct
     float torque_nm;         /* 输出轴力矩 */
     bool torque_is_estimate; /* true：由电流 × 力矩常数估算，只可参考 */
     float temperature_c;     /* C610 不报温度，恒为 0 */
-    uint8_t error_code; /* 驱动器上报的错误码，0 = 正常（DJI 没有；达妙为状态码 0x8–0xE） */
+    uint8_t error_code; /* 驱动器错误码，0 = 正常（C610/C620 为字节 7；GM 不报；达妙为 0x8–0xE） */
     bool enabled; /* 驱动器已使能（DJI 电调没有使能概念，恒为 true） */
     bool online;  /* 读取时按 MOTOR_TIMEOUT_MS 计算 */
 } MotorFeedback;
@@ -225,7 +225,8 @@ void motor_apply_stop_action(Motor *m, StopAction action);
 
 /**
  * @brief   请求使能（达妙；DJI 无操作）。电机报错时先清错一次再使能
- * @note    只由安全门允许动作后、所属子系统调用（进入 Manual 时）；离线后请求被清除，重新上线不会自动使能
+ * @note    只由安全门允许动作后、所属子系统调用（解锁或在线恢复时，每次请求最多清错一次）；
+ *          离线后设备层清除请求，在线恢复须由子系统重新请求；停机动作期间不发送清错/使能命令
  */
 void motor_request_enable(Motor *m);
 

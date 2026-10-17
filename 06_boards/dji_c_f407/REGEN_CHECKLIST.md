@@ -19,6 +19,7 @@
 | 12 | USB CDC 接收钩子还在 | `grep -n "usb_cdc_rx_isr" USB_DEVICE/App/usbd_cdc_if.c` | 两处：`USER CODE BEGIN PV` 里的声明、`CDC_Receive_FS` 的 `USER CODE BEGIN 6` 里的调用 | USB 能枚举但收不到任何数据 |
 | 13 | 致命故障处理还接在 IWDG 上 | `grep -n "iwdg_fault" Core/Src/stm32f4xx_it.c Core/Src/freertos.c Core/Inc/FreeRTOSConfig.h` | `stm32f4xx_it.c` 5 处（声明 + 四个 Fault 的 USER CODE 0 区）；`freertos.c` 2 处（声明 + `vApplicationStackOverflowHook`）；`FreeRTOSConfig.h` 2 处（声明和 `configASSERT`） | 故障时变成死循环：车停发但不复位 |
 | 14 | 生成时 Toolchain 是 CMake | `grep TargetToolchain dji_c.ioc` | `TargetToolchain=CMake` | 按 Keil 生成会删掉 CMake 需要的文件 |
+| 15 | 没有未使用的 CMSIS-DSP 链接依赖 | `rg -n 'ALGOBUILD|ARM/DSP|libarm_cortexM4lf_math' dji_c.ioc cmake/stm32cubemx/CMakeLists.txt` | 无匹配；`c-debug` 从干净克隆能链接 | 本地未跟踪的 DSP 库掩盖问题，换电脑或 CI 后链接失败 |
 
 第 1 条的命令：
 

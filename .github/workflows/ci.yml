@@ -1,4 +1,4 @@
-# 每次推送到 GitHub 自动检查：代码格式、电脑侧单元测试、DM-MC02 固件编译（-Werror，有警告即失败）。
+# 每次推送到 GitHub 自动检查：代码格式、电脑侧单元测试、DM-MC02 / C 板固件编译（-Werror，有警告即失败）。
 # 本地等价的命令见 README“快速开始”。Gitee 不运行这个文件。
 name: CI
 
@@ -38,7 +38,10 @@ jobs:
           ctest --preset host-tests
 
   firmware:
-    name: 固件编译（DM-MC02）
+    name: 固件编译（${{ matrix.preset }}）
+    strategy:
+      matrix:
+        preset: [h723-debug, c-debug]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -70,8 +73,9 @@ jobs:
 
       - name: 编译固件
         run: |
-          cmake --preset h723-debug
-          cmake --build --preset h723-debug
+          cmake --preset ${{ matrix.preset }}
+          cmake --build --preset ${{ matrix.preset }}
 
       - name: Keil 工程与 CMake 文件列表一致
+        if: matrix.preset == 'h723-debug'
         run: python3 tools/keil_sync.py --check

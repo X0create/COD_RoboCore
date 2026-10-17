@@ -241,8 +241,8 @@ static void dji_decode(const MotorConfig *cfg, DjiMotorState *st, const uint8_t 
     out->torque_nm = dir * (float)current_raw * tp->amps_per_raw * tp->kt_rotor * cfg->gear_ratio;
     out->torque_is_estimate = true;
     out->temperature_c = tp->has_temperature ? (float)d[6] : 0.0f;
-    out->error_code = 0u;
-    out->enabled = true; /* DJI 电调没有使能概念 */
+    out->error_code = cfg->type == MOTOR_GM6020 ? 0u : d[7]; /* C610/C620 错码；GM 此字节保留 */
+    out->enabled = true;                                     /* DJI 电调没有使能概念 */
 }
 
 /* 整数 → 浮点：[0, 2^bits − 1] 线性映射到 [lo, hi]（旧代码 uint_to_float） */
@@ -512,11 +512,12 @@ static void send_dm_frame(MotorGroup *group, Motor *m, uint64_t now_us)
     CanFrame frame = { .id = cfg->id, .len = 8u, .is_fd = can_bus_is_fd(cfg->can_bus) };
     const bool cmd_ready = !st->cmd_sent || now_us - st->last_cmd_us >= DM_CMD_INTERVAL_US;
     uint8_t cmd = 0u; /* 0：这个周期不发命令 */
-    if (cmd_ready && online && st->want_enabled && error != 0u && st->clear_requested)
+    if (cmd_ready && online && !m->stop_set && st->want_enabled && error != 0u
+        && st->clear_requested)
     {
         cmd = DM_CMD_CLEAR_ERROR; /* 这次使能请求只清一次错（发出去以后才算清过，见下面） */
     }
-    else if (cmd_ready && online && st->want_enabled && !enabled && error == 0u)
+    else if (cmd_ready && online && !m->stop_set && st->want_enabled && !enabled && error == 0u)
     {
         cmd = DM_CMD_ENABLE;
     }
