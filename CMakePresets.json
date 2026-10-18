@@ -52,6 +52,15 @@
           "toolchain": "MinGW"
         }
       }
+    },
+    {
+      "name": "h723-handguide",
+      "displayName": "MC02 DM4340 单电机手拖测试（待台架验证）",
+      "inherits": "h723-debug",
+      "binaryDir": "${sourceDir}/build/${hostSystemName}/h723-handguide",
+      "cacheVariables": {
+        "RM_HAND_GUIDE": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -66,6 +75,10 @@
     {
       "name": "c-debug",
       "configurePreset": "c-debug"
+    },
+    {
+      "name": "h723-handguide",
+      "configurePreset": "h723-handguide"
     }
   ],
   "testPresets": [

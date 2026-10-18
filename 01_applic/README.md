@@ -76,3 +76,9 @@ config/
 - 机构目录（`modules/` 下）：一个机构的完整闭环，只用 devices、algorithm、core；机构之间不互相 include，需要的数据由任务读出后传入。电脑上可测。
 - `config/`：选模块、填参数、创建任务；**禁止**写控制算法、直接操作外设。
 - `system/safety_gate` 和各机构是纯逻辑（库 `rm_app_logic`，电脑测试和固件都链接）；任务文件和 `app_main.c` 只用于固件（库 `rm_app`）。
+
+## DM4340 独立手拖台架（2026-10-18）
+
+预设 h723-handguide 选择 system/hand_guide_main.c、tasks/hand_guide_task.c、tasks/hand_guide_rx_task.c 与原 detect_task；不链接 robot.c 或底盘控制任务。
+modules/hand_guide/ 保存计算、故障锁定与记录协议；config/hand_guide_robot.h 是唯一参数表。h723-debug / c-debug 仍使用原整车入口。
+操作、限制及全部改动路径见 [DM4340_HAND_GUIDE.md](../docs/DM4340_HAND_GUIDE.md)。

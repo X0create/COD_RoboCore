@@ -1,9 +1,14 @@
+option(RM_HAND_GUIDE "DM4340 single motor hand guide test application" OFF)
+
 # 与芯片无关的部分（安全门、各机构），电脑测试和固件都链接它
 add_library(rm_app_logic STATIC
     system/safety_gate.c
     modules/chassis/chassis.c
     modules/ins/ins.c
 )
+if(RM_HOST_TESTS OR RM_HAND_GUIDE)
+    target_sources(rm_app_logic PRIVATE modules/hand_guide/hand_guide.c)
+endif()
 # 以 "01_applic/modules/chassis/chassis.h" 的形式 include
 target_include_directories(rm_app_logic PUBLIC ${PROJECT_SOURCE_DIR})
 target_link_libraries(rm_app_logic PUBLIC rm_devices rm_algorithm rm_core_common)
@@ -11,6 +16,25 @@ rm_target_warnings(rm_app_logic)
 
 # 以下只用于固件（依赖 FreeRTOS）
 if(NOT RM_BOARD)
+    return()
+endif()
+
+if(RM_HAND_GUIDE)
+    if(NOT RM_BOARD STREQUAL "dm_mc02")
+        message(FATAL_ERROR "Hand guide requires MC02/H723 CAN FD; use h723-handguide")
+    endif()
+    add_library(rm_hand_telemetry STATIC modules/hand_guide/telemetry/sysid/sysid.c)
+    target_include_directories(rm_hand_telemetry PUBLIC modules/hand_guide/telemetry)
+    rm_target_warnings(rm_hand_telemetry)
+    add_library(rm_app STATIC
+        system/hand_guide_main.c
+        tasks/hand_guide_task.c
+        tasks/hand_guide_rx_task.c
+        tasks/detect_task.c
+    )
+    target_link_libraries(rm_app PUBLIC rm_app_logic rm_core rm_devices rm_algorithm rm_hand_telemetry)
+    target_include_directories(rm_app PRIVATE ${RM_BOARD_DIR})
+    rm_target_warnings(rm_app)
     return()
 endif()
 

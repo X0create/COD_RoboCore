@@ -67,3 +67,8 @@ void log_task_entry(void *arg);
 #ifdef __cplusplus
 }
 #endif
+
+/** 独立 h723-handguide 台架固件的任务与记录初始化。 */
+bool hand_guide_log_init(void);
+void hand_guide_task_entry(void *argument);
+void hand_guide_rx_task_entry(void *argument);
