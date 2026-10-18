@@ -58,7 +58,7 @@
 | 2.5 | `docs/FREERTOS_GUIDE.md` | 没用过 FreeRTOS：任务怎么跑起来、怎么新增一个任务 |
 | 3 | `docs/CALL_FLOW.md` | 每个任务的函数调用树，和老模板 COD-H7-Template 的对照 |
 | 4 | `docs/CODING_STANDARD.md` | 动手写代码之前 |
-| 5 | `docs/ARCHITECTURE.md` | 想知道“为什么这样设计”时查 ADR 表 |
+| 5 | `docs/ADR.md` | 想知道“为什么这样设计”时查决策表；架构本身在 `docs/ARCHITECTURE.md` |
 
 ### 2.2 六层目录
 

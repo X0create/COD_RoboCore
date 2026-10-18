@@ -88,7 +88,7 @@
 - **看真实数值**：烧录后在 Ozone 的 Watched Data 里加 `dr16`、`chassis.target`，推摇杆时看数值变化，比干读代码直观
   （`DEV_ENVIRONMENT.md` 第 9 节）。
 - **单位**：代码里一律是国际单位，角度 rad、速度 rad/s、力矩 N·m；变量名带单位后缀（`_rad_s`、`_nm`、`_ms`）。
-- **为什么这样设计**：查 `ARCHITECTURE.md` 的 ADR 表，每个决定都写了原因；和老模板不同的地方在 `CHANGES_FROM_COD_H7_TEMPLATE.md`。
+- **为什么这样设计**：查 `ADR.md` 的决策表，每个决定都写了原因；和老模板不同的地方在 `CHANGES_FROM_COD_H7_TEMPLATE.md`。
 
 ## 熟悉老模板 COD-H7-Template 的话
 

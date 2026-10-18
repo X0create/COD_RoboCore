@@ -46,7 +46,7 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 - CAN FD 只在“全 FD 总线”上使用；FreeRTOS 由 CubeMX 生成，其余任务由框架静态创建，重新生成 CubeMX 代码有核对清单。
 
 **可追溯**
-- 每个设计决定和它的原因都记在 `docs/ARCHITECTURE.md` 的决策表里。
+- 每个设计决定和它的原因都记在 `docs/ADR.md` 里。
 - 严格区分“编译通过”“电脑测试通过”“上板验证”“台架实测”，未上板的结论不写成事实。
 
 ## 已支持的功能
@@ -89,7 +89,9 @@ COD 战队的 RoboMaster 电控通用模板：用普通 C11 写成，分层清�
 | `docs/LOGIC_PSEUDOCODE.md` | **中文逻辑伪代码**：从上电到发电机指令，每个任务做什么，每段标出对应的文件和函数（新队员先看这个） |
 | `docs/FREERTOS_GUIDE.md` | **FreeRTOS 入门与新增任务**：上电后怎么进到任务、任务怎么轮流、照模板 4 步加一个新任务、常见错误 |
 | `docs/CALL_FLOW.md` | 调用关系地图：老模板对照、每个任务的函数调用树、怎么在 IDE 里跳转 |
-| `docs/ARCHITECTURE.md` | 架构设计：分层、核心机制、运行时契约、决策记录（ADR），以及**实施计划**和硬件、协议事实表 |
+| `docs/ARCHITECTURE.md` | 架构设计：分层、核心机制、运行时契约、约定表、硬件与协议事实表 |
+| `docs/ADR.md` | 决策记录（ADR 0001–0084）：每条决策的原因和未决项 |
+| `docs/IMPLEMENTATION_PLAN.md` | **实施计划**：分阶段清单、验收标准、风险 |
 | `docs/CODING_STANDARD.md` | 编码规范：命名、格式、注释、错误处理、安全相关代码，“必须 / 应该 / 可以”三级 |
 | `docs/FORMATTING.md` | 代码格式化：一条命令 `python3 tools/format.py`，clang-format 18 的安装，CLion / VS Code 设置，CI 怎么查 |
 | `docs/DEV_ENVIRONMENT.md` | 开发环境搭建：WSL、工具链、Ozone 烧录调试、CLion，每步带验证状态；推送到 GitHub 和 Gitee |
@@ -266,7 +268,7 @@ CMake 报“CMakeCache.txt directory is different”时，删掉对应的 `build
 | 6 参数存储 | Flash 双区保存标定值 | 📝 |
 | 7–9 | 轮腿、多板 / 哨兵、工程 | 📝 |
 
-每个阶段的清单和验收标准见 `docs/ARCHITECTURE.md` 的“实施计划”。
+每个阶段的清单和验收标准见 `docs/IMPLEMENTATION_PLAN.md`。
 
 ## 仓库约定
 

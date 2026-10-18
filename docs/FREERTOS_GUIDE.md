@@ -182,5 +182,5 @@ const TaskTableEntry task_table[] = {
   在 CubeMX 里改中断优先级前先看这一条。
 - **两个任务共用数据**：读取函数内部用临界区（`rm_critical_enter()`），保证读到的是完整的一份；
   写法见 `CODING_STANDARD.md` 第 11 节。
-- 为什么任务表不放在 CubeMX 里：`ARCHITECTURE.md` 的 ADR 0025。
+- 为什么任务表不放在 CubeMX 里：`ADR.md` 的 0025。
 - FreeRTOS 官方入门书《Mastering the FreeRTOS Real Time Kernel》（freertos.org 可免费下载）。
