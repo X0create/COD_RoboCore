@@ -304,6 +304,8 @@ bool motor_group_receive(MotorGroup *group, CanBusId bus, const CanFrame *frame)
         /* 反馈和接收时刻在同一个临界区里写，读的一方拿到的数据和时刻一定对得上。
          * 用中断里记下的时刻：任务被耽误、帧积压时，旧帧按真正的年龄判断，不会让电机“上线” */
         rm_critical_enter();
+        fb.stamp_us = frame->stamp_us;
+        fb.sequence = m->fb.sequence + 1u;
         m->fb = fb;
         watchdog_feed(&m->wd, frame->stamp_us);
         rm_critical_exit();
@@ -330,6 +332,11 @@ void motor_set_torque(Motor *m, float torque_nm)
     /* 只记下本周期的指令，真正发送在 motor_group_send()；发完清空，下个周期不写就发零力矩 */
     m->torque_cmd_nm = torque_nm;
     m->torque_set = true;
+}
+
+void motor_group_read_tx(const MotorGroup *group, MotorTxSnapshot *out)
+{
+    *out = group->last_tx;
 }
 
 void motor_apply_stop_action(Motor *m, StopAction action)
@@ -407,6 +414,7 @@ static void send_dji_frame(MotorGroup *group, CanBusId bus, uint8_t frame_index)
     CanFrame frame = { .id = dji_ctrl_frame_id[frame_index], .len = 8u, .is_fd = false };
     bool used = false;
     bool all_disabled = true;
+    MotorTxSnapshot tx = { .bus = bus, .frame_id = frame.id };
 
     for (const Motor *m = group->head; m != NULL; m = m->next)
     {
@@ -431,6 +439,7 @@ static void send_dji_frame(MotorGroup *group, CanBusId bus, uint8_t frame_index)
             raw = raw > max ? max : (raw < -max ? -max : raw);
         }
         const int16_t raw_i16 = (int16_t)(raw >= 0.0f ? raw + 0.5f : raw - 0.5f); /* 四舍五入 */
+        tx.raw_current[slot] = raw_i16;
 
         used = true;
         all_disabled = all_disabled && m->out.kind == MOTOR_OUT_DISABLE;
@@ -447,7 +456,11 @@ static void send_dji_frame(MotorGroup *group, CanBusId bus, uint8_t frame_index)
     {
         return;
     }
-    if (!can_send(bus, &frame))
+    tx.sequence = group->last_tx.sequence + 1u;
+    tx.stamp_us = rm_time_now_us();
+    tx.accepted = can_send(bus, &frame);
+    group->last_tx = tx;
+    if (!tx.accepted)
     {
         /* 队列满：丢帧，下个周期重新生成（控制指令只要最新的，不排队补发旧的） */
         group->tx_dropped++;

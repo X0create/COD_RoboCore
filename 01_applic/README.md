@@ -2,6 +2,10 @@
 
 业务层：这台车“要做什么”都在这里。分四类子目录：
 
+独立 M3508 台架由 `h723-m3508` / `RM_MOTOR_BENCH` 选择：`config/motor_bench_robot.h` 集中参数，
+`modules/motor_bench/` 做定长速度试验，`system/motor_bench_main.c` 和两份 `tasks/motor_bench_*` 为专用入口。
+仅一台电机、DR16 和 USB 记录；操作与离线验证见 `docs/M3508_CONTROL_BENCH.md`。
+
 ```
 01_applic/
 ├── system/      通用框架：上电顺序、安全门

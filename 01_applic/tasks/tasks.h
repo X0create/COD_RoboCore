@@ -32,6 +32,10 @@ extern RmTask comm_rx_task;
 /** control_task（1 kHz）：读实测 → 算目标 → 算输出并发送 */
 void control_task_entry(void *arg);
 
+/** 独立单电机试验，仅 h723-m3508 使用。 */
+void motor_bench_task_entry(void *arg);
+void motor_bench_rx_task_entry(void *arg);
+
 /** control_task 每个周期加 1：detect_task 看到它在涨才喂硬件看门狗 IWDG，control 卡死时整板复位 */
 extern volatile uint32_t control_heartbeat;
 

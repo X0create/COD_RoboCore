@@ -101,6 +101,8 @@ typedef struct
 /** 一份完整快照：所有字段来自同一帧 */
 typedef struct
 {
+    uint64_t stamp_us; /* 接收中断时刻，随这份快照复制；不是读取时刻 */
+    uint32_t sequence; /* 每收到一帧合法反馈增加，便于区分重复读取 */
     float angle_rad; /* 输出轴多圈角度。带减速箱的型号以上电位置为 0；GM6020 以编码器 0 为 0 */
     float single_angle_rad; /* 转子编码器单圈角度 [-π, π)，不乘方向，标定零点时用 */
     uint16_t raw_encoder;    /* 原始编码器值 0–8191，只用于标定和调试 */
@@ -172,6 +174,17 @@ typedef struct Motor
 /* 每路 CAN 上 DJI 电调的控制帧：0x200（C6x0 1–4）、0x1FF（C6x0 5–8）、0x1FE（GM6020 1–4）、0x2FE（GM6020 5–7） */
 #define DJI_CTRL_FRAMES 4u
 
+/** 最近一次 DJI 组帧提交；仅 control_task 写 / 读。accepted 仅代表发送队列接受。 */
+typedef struct
+{
+    uint32_t sequence;
+    uint64_t stamp_us;
+    CanBusId bus;
+    uint32_t frame_id;
+    int16_t raw_current[4]; /* 与最终编码的四个槽相同，不含软件再换算误差 */
+    bool accepted;
+} MotorTxSnapshot;
+
 /**
  * 电机组：一辆车的全部电机。comm_rx_task 收反馈时逐个问组里的电机，control_task 周期末尾统一打包发送。
  * 本周期没写的槽位和离线电机的槽位填零力矩，不“保持上一帧”；达妙每台每周期一帧，FD 总线上发 FD 帧。
@@ -182,7 +195,11 @@ typedef struct
     /* 某个控制帧里的电机全部为“失能”时，发过一次 0 就不再发（DJI 的失能 = 发 0 后停止发送） */
     bool disabled_sent[CAN_BUS_COUNT][DJI_CTRL_FRAMES];
     uint32_t tx_dropped; /* can_send 失败（发送队列满）被丢弃的帧数，调试用 */
+    MotorTxSnapshot last_tx; /* 最近一次 DJI 组帧，不改变原有指令 / 编码 */
 } MotorGroup;
+
+/** @pre 由调用 motor_group_send 的同一控制任务读取；没有提交时 sequence 为 0。 */
+void motor_group_read_tx(const MotorGroup *group, MotorTxSnapshot *out);
 
 /**
  * @brief   初始化并加入电机组：检查配置、查 ID 冲突、登记看门狗
