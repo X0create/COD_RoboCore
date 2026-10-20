@@ -13,7 +13,7 @@ static struct
     uint32_t mode, phase, fault, gain, ff_selected, ff_active, saturated;
     uint32_t fb_sequence, fb_age_us, rc_online, rc_switch, tx_sequence, tx_accepted, tx_dropped;
     uint32_t fb_stamp_us, tx_stamp_us, motion_allowed, error_code;
-    uint32_t usb_control, usb_online;
+    uint32_t usb_control, usb_online, session;
 } record;
 static const SysIdChannel channels[] = {
     SYSID_F32("motor.q", "rad", &record.q),
@@ -54,6 +54,7 @@ static const SysIdChannel channels[] = {
     SYSID_U32("motor.error_code", "", &record.error_code),
     SYSID_U32("bench.usb_control", "", &record.usb_control),
     SYSID_U32("usb.online", "", &record.usb_online),
+    SYSID_U32("bench.session", "", &record.session),
 };
 
 static bool send_record(const uint8_t *frame, uint16_t length)
@@ -122,6 +123,7 @@ static void update_record(const MotorBenchInput *in, const MotorTxSnapshot *tx, 
     record.error_code = fb->error_code;
     record.usb_control = in->settings.usb_control ? 1u : 0u;
     record.usb_online = in->usb_online ? 1u : 0u;
+    record.session = motor_bench_link_session(&bench_link);
 }
 
 void motor_bench_task_entry(void *argument)

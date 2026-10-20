@@ -35,6 +35,8 @@ void motor_bench_link_receive(MotorBenchLink *self, const uint8_t *data, uint16_
 void motor_bench_link_control(MotorBenchLink *self, MotorBench *bench, MotorBenchInput *input);
 /** 通信任务取回执并交给 sysid_reply；返回 true 后本请求已消费。 */
 bool motor_bench_link_reply(MotorBenchLink *self, uint8_t *reply);
+/** 当前已接受 SET 的请求号；记录每条采样所属会话，不复制另一份状态。 */
+uint32_t motor_bench_link_session(const MotorBenchLink *self);
 
 #ifdef __cplusplus
 }

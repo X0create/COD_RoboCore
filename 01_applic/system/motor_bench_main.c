@@ -49,7 +49,7 @@ void app_main(void)
     {
         halt();
     }
-    RM_LOG_I("M3508 bench TEST: motion defaults OFF; MB02 USB start/stop or DR16; records");
+    RM_LOG_I("M3508 bench TEST: motion defaults OFF; MB02 USB start/stop or DR16; session records");
 }
 
 void startup_task(void *argument)

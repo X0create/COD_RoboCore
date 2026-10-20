@@ -431,6 +431,7 @@ static void usb_request(MotorBenchLink *link, uint8_t *request, uint8_t action, 
 static void usb_prepare(MotorBenchLink *link, uint8_t *request)
 {
     motor_bench_link_init(link);
+    TEST_ASSERT_EQUAL_UINT32(0u, motor_bench_link_session(link));
     input.rc_online = false;
     input.sw = RC_SW_UP;
     /* GET 填充当前实际浮点值，随后用 USB SET 准备。 */
@@ -444,6 +445,7 @@ static void usb_prepare(MotorBenchLink *link, uint8_t *request)
     request[10] = 1u;
     request[11] = 1u;
     usb_request(link, request, 1u, 0u);
+    TEST_ASSERT_EQUAL_UINT32(request[4], motor_bench_link_session(link));
     TEST_ASSERT_EQUAL(MOTOR_BENCH_READY, bench.mode);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, bench.torque_nm);
 }
@@ -463,6 +465,7 @@ static void test_usb_start_stop_timeout_and_session(void)
     }
     r[4] = 18u;
     usb_request(&link, r, 3u, 3u);
+    TEST_ASSERT_EQUAL_UINT32(17u, motor_bench_link_session(&link));
     r[4] = 17u;
     usb_request(&link, r, 3u, 0u);
     TEST_ASSERT_EQUAL(MOTOR_BENCH_RUNNING, bench.mode);
@@ -560,6 +563,7 @@ static void test_usb_heartbeat_wrap_and_completion(void)
     usb_request(&link, r, 3u, 3u);
     r[4] = 24u;
     usb_request(&link, r, 1u, 0u);
+    TEST_ASSERT_EQUAL_UINT32(24u, motor_bench_link_session(&link));
     r[4] = 23u;
     usb_request(&link, r, 3u, 3u);
     /* 旧 MB01 不能触发新固件运动。 */

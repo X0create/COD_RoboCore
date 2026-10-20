@@ -1,6 +1,8 @@
 #include "01_applic/modules/motor_bench/motor_bench_link.h"
-#include "05_platform/time/time.h"
+
 #include <string.h>
+
+#include "05_platform/time/time.h"
 
 enum
 {
@@ -54,6 +56,11 @@ void motor_bench_link_init(MotorBenchLink *self)
     atomic_init(&self->disarm_requested, false);
     atomic_init(&self->session, 0u);
     atomic_init(&self->heartbeat_us, 0u);
+}
+
+uint32_t motor_bench_link_session(const MotorBenchLink *self)
+{
+    return atomic_load_explicit(&self->session, memory_order_acquire);
 }
 
 void motor_bench_link_receive(MotorBenchLink *self, const uint8_t *data, uint16_t length)
