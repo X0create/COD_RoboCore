@@ -20,6 +20,7 @@ extern USBD_HandleTypeDef hUsbDeviceHS;
 
 /* 在 usbd_cdc_if.c 的 CDC_Receive_HS 里调用（USB 中断） */
 void usb_cdc_rx_isr(const uint8_t *data, uint32_t len);
+void usb_cdc_tx_complete_isr(void);
 
 static ByteRing rx_ring;
 static uint8_t tx_buf[USB_CDC_TX_MAX];
@@ -37,6 +38,15 @@ bool usb_cdc_start(UsbCdcRxNotify notify, void *ctx)
 void usb_cdc_rx_isr(const uint8_t *data, uint32_t len)
 {
     (void)byte_ring_push(&rx_ring, data, len);
+    if (rx_notify != NULL)
+    {
+        rx_notify(rx_ctx);
+    }
+}
+
+/* TxState 已由 CDC DataIn 清零；唤醒任务重试忙时保留的帧，不在中断里发送。 */
+void usb_cdc_tx_complete_isr(void)
+{
     if (rx_notify != NULL)
     {
         rx_notify(rx_ctx);

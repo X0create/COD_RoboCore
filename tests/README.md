@@ -2,7 +2,7 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| `host/` | PC 单元测试（Unity，C 语言）。子目录与被测的层同名、同编号（如 `host/05_platform/`）；Unity 源码在 `host/unity/`；`host/fakes/` 是 CAN、SPI、PWM、GPIO、临界区、延时和时钟的假实现（`fake_time_set_us()` 设定“现在”），测看门狗、设备、机构时链接 `rm_host_fakes`；目前 35 个测试程序 |
+| `host/` | PC 单元测试（Unity，C 语言）。子目录与被测的层同名、同编号（如 `host/05_platform/`）；Unity 源码在 `host/unity/`；`host/fakes/` 是 CAN、SPI、PWM、GPIO、临界区、延时和时钟的假实现（`fake_time_set_us()` 设定“现在”），测看门狗、设备、机构时链接 `rm_host_fakes`；38 个测试程序，其中 `test_usb_cdc_h7` 用最小 STM32 USB 头文件替身编译实际 H723 平台驱动，检查忙重试、缓冲生命周期和发送完成通知 |
 | `target/` | （规划）板上自测固件（看门狗数据读写并发等） |
 | `hil/` | （规划）硬件在环：USB-CAN 回放与故障注入脚本 |
 | `data/` | （规划）录制的 IMU、CAN、裁判系统数据 |

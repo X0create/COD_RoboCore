@@ -33,6 +33,7 @@
 /* Private variables ---------------------------------------------------------*/
 /* COD RoboCore：接收钩子，由平台层实现（05_platform/usb_cdc/usb_cdc_stm32h7.c，REGEN_CHECKLIST 第 11 条） */
 void usb_cdc_rx_isr(const uint8_t *data, uint32_t len);
+void usb_cdc_tx_complete_isr(void);
 
 /* USER CODE END PV */
 
@@ -313,6 +314,7 @@ static int8_t CDC_TransmitCplt_HS(uint8_t *Buf, uint32_t *Len, uint8_t epnum)
   UNUSED(Buf);
   UNUSED(Len);
   UNUSED(epnum);
+  usb_cdc_tx_complete_isr(); /* COD RoboCore：唤醒发送任务，继续忙时保留的帧 */
   /* USER CODE END 14 */
   return result;
 }
