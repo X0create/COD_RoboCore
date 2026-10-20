@@ -55,7 +55,7 @@ void motor_bench_rx_task_entry(void *argument)
         {
             reply_pending = false;
         }
-        sysid_poll(); /* 唯一 USB 发送方；参数设置不代替 DR16 启动。 */
+        sysid_poll(); /* 唯一 USB 发送方；运动仍须单独的 START 或 DR16 拨杆。 */
         const uint64_t now_us = rm_time_now_us();
         if (can_is_bus_off(bench_motor_config.can_bus) && now_us - last_recover_us >= 100000u)
         {

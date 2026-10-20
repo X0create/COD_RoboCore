@@ -359,7 +359,7 @@ static void test_parameter_mailbox_returns_actual_values_and_disarms(void)
 {
     MotorBenchLink link;
     motor_bench_link_init(&link);
-    uint8_t request[MOTOR_BENCH_MESSAGE_SIZE] = { 'M', 'B', '0', '1', 17u };
+    uint8_t request[MOTOR_BENCH_MESSAGE_SIZE] = { 'M', 'B', '0', '2', 17u };
     uint8_t reply[MOTOR_BENCH_MESSAGE_SIZE];
     TEST_ASSERT_FALSE(motor_bench_link_reply(&link, reply));
     motor_bench_link_receive(&link, request, sizeof(request));
@@ -417,6 +417,156 @@ static void test_parameter_mailbox_returns_actual_values_and_disarms(void)
     TEST_ASSERT_EQUAL_UINT8(2u, reply[9]);
 }
 
+static void usb_request(MotorBenchLink *link, uint8_t *request, uint8_t action, uint8_t status)
+{
+    uint8_t reply[MOTOR_BENCH_MESSAGE_SIZE];
+    request[8] = action;
+    motor_bench_link_receive(link, request, MOTOR_BENCH_MESSAGE_SIZE);
+    motor_bench_link_control(link, &bench, &input);
+    TEST_ASSERT_TRUE(motor_bench_link_reply(link, reply));
+    TEST_ASSERT_EQUAL_UINT8(status, reply[8]);
+    motor_bench_update(&bench, &input);
+}
+
+static void usb_prepare(MotorBenchLink *link, uint8_t *request)
+{
+    motor_bench_link_init(link);
+    input.rc_online = false;
+    input.sw = RC_SW_UP;
+    /* GET 填充当前实际浮点值，随后用 USB SET 准备。 */
+    usb_request(link, request, 0u, 0u);
+    MotorBenchParameters p = motor_bench_parameters(&bench);
+    const float values[] = { p.torque_limit_nm,   p.low_rad_s,         p.high_rad_s,
+                             p.accel_rad_s2,      p.speed_limit_rad_s, p.start_temperature_c,
+                             p.stop_temperature_c };
+    memcpy(request + 12, values, sizeof(values));
+    request[9] = 5u;
+    request[10] = 1u;
+    request[11] = 1u;
+    usb_request(link, request, 1u, 0u);
+    TEST_ASSERT_EQUAL(MOTOR_BENCH_READY, bench.mode);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, bench.torque_nm);
+}
+
+static void test_usb_start_stop_timeout_and_session(void)
+{
+    MotorBenchLink link;
+    uint8_t r[MOTOR_BENCH_MESSAGE_SIZE] = { 'M', 'B', '0', '2', 17u };
+    usb_prepare(&link, r);
+    /* 拨杆无论怎样切换都不启动 USB 模式。 */
+    for (unsigned sw = 1u; sw <= 3u; ++sw)
+    {
+        motor_bench_link_control(&link, &bench, &input);
+        step((RcSwitch)sw);
+        TEST_ASSERT_EQUAL(MOTOR_BENCH_READY, bench.mode);
+        TEST_ASSERT_EQUAL_FLOAT(0.0f, bench.torque_nm);
+    }
+    r[4] = 18u;
+    usb_request(&link, r, 3u, 3u);
+    r[4] = 17u;
+    usb_request(&link, r, 3u, 0u);
+    TEST_ASSERT_EQUAL(MOTOR_BENCH_RUNNING, bench.mode);
+    usb_request(&link, r, 3u, 3u); /* START 不得重置已运行轨迹。 */
+    fake_time_advance_ms(499u);
+    motor_bench_link_control(&link, &bench, &input);
+    motor_bench_update(&bench, &input);
+    TEST_ASSERT_EQUAL(MOTOR_BENCH_RUNNING, bench.mode);
+    fake_time_advance_ms(1u);
+    motor_bench_link_control(&link, &bench, &input);
+    motor_bench_update(&bench, &input);
+    TEST_ASSERT_EQUAL(MOTOR_BENCH_USB_LOST, bench.fault);
+    TEST_ASSERT_FALSE(bench.settings.allow_motion);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, bench.torque_nm);
+    r[8] = 4u;
+    motor_bench_link_receive(&link, r, sizeof(r));
+    usb_request(&link, r, 3u, 3u); /* 恢复心跳不能续跑。 */
+    usb_request(&link, r, 1u, 0u);
+    /* 启动请求占邮箱时到达停止，停止必须优先。 */
+    r[8] = 3u;
+    motor_bench_link_receive(&link, r, sizeof(r));
+    r[8] = 2u;
+    motor_bench_link_receive(&link, r, sizeof(r));
+    motor_bench_link_control(&link, &bench, &input);
+    motor_bench_update(&bench, &input);
+    TEST_ASSERT_FALSE(input.usb_start);
+    TEST_ASSERT_FALSE(bench.settings.allow_motion);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, bench.torque_nm);
+}
+
+static void test_usb_motor_faults_and_ready_timeout(void)
+{
+    for (unsigned f = 0u; f < 4u; ++f)
+    {
+        setUp();
+        MotorBenchLink link;
+        uint8_t r[MOTOR_BENCH_MESSAGE_SIZE] = { 'M', 'B', '0', '2', 31u };
+        usb_prepare(&link, r);
+        if (f == 0u)
+        {
+            fake_time_advance_ms(400u);
+            r[4] = 99u;
+            r[8] = 4u;
+            motor_bench_link_receive(&link, r, sizeof(r));
+            r[4] = 31u;
+            /* 旧会话心跳不能续期；尚未 START 也必须超时撤销准备。 */
+            fake_time_advance_ms(100u);
+        }
+        else
+        {
+            usb_request(&link, r, 3u, 0u);
+            if (f == 1u)
+            {
+                input.feedback.online = false;
+            }
+            else if (f == 2u)
+            {
+                input.feedback.temperature_c = motor_bench_config.stop_temperature_c;
+            }
+            else
+            {
+                input.feedback.speed_rad_s = motor_bench_config.speed_limit_rad_s + 1.0f;
+            }
+        }
+        motor_bench_link_control(&link, &bench, &input);
+        motor_bench_update(&bench, &input);
+        TEST_ASSERT_EQUAL(MOTOR_BENCH_FAULT, bench.mode);
+        TEST_ASSERT_FALSE(bench.settings.allow_motion);
+        TEST_ASSERT_EQUAL_FLOAT(0.0f, bench.torque_nm);
+        TEST_ASSERT_EQUAL_FLOAT(0.0f, bench.integral_nm);
+        input.feedback = (MotorFeedback){ .online = true, .temperature_c = 26.5f };
+        r[8] = 4u;
+        motor_bench_link_receive(&link, r, sizeof(r));
+        usb_request(&link, r, 3u, 3u);
+    }
+}
+
+static void test_usb_heartbeat_wrap_and_completion(void)
+{
+    MotorBenchLink link;
+    uint8_t r[MOTOR_BENCH_MESSAGE_SIZE] = { 'M', 'B', '0', '2', 23u };
+    fake_time_set_us(UINT32_MAX - 100000u);
+    usb_prepare(&link, r);
+    fake_time_advance_ms(400u);
+    r[8] = 4u;
+    motor_bench_link_receive(&link, r, sizeof(r));
+    fake_time_advance_ms(400u);
+    usb_request(&link, r, 3u, 0u);
+    TEST_ASSERT_EQUAL(MOTOR_BENCH_RUNNING, bench.mode);
+    bench.elapsed_s = 100.0f;
+    motor_bench_link_control(&link, &bench, &input);
+    motor_bench_update(&bench, &input);
+    TEST_ASSERT_EQUAL(MOTOR_BENCH_DONE, bench.mode);
+    TEST_ASSERT_FALSE(bench.settings.allow_motion);
+    usb_request(&link, r, 3u, 3u);
+    r[4] = 24u;
+    usb_request(&link, r, 1u, 0u);
+    r[4] = 23u;
+    usb_request(&link, r, 3u, 3u);
+    /* 旧 MB01 不能触发新固件运动。 */
+    r[3] = '1';
+    usb_request(&link, r, 3u, 1u);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -429,5 +579,8 @@ int main(void)
     RUN_TEST(test_temperature_start_and_stop_are_separate);
     RUN_TEST(test_configuration_is_atomic_and_requires_stopped_axis);
     RUN_TEST(test_parameter_mailbox_returns_actual_values_and_disarms);
+    RUN_TEST(test_usb_start_stop_timeout_and_session);
+    RUN_TEST(test_usb_heartbeat_wrap_and_completion);
+    RUN_TEST(test_usb_motor_faults_and_ready_timeout);
     return UNITY_END();
 }

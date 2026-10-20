@@ -1,6 +1,6 @@
 /** @file motor_bench.h
  * 单电机定长速度试验，纯逻辑。输出轴 rad/s、N·m；前馈和 PI 共用总输出抗积分饱和。
- * 下→中→上启动一次；故障 / 完成后必须重新下→中。电脑只记录，不参与运动授权。
+ * USB 准备后单次启动，或 DR16 下→中→上启动；故障 / 完成后必须重新准备。
  */
 #pragma once
 #include "02_devices/motor/motor.h"
@@ -29,12 +29,13 @@ typedef struct
     float start_temperature_c, stop_temperature_c;
 } MotorBenchParameters;
 
-/** 由停止态参数接口整组修改；allow_motion 默认 false，启动仍须操作 DR16。 */
+/** 停止态整组修改；USB / DR16 二选一，复位默认禁止运动。 */
 typedef struct
 {
     bool allow_motion, feedforward;
     int32_t direction; /* +1 / -1，方向对应辨识数据，不更改设备的 direction */
     uint32_t gain;     /* tc_s 的下标，运行开始时冻结 */
+    bool usb_control;
 } MotorBenchSettings;
 
 typedef enum
@@ -57,7 +58,8 @@ typedef enum
     MOTOR_BENCH_TX_FAILED,
     MOTOR_BENCH_TRACKING,
     MOTOR_BENCH_BAD_INPUT,
-    MOTOR_BENCH_BAD_SETTINGS
+    MOTOR_BENCH_BAD_SETTINGS,
+    MOTOR_BENCH_USB_LOST
 } MotorBenchFault;
 
 typedef struct
@@ -67,6 +69,7 @@ typedef struct
     RcSwitch sw;
     float dt_s, previous_exec_s;
     MotorBenchSettings settings;
+    bool usb_online, usb_start;
 } MotorBenchInput;
 
 typedef struct
@@ -86,7 +89,7 @@ typedef struct
 
 /** 配置边界检查；配置必须始终有效。上电锁定。 */
 bool motor_bench_init(MotorBench *self, const MotorBenchConfig *cfg);
-/** 仅控制任务调用。必须遥控下档、反馈新鲜且轴已停；运行中拒绝，失败不改变任何参数。 */
+/** 仅控制任务调用。反馈在线且轴已停；DR16 模式还须遥控下档，运行中拒绝。 */
 bool motor_bench_configure(MotorBench *self, const MotorBenchParameters *parameters,
                            const MotorBenchSettings *settings, const MotorBenchInput *input);
 /** 读取当前实际参数；仅控制任务调用。 */

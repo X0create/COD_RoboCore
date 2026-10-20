@@ -1,5 +1,5 @@
 /** @file motor_bench_link.h
- * M3508 应用参数命令。通信任务只交接请求，控制任务校验并应用；停止授权不依赖 USB。
+ * M3508 MB02 参数和启停。通信任务交接请求，控制任务校验、应用和检查 USB 心跳。
  */
 #pragma once
 #include "01_applic/modules/motor_bench/motor_bench.h"
@@ -14,13 +14,15 @@ enum
 {
     MOTOR_BENCH_COMMAND = 0x20,
     MOTOR_BENCH_REPLY = 0x21,
-    MOTOR_BENCH_MESSAGE_SIZE = 40
+    MOTOR_BENCH_MESSAGE_SIZE = 40,
+    MOTOR_BENCH_USB_TIMEOUT_US = 500000
 };
 
 typedef struct
 {
     _Atomic uint32_t state;
     _Atomic bool disarm_requested;
+    _Atomic uint32_t session, heartbeat_us;
     uint16_t length;
     uint8_t request[MOTOR_BENCH_MESSAGE_SIZE], reply[MOTOR_BENCH_MESSAGE_SIZE];
 } MotorBenchLink;

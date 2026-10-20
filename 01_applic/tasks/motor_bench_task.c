@@ -13,6 +13,7 @@ static struct
     uint32_t mode, phase, fault, gain, ff_selected, ff_active, saturated;
     uint32_t fb_sequence, fb_age_us, rc_online, rc_switch, tx_sequence, tx_accepted, tx_dropped;
     uint32_t fb_stamp_us, tx_stamp_us, motion_allowed, error_code;
+    uint32_t usb_control, usb_online;
 } record;
 static const SysIdChannel channels[] = {
     SYSID_F32("motor.q", "rad", &record.q),
@@ -51,6 +52,8 @@ static const SysIdChannel channels[] = {
     SYSID_U32("can.tx_stamp", "tick", &record.tx_stamp_us),
     SYSID_U32("bench.motion_allowed", "", &record.motion_allowed),
     SYSID_U32("motor.error_code", "", &record.error_code),
+    SYSID_U32("bench.usb_control", "", &record.usb_control),
+    SYSID_U32("usb.online", "", &record.usb_online),
 };
 
 static bool send_record(const uint8_t *frame, uint16_t length)
@@ -115,8 +118,10 @@ static void update_record(const MotorBenchInput *in, const MotorTxSnapshot *tx, 
     record.tx_dropped = bench_motors.tx_dropped;
     record.fb_stamp_us = (uint32_t)fb->stamp_us;
     record.tx_stamp_us = (uint32_t)tx->stamp_us;
-    record.motion_allowed = in->settings.allow_motion ? 1u : 0u;
+    record.motion_allowed = motor_bench.settings.allow_motion ? 1u : 0u;
     record.error_code = fb->error_code;
+    record.usb_control = in->settings.usb_control ? 1u : 0u;
+    record.usb_online = in->usb_online ? 1u : 0u;
 }
 
 void motor_bench_task_entry(void *argument)

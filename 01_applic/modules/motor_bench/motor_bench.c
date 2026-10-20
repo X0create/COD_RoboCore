@@ -49,8 +49,9 @@ bool motor_bench_configure(MotorBench *self, const MotorBenchParameters *p,
                            const MotorBenchSettings *s, const MotorBenchInput *in)
 {
     const MotorBenchConfig *b = self->bounds;
-    if (self->mode == MOTOR_BENCH_RUNNING || !in->rc_online || in->sw != RC_SW_DOWN
-        || !in->feedback.online || !isfinite(in->feedback.speed_rad_s)
+    if (self->mode == MOTOR_BENCH_RUNNING
+        || (!s->usb_control && (!in->rc_online || in->sw != RC_SW_DOWN)) || !in->feedback.online
+        || !isfinite(in->feedback.speed_rad_s)
         || fabsf(in->feedback.speed_rad_s) > b->arm_speed_rad_s)
     {
         return false;
@@ -77,7 +78,8 @@ bool motor_bench_configure(MotorBench *self, const MotorBenchParameters *p,
     self->config.start_temperature_c = p->start_temperature_c;
     self->config.stop_temperature_c = p->stop_temperature_c;
     self->settings = *s;
-    self->mode = MOTOR_BENCH_LOCKED;
+    self->mode = s->usb_control && s->allow_motion ? MOTOR_BENCH_READY : MOTOR_BENCH_LOCKED;
+    self->fault = MOTOR_BENCH_OK;
     self->down_seen = false;
     return true;
 }
@@ -95,6 +97,10 @@ static void fail(MotorBench *self, MotorBenchFault fault)
     self->mode = MOTOR_BENCH_FAULT;
     self->fault = fault;
     self->down_seen = false;
+    if (self->settings.usb_control)
+    {
+        self->settings.allow_motion = false;
+    }
     zero_output(self);
 }
 
@@ -102,7 +108,11 @@ static MotorBenchFault input_fault(const MotorBench *self, const MotorBenchInput
 {
     const MotorFeedback *f = &in->feedback;
     const MotorBenchConfig *c = self->cfg;
-    if (!in->rc_online)
+    if (in->settings.usb_control && !in->usb_online)
+    {
+        return MOTOR_BENCH_USB_LOST;
+    }
+    if (!in->settings.usb_control && !in->rc_online)
     {
         return MOTOR_BENCH_RC_LOST;
     }
@@ -112,7 +122,8 @@ static MotorBenchFault input_fault(const MotorBench *self, const MotorBenchInput
     }
     if (!isfinite(in->dt_s + in->previous_exec_s + f->speed_rad_s + f->temperature_c)
         || in->dt_s <= 0.0f || in->previous_exec_s < 0.0f
-        || (in->sw != RC_SW_DOWN && in->sw != RC_SW_MID && in->sw != RC_SW_UP))
+        || (!in->settings.usb_control && in->sw != RC_SW_DOWN && in->sw != RC_SW_MID
+            && in->sw != RC_SW_UP))
     {
         return MOTOR_BENCH_BAD_INPUT;
     }
@@ -243,7 +254,13 @@ void motor_bench_update(MotorBench *self, const MotorBenchInput *in)
         fail(self, fault);
         return;
     }
-    if (in->sw == RC_SW_DOWN)
+    if (in->settings.usb_control && self->mode != MOTOR_BENCH_RUNNING
+        && !(self->mode == MOTOR_BENCH_READY && in->usb_start))
+    {
+        zero_output(self);
+        return;
+    }
+    if (!in->settings.usb_control && in->sw == RC_SW_DOWN)
     {
         self->mode = MOTOR_BENCH_LOCKED;
         self->fault = MOTOR_BENCH_OK;
@@ -255,7 +272,7 @@ void motor_bench_update(MotorBench *self, const MotorBenchInput *in)
     {
         return;
     }
-    if (in->sw == RC_SW_MID)
+    if (!in->settings.usb_control && in->sw == RC_SW_MID)
     {
         if (self->mode == MOTOR_BENCH_RUNNING)
         {
@@ -294,6 +311,10 @@ void motor_bench_update(MotorBench *self, const MotorBenchInput *in)
     if (!reference(self))
     {
         self->mode = MOTOR_BENCH_DONE;
+        if (in->settings.usb_control)
+        {
+            self->settings.allow_motion = false;
+        }
         zero_output(self);
         return;
     }
