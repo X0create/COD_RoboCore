@@ -49,6 +49,7 @@ void app_main(void)
     {
         halt();
     }
+    RM_LOG_I("M3508 FW: usb-txcplt-session-v1");
     RM_LOG_I("M3508 bench TEST: motion defaults OFF; MB02 USB start/stop or DR16; session records");
 }
 
