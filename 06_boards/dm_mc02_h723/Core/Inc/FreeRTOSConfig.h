@@ -171,6 +171,15 @@ standard names. */
 #define USE_CUSTOM_SYSTICK_HANDLER_IMPLEMENTATION 0
 
 /* USER CODE BEGIN Defines */
+#if defined(RM_MOTOR_BENCH_TIMING)
+#include "05_platform/trace/trace.h"
+#define tracePOST_MOVED_TASK_TO_READY_STATE(task) rm_trace_ready((uintptr_t)(task))
+#define traceTASK_SWITCHED_IN() RM_TRACE_EVENT(RM_TRACE_TASK_IN, (uintptr_t)pxCurrentTCB)
+#define traceTASK_SWITCHED_OUT() RM_TRACE_EVENT(RM_TRACE_TASK_OUT, (uintptr_t)pxCurrentTCB)
+/* 诊断入口保留 cmsis_os2.c 的 tick 行为，并包住 SysTick 的整个 C 处理区间。 */
+#undef USE_CUSTOM_SYSTICK_HANDLER_IMPLEMENTATION
+#define USE_CUSTOM_SYSTICK_HANDLER_IMPLEMENTATION 1
+#endif
 /* Section where parameter definitions can be added (for instance, to override default ones in FreeRTOS.h) */
 /* USER CODE END Defines */
 

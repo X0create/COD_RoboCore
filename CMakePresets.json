@@ -61,6 +61,15 @@
       "cacheVariables": {
         "RM_MOTOR_BENCH": "ON"
       }
+    },
+    {
+      "name": "h723-m3508-timing",
+      "displayName": "MC02 M3508 RAM timing diagnostic",
+      "inherits": "h723-m3508",
+      "binaryDir": "${sourceDir}/build/${hostSystemName}/h723-m3508-timing",
+      "cacheVariables": {
+        "RM_MOTOR_BENCH_TIMING": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -79,6 +88,10 @@
     {
       "name": "h723-m3508",
       "configurePreset": "h723-m3508"
+    },
+    {
+      "name": "h723-m3508-timing",
+      "configurePreset": "h723-m3508-timing"
     }
   ],
   "testPresets": [

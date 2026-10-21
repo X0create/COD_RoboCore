@@ -20,6 +20,11 @@
 | 13 | 致命故障处理还接在 IWDG 上 | `grep -n "iwdg_fault" Core/Src/stm32h7xx_it.c Core/Src/freertos.c Core/Inc/FreeRTOSConfig.h` | `stm32h7xx_it.c` 5 处（声明 + HardFault / MemManage / BusFault / UsageFault 的 USER CODE 0 区）；`freertos.c` 2 处（声明 + `vApplicationStackOverflowHook`）；`FreeRTOSConfig.h` 2 处（`USER CODE BEGIN 1` 里的声明和 `configASSERT`） | 生成器清掉后故障时又变成死循环，车停发但不复位 |
 | 14 | 零点开关引脚是 GPIO 输入（只在接了舵轮零点开关时需要） | `grep -E "^(PE13|PE9|PA2|PA0)\." *.ioc` | 4 个引脚都是 `GPIO_Input`（上下拉按开关型号定；开关模块自带上拉电路时不开内部上下拉），对应 `05_platform/gpio/gpio_stm32h7.c` 的 `GPIO_IN_ZERO_SWITCH_1–4` | 没配时引脚是模拟模式，读出恒为低电平，找零会超时、这个轮子不出力 |
 
+诊断预设再生成附加检查：`Core/Inc/FreeRTOSConfig.h` 的 USER Defines 区须保留 `RM_MOTOR_BENCH_TIMING` 条件下的
+就绪 / 切换钩子及自定义 SysTick 选择；`Core/Src/stm32h7xx_it.c` 的 USER CODE 区须保留 31 对外设 IRQ 和 SysTick 记录。
+`05_platform/trace/trace_stm32h7.c` 覆盖表必须与实际入口同名对应。仓库根目录 WSL 运行 `bash tools/check_timing.sh` 检查。
+这些宏在普通固件为空；不修改 FreeRTOS / CMSIS 库文件。详见 `docs/M3508_TIMING_CAPTURE.md`。
+
 第 1 条的命令（在本目录执行）：
 
 ```bash

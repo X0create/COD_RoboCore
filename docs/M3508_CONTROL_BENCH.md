@@ -10,7 +10,7 @@
 `M3508 FW: usb-txcplt-session-v1`；用户应结束旧调试会话、重新下载本 ELF 并运行，在本次复位后的 RTT 看到该行后再采集。
 本轮仅新增启动日志，未改运动 / 通信逻辑；含此前 USB 完成通知修订。先确认标识，暂不启动电机。
 
-周期抖动的测点、捕获和判读方案见 [M3508_TIMING_CAPTURE.md](M3508_TIMING_CAPTURE.md)；当前仅完成方案，尚无诊断固件或新 MCU 时序结果。
+周期抖动诊断已实现独立 `h723-m3508-timing` 预设、RAM 事件记录及离线解码，操作见 [M3508_TIMING_CAPTURE.md](M3508_TIMING_CAPTURE.md)；已做主机 / 编译验证，尚未烧录或取得新 MCU 时序结果。
 
 ## 配置、接线与构建
 

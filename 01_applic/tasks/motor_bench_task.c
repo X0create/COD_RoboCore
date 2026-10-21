@@ -3,6 +3,7 @@
 #include "01_applic/modules/motor_bench/telemetry/sysid/sysid.h"
 #include "01_applic/tasks/tasks.h"
 #include "05_platform/time/time.h"
+#include "05_platform/trace/trace.h"
 #include "05_platform/usb_cdc/usb_cdc.h"
 
 volatile uint32_t control_heartbeat;
@@ -59,7 +60,14 @@ static const SysIdChannel channels[] = {
 
 static bool send_record(const uint8_t *frame, uint16_t length)
 {
+#if defined(RM_MOTOR_BENCH_TIMING)
+    RM_TRACE_EVENT(RM_TRACE_FRAME_BEGIN, ((uint32_t)frame[3] << 16) | length);
+    const bool accepted = usb_cdc_write(frame, length);
+    RM_TRACE_EVENT(RM_TRACE_FRAME_END, accepted);
+    return accepted;
+#else
     return usb_cdc_write(frame, length);
+#endif
 }
 
 static void receive_command(uint8_t type, const uint8_t *data, uint16_t length)
@@ -137,6 +145,7 @@ void motor_bench_task_entry(void *argument)
     for (;;)
     {
         const uint64_t start_us = rm_time_now_us();
+        RM_TRACE_ENTER(start_us);
         MotorBenchInput input = { .dt_s = first ? MOTOR_BENCH_PERIOD_S
                                                 : (float)(start_us - previous_us) * 1.0e-6f,
                                   .previous_exec_s = previous_exec_s,
@@ -149,17 +158,24 @@ void motor_bench_task_entry(void *argument)
         input.rc_online = dr16_read(&bench_rc, &rc);
         input.sw = rc.sw[MOTOR_BENCH_SWITCH];
         const uint64_t sample_us = rm_time_now_us();
+        RM_TRACE_EVENT(RM_TRACE_SAMPLE, sample_us);
         motor_bench_link_control(&bench_link, &motor_bench, &input);
         motor_bench_update(&motor_bench, &input);
+        RM_TRACE_STATE(motor_bench_link_session(&bench_link), motor_bench.settings.allow_motion);
         motor_bench_apply(&motor_bench, &bench_motor);
+        RM_TRACE_EVENT(RM_TRACE_SUBMIT_BEGIN, 0u);
         motor_group_send(&bench_motors);
+        RM_TRACE_EVENT(RM_TRACE_SUBMIT_END, 0u);
         MotorTxSnapshot tx;
         motor_group_read_tx(&bench_motors, &tx);
         update_record(&input, &tx, sample_us);
         record.exec_us = (float)(rm_time_now_us() - start_us);
+        RM_TRACE_EVENT(RM_TRACE_RECORD_BEGIN, 0u);
         sysid_record((uint32_t)sample_us);
+        RM_TRACE_EVENT(RM_TRACE_RECORD_END, 0u);
         previous_exec_s = (float)(rm_time_now_us() - start_us) * 1.0e-6f;
         control_heartbeat++;
+        RM_TRACE_END();
         rm_task_delay_until(&wake, MOTOR_BENCH_PERIOD_MS);
     }
 }

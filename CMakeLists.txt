@@ -26,6 +26,16 @@ if(RM_BOARD)
     endif()
 endif()
 
+option(RM_MOTOR_BENCH_TIMING "RAM timing capture for MC02 single-motor bench" OFF)
+if(RM_MOTOR_BENCH_TIMING)
+    if(NOT RM_BOARD STREQUAL "dm_mc02" OR NOT RM_MOTOR_BENCH)
+        message(FATAL_ERROR "Timing capture requires h723-m3508-timing")
+    endif()
+    # 内核、CubeMX IRQ 和应用必须看到相同宏；普通构建不引入这些选项。
+    add_compile_definitions(RM_MOTOR_BENCH_TIMING=1)
+    include_directories(${PROJECT_SOURCE_DIR})
+endif()
+
 add_subdirectory(05_platform)
 add_subdirectory(04_core)           # 电脑侧只有 rm_core_common，其余只用于固件（见 04_core/CMakeLists.txt）
 add_subdirectory(03_algorithm)

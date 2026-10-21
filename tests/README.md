@@ -2,7 +2,7 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| `host/` | PC 单元测试（Unity，C 语言）。子目录与被测的层同名、同编号（如 `host/05_platform/`）；Unity 源码在 `host/unity/`；`host/fakes/` 是 CAN、SPI、PWM、GPIO、临界区、延时和时钟的假实现（`fake_time_set_us()` 设定“现在”），测看门狗、设备、机构时链接 `rm_host_fakes`；38 个测试程序，其中 `test_usb_cdc_h7` 用最小 STM32 USB 头文件替身编译实际 H723 平台驱动，检查忙重试、缓冲生命周期和发送完成通知 |
+| `host/` | PC 单元测试（Unity，C 语言）。子目录与被测的层同名、同编号（如 `host/05_platform/`）；Unity 源码在 `host/unity/`；`host/fakes/` 是 CAN、SPI、PWM、GPIO、临界区、延时和时钟的假实现（`fake_time_set_us()` 设定“现在”），测看门狗、设备、机构时链接 `rm_host_fakes`；39 个测试程序，其中 `test_usb_cdc_h7` 用最小 STM32 USB 头文件替身编译实际 H723 平台驱动，检查忙重试、缓冲生命周期和发送完成通知 |
 | `target/` | （规划）板上自测固件（看门狗数据读写并发等） |
 | `hil/` | （规划）硬件在环：USB-CAN 回放与故障注入脚本 |
 | `data/` | （规划）录制的 IMU、CAN、裁判系统数据 |
@@ -19,3 +19,6 @@ ctest --preset host-tests
 `rm_add_host_test(test_xxx <层>/test_xxx.c <被测库>)`。测试函数写成 `static`（编译选项要求非 static 函数必须有声明）。
 
 主机测试通过**不等于**硬件验证通过。涉及 DMA、缓存、时序、中断、电机安全的结论，必须写明验证层级。
+
+诊断记录器：`test_trace` 六例检查捕获状态、绕回、尾部、冻结不变与中断屏蔽恢复；`python3 -B tests/test_timing_trace.py` 五例检查独立解码。
+`bash tools/check_timing.sh` 还运行真实 C→Python 二进制夹具、内核 / IRQ 插桩及普通 ELF 无诊断代码检查；不连接硬件。

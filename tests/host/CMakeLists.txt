@@ -21,6 +21,7 @@ function(rm_add_host_test name source)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
+rm_add_host_test(test_trace 05_platform/test_trace.c rm_platform_common)
 rm_add_host_test(test_time 05_platform/test_time.c rm_platform_common)
 rm_add_host_test(test_status_led 05_platform/test_status_led.c rm_platform_common)
 rm_add_host_test(test_uart 05_platform/test_uart.c rm_platform_common)

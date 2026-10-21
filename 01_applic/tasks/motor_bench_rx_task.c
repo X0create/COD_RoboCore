@@ -4,6 +4,7 @@
 #include "01_applic/tasks/tasks.h"
 #include "04_core/log/log.h"
 #include "05_platform/time/time.h"
+#include "05_platform/trace/trace.h"
 #include "05_platform/uart/uart.h"
 #include "05_platform/usb_cdc/usb_cdc.h"
 #include <board.h>
@@ -30,10 +31,20 @@ void motor_bench_rx_task_entry(void *argument)
     bool reply_pending = false;
     for (;;)
     {
+#if defined(RM_MOTOR_BENCH_TIMING)
+        const bool notified = rm_task_wait_notify(1u);
+        uint32_t can_count = 0u, uart_bytes = 0u, usb_bytes = 0u;
+        RM_TRACE_EVENT(RM_TRACE_RX_BEGIN, notified);
+#else
         (void)rm_task_wait_notify(1u);
+#endif
+        RM_TRACE_EVENT(RM_TRACE_DISPATCH_BEGIN, 0u);
         CanFrame frame;
         while (can_read(bench_motor_config.can_bus, &frame))
         {
+#if defined(RM_MOTOR_BENCH_TIMING)
+            ++can_count;
+#endif
             (void)motor_group_receive(&bench_motors, bench_motor_config.can_bus, &frame);
         }
         uint8_t bytes[64];
@@ -41,10 +52,16 @@ void motor_bench_rx_task_entry(void *argument)
         uint32_t n;
         while ((n = uart_read(BOARD_DBUS_UART, bytes, sizeof(bytes), &stamp_us)) != 0u)
         {
+#if defined(RM_MOTOR_BENCH_TIMING)
+            uart_bytes += n;
+#endif
             dr16_on_bytes(&bench_rc, bytes, n, stamp_us);
         }
         while ((n = usb_cdc_read(bytes, sizeof(bytes))) != 0u)
         {
+#if defined(RM_MOTOR_BENCH_TIMING)
+            usb_bytes += n;
+#endif
             sysid_receive(bytes, n);
         }
         if (!reply_pending)
@@ -55,12 +72,19 @@ void motor_bench_rx_task_entry(void *argument)
         {
             reply_pending = false;
         }
+        RM_TRACE_EVENT(RM_TRACE_CAN_COUNT, can_count);
+        RM_TRACE_EVENT(RM_TRACE_UART_COUNT, uart_bytes);
+        RM_TRACE_EVENT(RM_TRACE_USB_COUNT, usb_bytes);
+        RM_TRACE_EVENT(RM_TRACE_DISPATCH_END, 0u);
+        RM_TRACE_EVENT(RM_TRACE_POLL_BEGIN, 0u);
         sysid_poll(); /* 唯一 USB 发送方；运动仍须单独的 START 或 DR16 拨杆。 */
+        RM_TRACE_EVENT(RM_TRACE_POLL_END, 0u);
         const uint64_t now_us = rm_time_now_us();
         if (can_is_bus_off(bench_motor_config.can_bus) && now_us - last_recover_us >= 100000u)
         {
             last_recover_us = now_us;
             can_recover(bench_motor_config.can_bus);
         }
+        RM_TRACE_EVENT(RM_TRACE_RX_END, 0u);
     }
 }

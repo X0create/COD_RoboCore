@@ -9,6 +9,7 @@
 | `can/` | `can.h` | `can_stm32h7.c`（FDCAN，全放行） | `can.c`：DLC 换算、接收环形缓冲 |
 | `uart/` | `uart.h` | `uart_stm32h7.c`（DMA 循环接收 + 空闲中断） | `uart.c`：从 DMA 循环缓冲取数 |
 | `usb_cdc/` | `usb_cdc.h` | `usb_cdc_stm32h7.c`（接收和发送完成均通知同一任务） | `usb_cdc.c`：字节环形缓冲 |
+| `trace/` | `trace.h`（诊断事件格式与空宏） | `trace_stm32h7.c`（DWT / PRIMASK / NVIC） | `trace.c`：RAM 环和捕获状态机，仅诊断 / 主机测试编译 |
 | `time/` | `time.h`（只有 `rm_time_init`、`rm_time_now_us`） | `time_stm32h7.c`（DWT） | `time.c`：32 位计数扩展成 64 位，声明在 `time_internal.h` |
 | `status_led/` | `status_led.h` | `status_led_stm32h7.c`（SPI 驱动 WS2812） | `status_led.c`：WS2812 颜色编码 |
 | `spi/` | `spi.h` | `spi_stm32h7.c` | |

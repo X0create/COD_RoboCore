@@ -5,6 +5,7 @@
 #include "04_core/log/log.h"
 #include "05_platform/iwdg/iwdg.h"
 #include "05_platform/time/time.h"
+#include "05_platform/trace/trace.h"
 
 Motor bench_motor;
 MotorGroup bench_motors;
@@ -31,6 +32,9 @@ void app_main(void)
     {
         halt();
     }
+#if defined(RM_MOTOR_BENCH_TIMING)
+    rm_trace_platform_init();
+#endif
     dr16_init(&bench_rc);
     motor_bench_link_init(&bench_link);
     const Motor *conflict;
@@ -49,7 +53,13 @@ void app_main(void)
     {
         halt();
     }
+#if defined(RM_MOTOR_BENCH_TIMING)
+    rm_trace_bind_tasks((uintptr_t)control_task.handle, (uintptr_t)comm_rx_task.handle,
+                        (uintptr_t)detect_task.handle);
+    RM_LOG_I("M3508 FW: timing-mbt1-v1; RAM capture, motion defaults OFF");
+#else
     RM_LOG_I("M3508 FW: usb-txcplt-session-v1");
+#endif
     RM_LOG_I("M3508 bench TEST: motion defaults OFF; MB02 USB start/stop or DR16; session records");
 }
 

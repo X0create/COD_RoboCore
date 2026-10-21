@@ -11,6 +11,9 @@ add_library(rm_platform_common STATIC
 # 以 "05_platform/can/can.h" 的形式 include
 target_include_directories(rm_platform_common PUBLIC ${PROJECT_SOURCE_DIR})
 rm_target_warnings(rm_platform_common)
+if(RM_HOST_TESTS OR RM_MOTOR_BENCH_TIMING)
+    target_sources(rm_platform_common PRIVATE trace/trace.c)
+endif()
 
 # 当前主控的芯片实现：每个外设一份 <外设>_${RM_CHIP}.c，同名函数，CMake 只编译这一份（换芯片不改上层代码）
 if(RM_CHIP)
@@ -31,5 +34,8 @@ if(RM_CHIP)
         PUBLIC rm_vendor
         PRIVATE rm_platform_common
     )
+    if(RM_MOTOR_BENCH_TIMING)
+        target_sources(rm_platform PRIVATE trace/trace_stm32h7.c)
+    endif()
     rm_target_warnings(rm_platform)
 endif()
