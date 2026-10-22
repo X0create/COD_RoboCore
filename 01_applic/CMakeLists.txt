@@ -26,6 +26,9 @@ if(RM_MOTOR_BENCH)
     endif()
     add_library(rm_bench_telemetry STATIC modules/motor_bench/telemetry/sysid/sysid.c)
     target_include_directories(rm_bench_telemetry PUBLIC modules/motor_bench/telemetry)
+    if(RM_MOTOR_BENCH_TIMING)
+        target_link_libraries(rm_bench_telemetry PRIVATE rm_platform_common)
+    endif()
     rm_target_warnings(rm_bench_telemetry)
     add_library(rm_app STATIC
         system/motor_bench_main.c

@@ -22,6 +22,13 @@ function(rm_add_host_test name source)
 endfunction()
 
 rm_add_host_test(test_trace 05_platform/test_trace.c rm_platform_common)
+foreach(name test_sysid_plain test_sysid_timing)
+    rm_add_host_test(${name} 01_applic/test_sysid_timing.c m)
+    target_sources(${name} PRIVATE ${PROJECT_SOURCE_DIR}/01_applic/modules/motor_bench/telemetry/sysid/sysid.c)
+    target_include_directories(${name} PRIVATE ${PROJECT_SOURCE_DIR}
+        ${PROJECT_SOURCE_DIR}/01_applic/modules/motor_bench/telemetry)
+endforeach()
+target_compile_definitions(test_sysid_timing PRIVATE RM_MOTOR_BENCH_TIMING=1)
 rm_add_host_test(test_time 05_platform/test_time.c rm_platform_common)
 rm_add_host_test(test_status_led 05_platform/test_status_led.c rm_platform_common)
 rm_add_host_test(test_uart 05_platform/test_uart.c rm_platform_common)

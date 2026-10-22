@@ -61,7 +61,14 @@ typedef enum
     RM_TRACE_IRQ_OUT,
     RM_TRACE_TRIGGER,
     RM_TRACE_FREEZE,
-    RM_TRACE_CYCLE_END
+    RM_TRACE_CYCLE_END,
+    /* 追加编号，保持已有 MBT1 捕获可读；BEGIN/END 分别携带输入/结果。 */
+    RM_TRACE_LOG_PEEK_BEGIN,
+    RM_TRACE_LOG_PEEK_END,
+    RM_TRACE_ENCODE_BEGIN,
+    RM_TRACE_ENCODE_END,
+    RM_TRACE_CRC_BEGIN,
+    RM_TRACE_CRC_END
 } RmTraceEventType;
 
 typedef struct

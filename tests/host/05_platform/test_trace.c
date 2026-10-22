@@ -199,9 +199,16 @@ static int dump_fixture(const char *path)
 {
     setUp();
     rm_trace_reset(1000000u);
+    rm_trace.covered_irqs[0] = 4u; /* 与本夹具 rm_trace_hw_irqs() 声明的启用位一致。 */
     rm_trace_bind_tasks(0x100u, 0x200u, 0x300u);
     arm();
     rm_trace_emit(RM_TRACE_POLL_BEGIN, 0u);
+    rm_trace_emit(RM_TRACE_LOG_PEEK_BEGIN, 0u);
+    rm_trace_emit(RM_TRACE_LOG_PEEK_END, (0x10u << 16) | 466u);
+    rm_trace_emit(RM_TRACE_ENCODE_BEGIN, (0x10u << 16) | 466u);
+    rm_trace_emit(RM_TRACE_CRC_BEGIN, 466u);
+    rm_trace_emit(RM_TRACE_CRC_END, 0x1234u);
+    rm_trace_emit(RM_TRACE_ENCODE_END, 472u);
     rm_trace_emit(RM_TRACE_FRAME_BEGIN, (0x10u << 16) | 472u);
     rm_trace_emit(RM_TRACE_FRAME_END, 1u);
     rm_trace_emit(RM_TRACE_POLL_END, 0u);

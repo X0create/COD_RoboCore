@@ -66,13 +66,19 @@ command(str(repo / "build/Linux/host-tests/tests/host/test_trace"), "--dump", st
 sys.path.insert(0, str(repo / "tools"))
 import decode_timing_trace as dec
 report, events = dec.decode(fixture.read_bytes())
-assert report["retained_events"] == 16
+assert report["retained_events"] == 22
 assert report["control_cycles"][0]["ready_to_first_in_us"] == 349
 assert report["control_cycles"][0]["first_in_to_entry_us"] == 50
 assert report["control_cycles"][0]["irq_overlap_us"] == 299
 assert report["irq_union_us"] == 300
 assert report["frames"][0]["type"] == 0x10 and report["frames"][0]["accepted"]
+for phase, wall in (("LOG_PEEK", 1), ("ENCODE", 3), ("CRC", 1)):
+    stage = report["phases"][phase][0]
+    assert stage["wall_us"] == wall and stage["non_irq_us"] == wall
 (out / "c_fixture_report.json").write_text(json.dumps(report, indent=2) + "\n")
+for name in ("test_sysid_plain", "test_sysid_timing"):
+    command(str(repo / "build/Linux/host-tests/tests/host" / name), "--dump", str(out / (name + ".bin")))
+assert (out / "test_sysid_plain.bin").read_bytes() == (out / "test_sysid_timing.bin").read_bytes()
 manifest = {"elf": str(elf.relative_to(repo)), "elf_sha256": hashlib.sha256(elf.read_bytes()).hexdigest(),
             "source_commit_at_check": command("git", "rev-parse", "HEAD").strip(),
             "source_dirty_at_check": bool(command("git", "status", "--porcelain").strip()),
@@ -85,4 +91,4 @@ manifest = {"elf": str(elf.relative_to(repo)), "elf_sha256": hashlib.sha256(elf.
 (out / "export_trace.jlink").write_text(
     f"h\nSaveBin build/timing_20261021/timing_capture.bin 0x{address:08X} 0x{size:X}\nexit\n")
 print(json.dumps(manifest, indent=2))
-print("PASS: USER CODE scope, kernel hooks, 31 IRQ pairs, ordinary ELF isolation and actual C -> Python fixture")
+print("PASS: USER CODE scope, kernel hooks, 31 IRQ pairs, ordinary ELF isolation, C -> Python phases and identical wire bytes")

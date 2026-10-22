@@ -21,7 +21,9 @@ KEYS = ("magic version capacity clock_hz control_task rx_task detect_task reques
 NAMES = ("ARM READY TASK_IN TASK_OUT CONTROL_ENTER SAMPLE SESSION SUBMIT_BEGIN SUBMIT_END "
          "RECORD_BEGIN RECORD_END RX_BEGIN RX_END DISPATCH_BEGIN DISPATCH_END CAN_COUNT "
          "UART_COUNT USB_COUNT POLL_BEGIN POLL_END FRAME_BEGIN FRAME_END IRQ_IN IRQ_OUT "
-         "TRIGGER FREEZE CYCLE_END").split()
+         "TRIGGER FREEZE CYCLE_END LOG_PEEK_BEGIN LOG_PEEK_END ENCODE_BEGIN ENCODE_END "
+         "CRC_BEGIN CRC_END").split()
+PHASES = ("LOG_PEEK", "ENCODE", "CRC")
 
 
 def union_length(intervals, start, end):
@@ -31,6 +33,40 @@ def union_length(intervals, start, end):
         total += max(0, b - max(previous, a))
         previous = max(previous, b)
     return total
+
+
+def decode_phases(events, irq_intervals, anchor_time, missing_irqs, scale):
+    """Pair stages independently: CRC is nested in ENCODE, so do not add their times."""
+    opened, prefix = {}, []
+    spans = {phase: [] for phase in PHASES}
+    seen = set()
+    for event in events:
+        kind = event["type"]
+        phase, _, edge = kind.rpartition("_")
+        if phase not in spans or edge not in ("BEGIN", "END"):
+            continue
+        if edge == "BEGIN":
+            if phase in opened:
+                raise ValueError(f"Overlapping {phase} calls")
+            opened[phase] = event
+        elif phase in opened:
+            begin = opened.pop(phase)
+            a, b = begin["cycles"], event["cycles"]
+            complete = anchor_time is not None and a >= anchor_time
+            irq = union_length(irq_intervals, a, b) * scale if complete else None
+            spans[phase].append({
+                "begin_sequence": begin["sequence"], "end_sequence": event["sequence"],
+                "begin_us": a * scale, "end_us": b * scale,
+                "begin_data": begin["data"], "end_data": event["data"],
+                "wall_us": (b - a) * scale, "irq_overlap_us": irq,
+                "non_irq_us": (b - a) * scale - irq if complete and not missing_irqs else None,
+                "irq_window_complete": complete and not missing_irqs})
+        elif phase not in seen:
+            prefix.append(phase)  # Ring may begin after the corresponding BEGIN was overwritten.
+        else:
+            raise ValueError(f"{phase}_END without BEGIN")
+        seen.add(phase)
+    return spans, prefix, sorted(opened)
 
 
 def decode(raw):
@@ -137,6 +173,8 @@ def decode(raw):
                 "irq_window_complete": irq_complete and not missing_irqs,
                 "no_new_ready_in_window": r is None}
         waits.append(wait)
+    phases, phase_prefix, phase_tail = decode_phases(
+        events, irq_intervals, anchor_time, missing_irqs, scale)
     report = {"sha256": hashlib.sha256(raw).hexdigest(), "header": header,
               "retained_events": len(events), "span_us": ticks * scale,
               "event_counts": dict(Counter(e["type"] for e in events)),
@@ -146,10 +184,13 @@ def decode(raw):
               "control_cycles": waits,
               "poll_wall_us": [(b - a) * scale for a, b in polls], "frames": frames,
               "partial_poll_at_end": poll is not None, "partial_frame_at_end": frame is not None,
+              "phases": phases, "partial_phase_prefix": phase_prefix,
+              "partial_phase_at_end": phase_tail,
               "limits": ["Assumes no whole DWT wrap between adjacent events, reset, clock change or breakpoint",
                          "Prefix may start inside a task/IRQ; missing READY is not a zero delay",
                          "IRQ union covers instrumented entries; scheduler/entry/probe overhead is not subtracted",
-                         "POLL/FRAME are wall intervals, not pure CPU or CRC time"]}
+                         "POLL/FRAME are wall intervals, not pure CPU or CRC time",
+                         "Phase non_irq_us still includes probe/scheduler/other-task time; CRC is inside ENCODE"]}
     return report, events
 
 

@@ -16,7 +16,8 @@ mkdir -p "$out"
 python3 tools/format.py 05_platform/trace/trace.h 05_platform/trace/trace.c \
     05_platform/trace/trace_stm32h7.c tests/host/05_platform/test_trace.c \
     01_applic/system/motor_bench_main.c 01_applic/tasks/motor_bench_task.c \
-    01_applic/tasks/motor_bench_rx_task.c
+    01_applic/tasks/motor_bench_rx_task.c tests/host/01_applic/test_sysid_timing.c \
+    01_applic/modules/motor_bench/telemetry/sysid/sysid.c
 for preset in host-tests h723-m3508-timing h723-m3508 h723-debug c-debug; do
     cmake --preset "$preset" > "$out/${preset}_configure.log" 2>&1
     cmake --build --preset "$preset" -j 6 > "$out/${preset}_build.log" 2>&1

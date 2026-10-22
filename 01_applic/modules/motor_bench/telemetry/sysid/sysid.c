@@ -20,6 +20,14 @@
  */
 #include "sysid/sysid.h"
 
+/* 仅本仓库独立诊断预设接入 RAM 测点；普通构建不依赖平台且参数不求值。 */
+#if defined(RM_MOTOR_BENCH_TIMING)
+#include "05_platform/trace/trace.h"
+#define SYSID_TRACE(event, data) RM_TRACE_EVENT((event), (data))
+#else
+#define SYSID_TRACE(event, data) ((void)0)
+#endif
+
 #include <math.h>
 #include <stdatomic.h>
 #include <string.h>
@@ -77,7 +85,7 @@ static uint16_t sysid_crc16(const uint8_t *data, uint16_t length)
 
 static uint16_t sysid_crc16_update(uint16_t crc, const uint8_t *data, uint16_t length)
 {
-    /* 逐位计算：一条 480 字节的记录约 4000 次移位，比查表慢但不占 512 字节的表，在传输任务里足够快。 */
+    /* 逐位计算，不占 CRC 查找表；实际耗时由独立诊断测量，不在此假定实时预算充足。 */
     for (uint16_t i = 0U; i < length; ++i)
     {
         crc ^= data[i];
@@ -92,7 +100,9 @@ static uint16_t sysid_crc16_update(uint16_t crc, const uint8_t *data, uint16_t l
 static uint16_t sysid_frame_encode(uint8_t type, const uint8_t *data, uint16_t length, uint8_t *out)
 {
     const uint16_t payload = (uint16_t)(length + 2U);
+    SYSID_TRACE(RM_TRACE_CRC_BEGIN, length);
     const uint16_t crc = sysid_crc16(data, length);
+    SYSID_TRACE(RM_TRACE_CRC_END, crc);
     out[0] = SYSID_FRAME_HEADER;
     out[1] = (uint8_t)payload;
     out[2] = (uint8_t)(payload >> 8);
@@ -1354,11 +1364,20 @@ void sysid_poll(void)
                 length = sysid.reply_length;
                 sysid.reply_pending = false;
             }
-            else if (!sysid_log_peek(&sysid.log, &type, &data, &length))
+            else
             {
-                return;
+                SYSID_TRACE(RM_TRACE_LOG_PEEK_BEGIN, 0U);
+                const bool has_record = sysid_log_peek(&sysid.log, &type, &data, &length);
+                SYSID_TRACE(RM_TRACE_LOG_PEEK_END,
+                            has_record ? ((uint32_t)type << 16) | length : 0U);
+                if (!has_record)
+                {
+                    return;
+                }
             }
+            SYSID_TRACE(RM_TRACE_ENCODE_BEGIN, ((uint32_t)type << 16) | length);
             sysid.tx_length = sysid_frame_encode(type, data, length, sysid.tx[sysid.tx_index]);
+            SYSID_TRACE(RM_TRACE_ENCODE_END, sysid.tx_length);
             sysid.tx_pending = true;
         }
         if (!sysid.config->send(sysid.tx[sysid.tx_index], sysid.tx_length))

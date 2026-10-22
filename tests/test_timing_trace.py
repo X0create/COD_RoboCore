@@ -87,6 +87,42 @@ class TraceTests(unittest.TestCase):
         struct.pack_into("<I", raw, 96, 0x20)
         self.assertEqual(dec.decode(raw)[0]["uncovered_enabled_irqs"], [5])
 
+    def test_encoding_phases_nested_irq_and_counter_wrap(self):
+        raw = capture([(0xFFFFFFE0, "ARM", 0, 1),
+                       (0xFFFFFFE4, "LOG_PEEK_BEGIN", 0, 0),
+                       (0xFFFFFFE8, "LOG_PEEK_END", 0, (0x11 << 16) | 188),
+                       (0xFFFFFFF0, "ENCODE_BEGIN", 0, (0x11 << 16) | 188),
+                       (0xFFFFFFF4, "CRC_BEGIN", 0, 188),
+                       (0xFFFFFFF8, "IRQ_IN", 42, 0),
+                       (2, "IRQ_IN", 43, 0), (6, "IRQ_OUT", 43, 0),
+                       (10, "IRQ_OUT", 42, 0), (20, "CRC_END", 0, 0x1234),
+                       (30, "ENCODE_END", 0, 194), (40, "FREEZE", 0, 2)])
+        report, _ = dec.decode(raw)
+        peek, encode, crc = (report["phases"][p][0] for p in dec.PHASES)
+        self.assertEqual(peek["wall_us"], 4)
+        self.assertEqual(peek["end_data"], (0x11 << 16) | 188)
+        self.assertEqual(encode["wall_us"], 46)
+        self.assertEqual(crc["wall_us"], 32)
+        self.assertEqual(crc["irq_overlap_us"], 18)
+        self.assertEqual(crc["non_irq_us"], 14)
+        self.assertEqual(encode["non_irq_us"], 28)
+        struct.pack_into("<I", raw, 96, 0x20)
+        crc = dec.decode(raw)[0]["phases"]["CRC"][0]
+        self.assertFalse(crc["irq_window_complete"])
+        self.assertIsNone(crc["non_irq_us"])
+
+    def test_phase_prefix_tail_and_malformed_pairs(self):
+        raw = capture([(0, "CRC_END", 0, 0), (1, "ENCODE_END", 0, 194),
+                       (2, "CRC_BEGIN", 0, 188), (3, "FREEZE", 0, 2)])
+        report, _ = dec.decode(raw)
+        self.assertEqual(report["partial_phase_prefix"], ["CRC", "ENCODE"])
+        self.assertEqual(report["partial_phase_at_end"], ["CRC"])
+        self.assertEqual(report["phases"]["CRC"], [])
+        for events in ([(0, "CRC_BEGIN", 0, 0), (1, "CRC_BEGIN", 0, 0)],
+                       [(0, "CRC_END", 0, 0), (1, "CRC_END", 0, 0)]):
+            with self.assertRaises(ValueError):
+                dec.decode(capture(events + [(2, "FREEZE", 0, 2)]))
+
 
 if __name__ == "__main__":
     unittest.main()

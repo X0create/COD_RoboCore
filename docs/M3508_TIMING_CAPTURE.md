@@ -1,6 +1,6 @@
 # M3508 周期抖动的最小计时测量方案
 
-状态：2026-10-21，独立诊断固件与离线解码已实现；**尚未烧录，尚无新的 MCU 测量**。
+状态：2026-10-22，首版诊断已取得用户 MCU RAM；取记录 / 编码 / CRC 分段测点已实现，**新增测点尚未上板**。
 依据：辨识仓库 `docs/cn/bench_findings.md` #84；实现决策见 ADR 0088。不改任务优先级、运动设置或质量标准。
 
 ## 使用本版（硬件操作由用户完成）
@@ -9,7 +9,7 @@
    检查内核钩子、普通 ELF 无诊断符号、IRQ 覆盖和 USER CODE 边界；不连接硬件。
    ELF 为 `build/Linux/h723-m3508-timing/COD_RoboCore.elf`，可在 Windows Ozone 打开。
    诊断预设名 `h723-m3508-timing`；也可单独 `cmake --preset h723-m3508-timing` / `cmake --build --preset h723-m3508-timing`。
-2. 用户在 Ozone 选择并烧录这个 ELF，复位后 RTT 应出现 `M3508 FW: timing-mbt1-v1; RAM capture, motion defaults OFF`。
+2. 用户在 Ozone 选择并烧录这个 ELF，复位后 RTT 应出现 `M3508 FW: timing-mbt1-phases-v1; RAM capture, motion defaults OFF`。
    启动标识区分普通 / 诊断版，不是唯一构建哈希；同时保存该 ELF 及生成的 `build/timing_20261021/capture_manifest.json`。
    manifest 的源码提交只描述电脑检查时的版本，不能回溯证明曾烧录的版本。
 3. 用原采集流程 SET 准备无运动记录，确认实际回读 `allow_motion=false`、会话号非零；不发送 START。
@@ -33,7 +33,39 @@
 `reason`：1 周期触发收尾，2 手动，3 会话变化，4 出现运动授权，5 arm 配置不合法，6 致命异常。
 捕获只接受当前非零会话且无运动授权；出现运动授权只结束诊断，不改运动状态，不能把它当作运动保护。
 arm 时逻辑清空槽数而不擦 32 KiB 内存；有效槽由本次 count / sequence 确定，旧槽不属于新捕获。
-软件验证见文末；插桩开销、最长关中断段、实际捕获覆盖、真实停止行为均未实测。
+软件验证见文末；新增测点的插桩开销、最长关中断段、环覆盖长度和真实停止行为尚未实测。
+
+## 2026-10-22 分段测量的依据与操作
+
+用户第二份 RAM 为 state=3 / reason=1，744 有效事件、13.089 ms；13 次 0x11 普通记录帧发送接口均接受。
+触发周期 1111.115 µs，控制就绪到入口 122.207 µs；其中主要 POLL 区间 103.758 µs，扣除 IRQ 并集后 90.940 µs。
+POLL_BEGIN 到 FRAME_BEGIN 扣除 IRQ 后 86.869 µs，不能全部称为 CRC。此窗口没有通道表帧。
+验证层级为用户 RAM / Python 解码 / 独立原始字节与 DWT、IRQ 复核；未关联对应完整 30 s 原流，不代表全程周期验收。
+详细原始快照、哈希及分析保存在本工作树忽略目录 `build/timing_20261021/auto_capture_20261022*`。
+
+新增分段沿用上面的 30 s 无运动记录流程，threshold_us=1050；需要用户下载新 ELF 并确认新 RTT 标识后才有新事件。
+Ozone 仍使用 `build/timing_20261021/MC02_H723_3508_timing.jdebug`。导出前从当前 ELF / manifest 核对地址，
+不要沿用此前 RAM 地址；对象仍为 32928 字节，Ozone Save Memory 的 Size 填 `0x80A0`（框内数字按十六进制）。
+2026-10-22 本次已验证构建的地址为 `0x2000C578`；后续重建仍以对应 manifest / ELF 为准。
+导出另存新文件，例如 `timing_capture_phases_01.bin`，不要覆盖旧捕获；读取后先检查新事件是否实际存在。
+本轮软件准备不操作硬件，烧录 / 采集仍由用户完成；未下载的新 ELF 不能用于解释之前的 RAM。
+
+解码 JSON 的 `phases.LOG_PEEK` / `phases.ENCODE` / `phases.CRC` 按独立 BEGIN/END 序号配对：
+
+| 字段 / 阶段 | 含义 |
+| --- | --- |
+| LOG_PEEK | 取得普通记录指针，或准备一个通道表分页；END 为 0 表示队列空，否则高 16 位类型、低 16 位数据长度 |
+| ENCODE | `sysid_frame_encode()` 全部，BEGIN 是类型 / 数据长度，END 是完整帧长度 |
+| CRC | 编码内部 `sysid_crc16()`，BEGIN 是数据长度，END 是 CRC 值；不测接收解析或 schema_id 的 CRC |
+| wall_us / irq_overlap_us | 墙钟区间 / 同一区间 IRQ 并集；嵌套 IRQ 不重复累计 |
+| non_irq_us | 覆盖完整时的墙钟减 IRQ，仍包含测点 / 调度 / 其他任务时间；覆盖不全则为 null |
+| partial_phase_prefix / partial_phase_at_end | 环开头缺 BEGIN / 冻结时缺 END 的阶段名；不补零、不当作完整耗时 |
+
+CRC 是 ENCODE 的子区间，不能把两者相加；ENCODE 减 CRC 也不能全称为复制耗时。
+普通记录的数值打包已经在控制任务完成，LOG_PEEK 不包含该过程；通道表则会在 peek 时打包分页。
+普通版不求值诊断宏参数，不链接记录器；不改 CRC 算法、协议、优先级、队列、运动授权或质量阈值。
+新事件在原 27 个事件之后追加，格式版本仍为 MBT1 v1，当前解码器可读旧捕获；旧解码器会拒绝新事件。
+每次非空新帧额外记录六个事件，每次空 peek 两个；环覆盖长度会缩短，测点本身扰动尚须实测。
 
 ## 要回答的问题
 
@@ -64,6 +96,9 @@ arm 时逻辑清空槽数而不擦 32 KiB 内存；有效槽由本次 count / se
 | DISPATCH_BEGIN / END | 同文件 CAN / DBUS / USB 收取和回执交接的前 / 后 | 区分反馈分发与遥测发送；记各类处理数量，不在热路径格式化 |
 | POLL_BEGIN / END | 同文件 `sysid_poll()` 前 / 后 | 记录命令解析、帧准备及发送尝试的整个调用区间 |
 | FRAME_BEGIN / END | `01_applic/tasks/motor_bench_task.c` 的 `send_record()` 包住 `usb_cdc_write()` | 记录帧类型 `frame[3]`、长度、接受 / 忙；该区间不包含此前的编码或后续 USB 传输 |
+| LOG_PEEK_BEGIN / END | `sysid_poll()` 调用 `sysid_log_peek()` 前 / 后 | 普通记录取指针、通道表分页打包，空队列也有完整配对 |
+| ENCODE_BEGIN / END | `sysid_poll()` 调用 `sysid_frame_encode()` 前 / 后 | 一次完整封帧；忙重试复用旧帧，不重新编码 |
+| CRC_BEGIN / END | `sysid_frame_encode()` 内的 `sysid_crc16()` 前 / 后 | 仅本次发帧 CRC，与 ENCODE 嵌套，不归入 USB 在途时间 |
 | IRQ_IN / IRQ_OUT | 本预设实际启用的各中断处理入口 / 出口 | 从任务区间中分离中断占用，记录 IRQ 编号并正确处理嵌套 |
 
 `tracePOST_MOVED_TASK_TO_READY_STATE` 在 `tasks.c:226`；切换钩子在 `tasks.c:3081/3124`，首次切入另见 2062。
@@ -127,15 +162,18 @@ READY 只给出解除阻塞时刻；若要区分 tick 本身晚到与就绪后�
 | 长周期后出现短周期且没有新阻塞 / READY | 该迭代在追赶绝对节拍 | 控制已经满足当前周期质量草案 |
 
 每段 POLL 与它内部多个 FRAME 都保留；只能把编码时间列为 POLL 内尚未归因的部分，不能把整段 POLL 减 FRAME 后全称为 CRC。
-若该剩余量占主导，再为具体编码 / 通道表打包增加第二轮测点，不先改第三方协议快照。
+本轮已经为编码 / 通道表取数增加第二轮测点；在取得分段实测前，不修改协议或 CRC 算法。
 
 ## 验证层级与后续测量
 
 1. **主机：** `test_trace` 六例覆盖 arm 边界、阈值锁存、环形覆盖、尾部、冻结后不变、计数回绕、IRQ 屏蔽恢复及结束原因；
-   Python 五例覆盖嵌套并集、READY 不沿用、DWT 回绕、损坏拒绝和 IRQ 覆盖缺口。另由实际 C 生成 MBT1 二进制，Python 独立核对字段和等待 / 嵌套时间。
+   Python 七例覆盖嵌套并集、READY 不沿用、DWT 回绕、损坏拒绝、IRQ 覆盖缺口，以及分段嵌套 / 前后截断 / 非法配对。
+   实际 C 生成 MBT1 二进制，Python 独立核对字段、等待 / 嵌套时间和新增事件编号 / 阶段耗时。
+   `test_sysid_plain` / `test_sysid_timing` 各三例验证真实插件的通道表、记录、空队列及忙重试，另比较两种构建的输出帧逐字节一致。
    这些是合成事件，不是 MCU 性能测试。
-2. **编译：** WSL host-tests 39/39；诊断 / 普通单电机 / 默认 H723 / C 板构建，零警告。
+2. **编译：** WSL host-tests 41/41；诊断 / 普通单电机 / 默认 H723 / C 板构建，零警告。
    检查三种普通 ELF 无 `rm_trace`、诊断内核确有就绪 / 切换钩子、31 个外设入口及 SysTick 插桩、USER CODE 边界、Keil 清单。
+   2026-10-22 分段版另通过 189 文件格式检查、普通 / 诊断实际输出字节相同及旧真实 RAM 捕获字段回归；旧捕获不伪造新增阶段数据。
    PendSV 的切换前后开销没有完整 IRQ 包围，解码不把剩余量宣称为纯任务 CPU 时间；NVIC 位图有未覆盖项时不能完整归因。
 3. 校准空事件写入的 MCU 开销和最长关中断段，并记录捕获事件率 / 覆盖长度；常数开销不能简单逐项相减来消除缓存和抢占扰动。
    用户用相同无运动工况比较未插桩基线与诊断版完整记录分布；插桩版变好或变差都必须报告。

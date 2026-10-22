@@ -56,7 +56,7 @@ void app_main(void)
 #if defined(RM_MOTOR_BENCH_TIMING)
     rm_trace_bind_tasks((uintptr_t)control_task.handle, (uintptr_t)comm_rx_task.handle,
                         (uintptr_t)detect_task.handle);
-    RM_LOG_I("M3508 FW: timing-mbt1-v1; RAM capture, motion defaults OFF");
+    RM_LOG_I("M3508 FW: timing-mbt1-phases-v1; RAM capture, motion defaults OFF");
 #else
     RM_LOG_I("M3508 FW: usb-txcplt-session-v1");
 #endif
