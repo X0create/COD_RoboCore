@@ -860,9 +860,12 @@ static void sysid_excite_stop(SysIdExcite *self)
 
 /* ================================================================ 记录 */
 
-/** 每发出这么多条记录，重发一次通道表。 */
+/** 每发出这么多条记录，重发一次通道表。
+ * 2026-10-22 依据 RAM 计时捕获（phases_02，-O2）：472 B 通道表页的编码 + 发送约占 43 us，落在控制就绪等待窗口时
+ * 会把控制周期推到 1057.9 us（草案 1050 us）；原先每秒重发一次（2 页）在 30 s 里占约 0.2% 样本，正好压在
+ * p99.9 上。改为每 10 s 重发一次后降到约 0.02%，协议字节不变，电脑端只需要每个通道表编号收一次。 */
 #ifndef SYSID_LOG_SCHEMA_EVERY
-#define SYSID_LOG_SCHEMA_EVERY 1000U
+#define SYSID_LOG_SCHEMA_EVERY 10000U
 #endif
 
 #define SYSID_LOG_NAME_MAX    31U /* 来源名、通道名的最大字节数 */
